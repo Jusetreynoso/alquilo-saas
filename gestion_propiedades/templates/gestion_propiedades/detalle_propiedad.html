@@ -1,0 +1,238 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+
+{% block encabezado %}
+    <div class="d-flex w-100 justify-content-between align-items-center">
+        <div>
+            <a href="{% url 'lista_propiedades' %}" class="btn btn-sm btn-outline-secondary me-3">⬅ Volver</a>
+            {{ titulo_pagina }}
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'editar_propiedad' propiedad.id %}" class="btn btn-sm btn-outline-primary shadow-sm">
+                ✏️ Editar Propiedad
+            </a>
+            <form method="POST" action="{% url 'eliminar_propiedad' propiedad.id %}" onsubmit="return confirm('¿Estás seguro de archivar esta propiedad? Dejará de contar en la facturación SaaS y pasará al archivo muerto de tu inventario.');" class="m-0 p-0">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-danger shadow-sm">🗑️ Archivar (Excluir del Cobro)</button>
+            </form>
+        </div>
+    </div>
+{% endblock %}
+
+{% block contenido %}
+<div class="row">
+    
+    <div class="col-md-5 mb-4">
+        
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white fw-bold text-secondary py-3 d-flex justify-content-between align-items-center">
+                <span>👤 Inquilino Actual</span>
+
+                {% if contrato_activo %}
+                <div class="d-flex gap-2">
+                    <a href="{% url 'editar_contrato' contrato_activo.id %}" class="btn btn-sm btn-outline-secondary">
+                        ✏️ Editar
+                    </a>
+                    <form method="POST" action="{% url 'finalizar_contrato' contrato_activo.id %}" onsubmit="return confirm('¿Estás seguro de finalizar este contrato? La propiedad quedará DISPONIBLE y dejará de generar facturas para este inquilino.');" class="m-0 p-0">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline-danger">🚪 Finalizar</button>
+                    </form>
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="card-body">
+                {% if contrato_activo %}
+                    <h5 class="fw-bold">{{ contrato_activo.inquilino.nombre }}</h5>
+                    <p class="mb-1"><strong>Teléfono:</strong> {{ contrato_activo.inquilino.telefono }}</p>
+                    <p class="mb-1"><strong>Renta:</strong> ${{ contrato_activo.monto_renta|floatformat:2 }}</p>
+                    <p class="mb-1 text-primary"><strong>Fianza Retenida:</strong> ${{ contrato_activo.monto_deposito|floatformat:2 }} <small class="text-muted">(Adelanto: ${{ contrato_activo.monto_adelanto|floatformat:2 }})</small></p>
+                    <p class="mb-1"><strong>Día de Pago:</strong> Los días {{ contrato_activo.dia_de_pago }} de cada mes</p>
+                    <p class="mb-0 text-muted small">Días de gracia: {{ contrato_activo.dias_gracia }}</p>
+                    
+                    <hr>
+                    <h6 class="fw-bold text-muted small mb-2">DOCUMENTOS ADJUNTOS</h6>
+
+                    {% if contrato_activo.documento_contrato %}
+                        <p class="mb-2 small">📄 <a href="{{ contrato_activo.documento_contrato.url }}" target="_blank" class="text-decoration-none">Ver Contrato Firmado</a></p>
+                    {% else %}
+                        <p class="mb-2 small text-muted">📄 Sin contrato adjunto</p>
+                    {% endif %}
+
+                    {% if contrato_activo.fotos_entrega or contrato_activo.foto_entrega_2 or contrato_activo.foto_entrega_3 %}
+                        <p class="mb-1 small">📸 Fotos de Entrega:</p>
+                        <ul class="list-unstyled ms-4 small mb-0">
+                            {% if contrato_activo.fotos_entrega %}
+                                <li><a href="{{ contrato_activo.fotos_entrega.url }}" target="_blank" class="text-decoration-none">🖼️ Foto 1 (Principal)</a></li>
+                            {% endif %}
+                            {% if contrato_activo.foto_entrega_2 %}
+                                <li><a href="{{ contrato_activo.foto_entrega_2.url }}" target="_blank" class="text-decoration-none">🖼️ Foto 2</a></li>
+                            {% endif %}
+                            {% if contrato_activo.foto_entrega_3 %}
+                                <li><a href="{{ contrato_activo.foto_entrega_3.url }}" target="_blank" class="text-decoration-none">🖼️ Foto 3</a></li>
+                            {% endif %}
+                        </ul>
+                    {% else %}
+                        <p class="mb-0 small text-muted">📸 Sin fotos de entrega</p>
+                    {% endif %}
+                    
+                {% else %}
+                    <div class="alert alert-warning mb-0 text-center d-flex flex-column align-items-center py-4">
+                        <span class="fs-1 mb-2">🏠</span>
+                        <p class="mb-3 fw-bold">Esta propiedad está vacía en este momento.</p>
+                        <a href="{% url 'crear_contrato' %}" class="btn btn-success shadow-sm">
+                            📝 + Crear Nuevo Contrato
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white fw-bold text-secondary py-3 d-flex justify-content-between align-items-center">
+                <span>📋 Solicitudes de Alquiler</span>
+                {% if propiedad.estado == 'DISPONIBLE' %}
+                <a href="{% url 'generar_solicitud' propiedad.id %}" class="btn btn-sm btn-outline-primary">
+                    + Nuevo Link
+                </a>
+                {% endif %}
+            </div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    {% for solicitud in solicitudes %}
+                        <li class="list-group-item py-3">
+                            <div class="d-flex w-100 justify-content-between align-items-center mb-1">
+                                <h6 class="mb-0 fw-bold">
+                                    {{ solicitud.nombre_completo|default:"Prospecto Anónimo" }}
+                                </h6>
+                                <span class="badge {% if solicitud.estado == 'RECIBIDA' %}bg-success{% elif solicitud.estado == 'ENVIADA' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                    {{ solicitud.get_estado_display }}
+                                </span>
+                            </div>
+                            <small class="text-muted d-block mb-2">Generada: {{ solicitud.creada_en|date:"d M Y" }}</small>
+                            
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-sm btn-light border text-primary" onclick="navigator.clipboard.writeText(window.location.origin + '/solicitud/{{ solicitud.codigo_secreto }}/'); alert('¡Link copiado al portapapeles!');">
+                                    🔗 Copiar Link para WhatsApp
+                                </button>
+                                
+                                {% if solicitud.estado == 'RECIBIDA' %}
+                                    <a href="{% url 'ver_solicitud' solicitud.id %}" class="btn btn-sm btn-success shadow-sm">
+                                        📄 Ver Respuestas
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </li>
+                    {% empty %}
+                        <li class="list-group-item text-center text-muted py-4 small">
+                            No hay solicitudes generadas. Crea un link para enviarlo a los prospectos.
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white fw-bold text-secondary py-3 d-flex justify-content-between align-items-center">
+                <span>🔧 Historial de Reparaciones</span>
+                <a href="{% url 'registrar_gasto' propiedad.id %}" class="btn btn-sm btn-outline-danger">
+                    + Reportar Daño
+                </a>
+            </div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    {% for trabajo in mantenimientos %}
+                        <li class="list-group-item py-3">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1 fw-bold">{{ trabajo.get_categoria_display }}</h6>
+                                <small class="text-muted">{{ trabajo.fecha_reporte|date:"d M Y" }}</small>
+                            </div>
+                            <p class="mb-1 small">{{ trabajo.descripcion }}</p>
+                            
+                            <div class="d-flex justify-content-between align-items-center mt-2">
+                                <div>
+                                    <span class="badge {% if trabajo.estado == 'COMPLETADO' %}bg-success{% else %}bg-warning text-dark{% endif %}">
+                                        {{ trabajo.get_estado_display }}
+                                    </span>
+                                    {% if trabajo.factura_adjunta %}
+                                        <a href="{{ trabajo.factura_adjunta.url }}" target="_blank" class="ms-2 small text-decoration-none">
+                                            📎 Ver Factura
+                                        </a>
+                                    {% endif %}
+                                </div>
+                                <span class="fw-bold text-danger small">Costo: ${{ trabajo.costo|floatformat:2 }}</span>
+                            </div>
+                        </li>
+                    {% empty %}
+                        <li class="list-group-item text-center text-muted py-4">No hay mantenimientos registrados.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-7 mb-4">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white fw-bold text-secondary py-3">
+                💰 Historial de Facturación
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="px-4 py-3">Concepto</th>
+                                <th class="py-3">Monto</th>
+                                <th class="py-3">Vence</th>
+                                <th class="py-3">Estado</th>
+                                <th class="py-3 text-end px-4">Acción</th> 
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for factura in facturas %}
+                            <tr>
+                                <td class="px-4 py-3 text-muted small">{{ factura.concepto }}</td>
+                                <td class="py-3 fw-bold">${{ factura.monto_total_con_mora|floatformat:2 }}</td>
+                                <td class="py-3 small">{{ factura.fecha_vencimiento|date:"d M Y" }}</td>
+                                <td class="py-3">
+                                    {% if factura.estado == 'PAGADA' %}
+                                        <span class="badge bg-success">Pagada</span>
+                                    {% elif factura.estado == 'PENDIENTE' %}
+                                        <span class="badge bg-primary">Pendiente</span>
+                                    {% elif factura.estado == 'ATRASADA' %}
+                                        <span class="badge bg-danger">Atrasada</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Anulada</span>
+                                    {% endif %}
+                                </td>
+                                <td class="py-3 text-end px-4">
+                                    {% if factura.estado == 'PENDIENTE' or factura.estado == 'ATRASADA' %}
+                                        <a href="{% url 'registrar_pago' factura.id %}" class="btn btn-sm btn-success shadow-sm">Cobrar</a>
+                                    {% elif factura.estado == 'PAGADA' %}
+                                        {% with recibo=factura.recibos.first %}
+                                            {% if recibo %}
+                                                <a href="{% url 'imprimir_recibo' recibo.id %}" class="btn btn-sm btn-outline-primary" target="_blank">
+                                                    🖨️ Recibo
+                                                </a>
+                                            {% endif %}
+                                        {% endwith %}
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-5 text-muted">
+                                    Aún no hay facturas generadas para esta propiedad.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

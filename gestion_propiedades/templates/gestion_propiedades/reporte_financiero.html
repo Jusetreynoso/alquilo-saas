@@ -1,0 +1,149 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}Reporte Financiero{% endblock %}
+{% block encabezado %}📊 Reporte de Rentabilidad (P&L){% endblock %}
+
+{% block contenido %}
+<!-- CHART CONTAINER -->
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <h5 class="card-title text-muted mb-3">Resumen de Ingresos vs Egresos (Mes a Mes)</h5>
+        <canvas id="rentabilidadChart" height="100"></canvas>
+    </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <h5 class="card-title text-muted mb-3">Beneficio Neto por Propiedad (Mensual)</h5>
+        
+        <div class="table-responsive">
+            <table class="table table-hover table-bordered align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th scope="col">Mes</th>
+                        <th scope="col">Propiedad</th>
+                        <th scope="col" class="text-end">Ingresos (Cobros)</th>
+                        <th scope="col" class="text-end">Egresos (Gastos)</th>
+                        <th scope="col" class="text-end">Beneficio Neto</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in finanzas %}
+                    <tr>
+                        <td><strong>{{ item.mes_formateado }}</strong></td>
+                        <td>{{ item.nombre_propiedad }}</td>
+                        <td class="text-end text-success">+ ${{ item.ingresos|floatformat:2 }}</td>
+                        <td class="text-end text-danger">- ${{ item.egresos|floatformat:2 }}</td>
+                        <td class="text-end">
+                            {% if item.neto > 0 %}
+                                <span class="badge bg-success fw-bold p-2">${{ item.neto|floatformat:2 }}</span>
+                            {% elif item.neto < 0 %}
+                                <span class="badge bg-danger fw-bold p-2">${{ item.neto|floatformat:2 }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary fw-bold p-2">$0.00</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted py-4">No hay datos de ingresos ni egresos registrados para calcular rentabilidad.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- SCRIPTS DE CHART.JS -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // 1. Obtener y estructurar los datos desde Django
+        const rawData = [
+            {% for item in finanzas %}
+            {
+                "mes": "{{ item.mes_formateado|escapejs }}",
+                "ingresos": parseFloat("{{ item.ingresos|stringformat:'.2f' }}".replace(',', '.')) || 0,
+                "egresos": parseFloat("{{ item.egresos|stringformat:'.2f' }}".replace(',', '.')) || 0
+            }{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        ];
+
+        // 2. Agrupar totales por mes (por si hay múltiples propiedades en un mismo mes)
+        const groupedData = {};
+        rawData.forEach(row => {
+            if (!groupedData[row.mes]) {
+                groupedData[row.mes] = { ingresos: 0, egresos: 0 };
+            }
+            groupedData[row.mes].ingresos += row.ingresos;
+            groupedData[row.mes].egresos += row.egresos;
+        });
+
+        // 3. Extraer meses ordenados cronológicamente
+        const labels = Object.keys(groupedData).sort();
+        
+        const ingresosData = labels.map(mes => groupedData[mes].ingresos);
+        const egresosData = labels.map(mes => groupedData[mes].egresos);
+
+        // 4. Configurar y renderizar la gráfica (Chart.js)
+        const ctx = document.getElementById('rentabilidadChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Ingresos',
+                        data: ingresosData,
+                        backgroundColor: 'rgba(25, 135, 84, 0.8)', // Bootstrap Success
+                        borderColor: '#198754',
+                        borderWidth: 1,
+                        borderRadius: 4
+                    },
+                    {
+                        label: 'Egresos',
+                        data: egresosData,
+                        backgroundColor: 'rgba(220, 53, 69, 0.8)', // Bootstrap Danger
+                        borderColor: '#dc3545',
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    label += new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(context.parsed.y);
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return '$' + value;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,119 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+
+{% block encabezado %}
+    <div class="d-flex w-100 justify-content-between align-items-center">
+        <div>
+            <a href="{% url 'saas_master_control' %}" class="btn btn-sm btn-outline-secondary me-3">⬅ Volver al Master Control</a>
+            <h2 class="h4 mb-0 text-success fw-bold d-inline-block">💸 {{ titulo_pagina }}</h2>
+        </div>
+        <form method="POST" action="{% url 'generar_corte_saas' %}" onsubmit="return confirm('¿Generar nuevo corte hoy?');" class="m-0">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-dark shadow-sm fw-bold">🧾 Forzar Nuevo Corte</button>
+        </form>
+    </div>
+{% endblock %}
+
+{% block contenido %}
+<!-- Métricas Superiores -->
+<div class="row g-4 mb-5">
+    <div class="col-md-6">
+        <div class="card bg-success text-white border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body p-4 d-flex align-items-center">
+                <div class="bg-white bg-opacity-25 rounded-circle p-3 me-4">
+                    <span class="fs-1">💰</span>
+                </div>
+                <div>
+                    <h6 class="text-uppercase text-white-50 fw-bold mb-1">Ingresos Recaudados</h6>
+                    <h1 class="display-5 fw-bold mb-0">${{ total_cobrado|floatformat:2 }}</h1>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card bg-warning text-dark border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body p-4 d-flex align-items-center">
+                <div class="bg-dark bg-opacity-10 rounded-circle p-3 me-4">
+                    <span class="fs-1">⏳</span>
+                </div>
+                <div>
+                    <h6 class="text-uppercase text-dark opacity-50 fw-bold mb-1">Cuentas por Cobrar (SaaS)</h6>
+                    <h1 class="display-5 fw-bold mb-0">${{ total_pendiente|floatformat:2 }}</h1>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla de Cobros SaaS -->
+<div class="card shadow-sm border-0 rounded-4 overflow-hidden">
+    <div class="card-header bg-white py-3 border-0">
+        <h5 class="mb-0 fw-bold">Directorio de Facturas Emitidas</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="px-4 py-3">Cliente</th>
+                        <th>Emisión</th>
+                        <th>Vencimiento</th>
+                        <th class="text-center">Propiedades Base</th>
+                        <th class="text-end fw-bold">Deuda ($USD)</th>
+                        <th class="text-center">Estado</th>
+                        <th class="text-center px-4">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for factura in facturas %}
+                    <tr>
+                        <td class="px-4 py-3">
+                            <h6 class="mb-0 fw-bold">{{ factura.usuario.get_full_name|default:factura.usuario.username }}</h6>
+                            <small class="text-muted">{{ factura.usuario.email }}</small>
+                        </td>
+                        <td class="text-muted">{{ factura.fecha_emision|date:"d M Y" }}</td>
+                        <td>{{ factura.fecha_vencimiento|date:"d M Y" }}</td>
+                        <td class="text-center">
+                            <span class="badge bg-secondary rounded-pill px-3">{{ factura.propiedades_cobradas }} unid.</span>
+                        </td>
+                        <td class="text-end fw-bold text-dark fs-5">
+                            ${{ factura.monto_total }}
+                        </td>
+                        <td class="text-center">
+                            {% if factura.estado == 'PAGADA' %}
+                                <span class="badge bg-success px-3 py-2 rounded-pill">🟢 Pagada</span>
+                            {% elif factura.estado == 'PENDIENTE' %}
+                                <span class="badge bg-warning text-dark px-3 py-2 rounded-pill">🟡 Pendiente</span>
+                            {% else %}
+                                <span class="badge bg-danger px-3 py-2 rounded-pill">🔴 Vencida</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center px-4">
+                            {% if factura.estado != 'PAGADA' %}
+                                <form method="POST" action="{% url 'marcar_factura_saas_pagada' factura.id %}" class="m-0" onsubmit="return confirm('¿Confirmas que recibiste el pago de ${{ factura.monto_total }} vía transferencia o tarjeta?');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-success fw-bold rounded-pill shadow-sm">
+                                        ✔️ Marcar Pagada
+                                    </button>
+                                </form>
+                            {% else %}
+                                <span class="text-success small fw-bold">✓ Recibido</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            <span class="fs-1 d-block mb-3">🧾</span>
+                            <strong>Aún no has generado cortes automáticos de facturación.</strong><br>
+                            Los cortes se generarán al presionar "Generar Corte de Mes".
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

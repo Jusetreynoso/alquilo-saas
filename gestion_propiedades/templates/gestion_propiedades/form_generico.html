@@ -1,0 +1,79 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+
+{% block encabezado %}
+    <a href="javascript:history.back()" class="btn btn-sm btn-outline-secondary me-3">⬅ Cancelar</a>
+    {{ titulo_pagina }}
+{% endblock %}
+
+{% block contenido %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                <form method="POST" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    {% for field in form %}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}
+                            <div class="form-text">{{ field.help_text }}</div>
+                        {% endif %}
+                        {% if field.errors %}
+                            <div class="text-danger small">{{ field.errors }}</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+
+                    <div class="d-grid mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg">💾 Guardar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if es_contrato %}
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const configDep = {{ config_depositos|safe }};
+        const propSelect = document.getElementById('id_propiedad');
+        const rentaInput = document.getElementById('id_monto_renta');
+        const depInput = document.getElementById('id_monto_deposito');
+        const adelantoInput = document.getElementById('id_monto_adelanto');
+
+        function updateFianzas() {
+            if(!propSelect || !rentaInput || !depInput || !adelantoInput) return;
+            
+            const propId = propSelect.value;
+            if(propId && configDep[propId]) {
+                const rules = configDep[propId];
+                const renta = parseFloat(rentaInput.value) || 0;
+                
+                // Solo auto-completamos si el usuario no ha puesto un valor custom ya
+                // o si estamos en contexto de "Crear" donde los valores arrancan en 0.
+                if(parseFloat(depInput.value) === 0 || !depInput.dataset.modified) {
+                    depInput.value = (renta * rules.dep).toFixed(2);
+                }
+                if(parseFloat(adelantoInput.value) === 0 || !adelantoInput.dataset.modified) {
+                    adelantoInput.value = (renta * rules.adel).toFixed(2);
+                }
+            }
+        }
+
+        if(propSelect && rentaInput) {
+            propSelect.addEventListener('change', updateFianzas);
+            rentaInput.addEventListener('input', updateFianzas);
+            
+            // Flags to track if user manually overrides to prevent auto-fill blocking
+            depInput.addEventListener('input', () => depInput.dataset.modified = "true");
+            adelantoInput.addEventListener('input', () => adelantoInput.dataset.modified = "true");
+        }
+    });
+</script>
+{% endif %}
+{% endblock %}

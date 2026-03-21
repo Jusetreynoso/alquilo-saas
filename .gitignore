@@ -1,0 +1,22 @@
+# Entornos Virtuales
+venv_alquilo/
+venv/
+env/
+
+# Base de datos local
+db.sqlite3
+
+# Compilados Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Archivos estáticos y media subidos por el usuario
+staticfiles/
+media/
+
+# Archivos de entorno y secretos
+.env
+.idea/
+.vscode/
+.gemini/

@@ -1,0 +1,65 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+
+{% block encabezado %}
+    {{ titulo_pagina }}
+    <a href="{% url 'crear_contrato' %}" class="btn btn-sm btn-primary ms-3">+ Nuevo Contrato</a>
+{% endblock %}
+
+{% block contenido %}
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="px-4 py-3">Inquilino</th>
+                        <th class="py-3">Propiedad</th>
+                        <th class="py-3">Renta</th>
+                        <th class="py-3">Día de Pago</th>
+                        <th class="py-3">Vigencia</th>
+                        <th class="py-3">Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for contrato in contratos %}
+                    <tr>
+                        <td class="px-4 py-3 fw-bold">
+                            {{ contrato.inquilino.nombre }}
+                            <br>
+                            <small class="text-muted fw-normal">📞 {{ contrato.inquilino.telefono }}</small>
+                        </td>
+                        <td class="py-3 text-primary fw-bold">
+                            <a href="{% url 'detalle_propiedad' contrato.propiedad.id %}" class="text-decoration-none">
+                                {{ contrato.propiedad.nombre_o_numero }}
+                            </a>
+                        </td>
+                        <td class="py-3 fw-bold text-success">${{ contrato.monto_renta|floatformat:2 }}</td>
+                        <td class="py-3">Los días {{ contrato.dia_de_pago }}</td>
+                        <td class="py-3 small">
+                            {{ contrato.fecha_inicio|date:"d M Y" }} <br>
+                            <span class="text-muted">al</span> <br>
+                            {{ contrato.fecha_fin|date:"d M Y"|default:"Indefinido" }}
+                        </td>
+                        <td class="py-3">
+                            {% if contrato.activo %}
+                                <span class="badge bg-success">Activo</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Finalizado</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-muted">
+                            No tienes contratos registrados en tu portafolio.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,44 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+{% block encabezado %}
+    {{ titulo_pagina }}
+    <a href="{% url 'crear_inquilino' %}" class="btn btn-primary">+ Nuevo Inquilino</a>
+{% endblock %}
+
+{% block contenido %}
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="px-4 py-3">Nombre</th>
+                            <th class="py-3">Teléfono</th>
+                            <th class="py-3">Cédula / Pasaporte</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for inquilino in inquilinos %}
+                        <tr>
+                            <td class="px-4 py-3 fw-bold">
+                                <a href="{% url 'detalle_inquilino' inquilino.id %}" class="text-decoration-none text-primary">
+                                    {{ inquilino.nombre }} 🔍
+                                </a>
+                            </td>
+                            <td class="py-3 text-muted">{{ inquilino.telefono }}</td>
+                            <td class="py-3 text-muted">{{ inquilino.cedula_o_pasaporte|default:"---" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="3" class="text-center py-5 text-muted">
+                                No tienes inquilinos registrados.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+{% endblock %}

@@ -1,0 +1,69 @@
+{% extends 'gestion_propiedades/base.html' %}
+{% load static %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+
+{% block contenido %}
+<div class="card border-0 shadow-sm mt-3">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 fw-bold">Tickets de Operaciones</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="px-4 py-3">Fecha</th>
+                        <th>Propiedad Afectada</th>
+                        <th>Categoría y Descripción</th>
+                        <th>Costo Operativo</th>
+                        <th>Estado de Evolución</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tick in mantenimientos %}
+                    <tr>
+                        <td class="px-4 py-3 text-muted">
+                            {{ tick.fecha_reporte|date:"d M Y" }}<br>
+                            <small>Res: {{ tick.fecha_resolucion|date:"d M Y"|default:"---" }}</small>
+                        </td>
+                        <td>
+                            <a href="{% url 'detalle_propiedad' tick.propiedad.id %}" class="fw-bold text-decoration-none">
+                                {{ tick.propiedad.nombre_o_numero }}
+                            </a>
+                        </td>
+                        <td>
+                            <span class="badge bg-secondary mb-1">{{ tick.get_categoria_display }}</span><br>
+                            <small class="text-muted text-wrap" style="max-width: 250px; display: inline-block;">{{ tick.descripcion }}</small>
+                        </td>
+                        <td class="fw-bold">
+                            {% if tick.costo > 0 %}
+                                ${{ tick.costo }}
+                            {% else %}
+                                <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if tick.estado == 'PENDIENTE' %}
+                                <span class="badge bg-danger px-2 py-1">🔴 Pendiente</span>
+                            {% elif tick.estado == 'PROGRESO' %}
+                                <span class="badge bg-warning text-dark px-2 py-1">🟡 En Proceso</span>
+                            {% elif tick.estado == 'COMPLETADO' %}
+                                <span class="badge bg-success px-2 py-1">🟢 Completado</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center py-5 text-muted">
+                            <span class="fs-1 d-block mb-3">🛠️</span>
+                            <strong>No hay reportes de mantenimiento</strong> en tu portafolio.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

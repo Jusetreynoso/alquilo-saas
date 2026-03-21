@@ -1,0 +1,93 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+    <title>Recibo de Pago #{{ recibo.id }}</title>
+    <style type="text/css">
+        body { font-family: Helvetica, sans-serif; font-size: 12px; color: #333; }
+        .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #ddd; padding-bottom: 10px; }
+        .company-name { font-size: 20px; font-weight: bold; color: #2c3e50; }
+        .receipt-title { font-size: 16px; margin-top: 10px; text-transform: uppercase; }
+        
+        .box { border: 1px solid #eee; padding: 10px; margin-bottom: 15px; background-color: #f9f9f9; }
+        .label { font-weight: bold; color: #555; font-size: 10px; text-transform: uppercase; }
+        .value { font-size: 13px; margin-bottom: 5px; }
+        
+        table { width: 100%; margin-top: 20px; border-collapse: collapse; }
+        th { text-align: left; background-color: #eee; padding: 8px; font-size: 11px; border-bottom: 1px solid #ccc; }
+        td { padding: 8px; border-bottom: 1px solid #eee; }
+        
+        .total-section { text-align: right; margin-top: 20px; }
+        .total-label { font-size: 14px; font-weight: bold; }
+        .total-amount { font-size: 18px; color: #27ae60; font-weight: bold; }
+        
+        .footer { margin-top: 50px; text-align: center; font-size: 10px; color: #999; border-top: 1px dashed #ccc; padding-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="company-name">ALQUILO - GESTIÓN INMOBILIARIA</div>
+        <div class="receipt-title">Comprobante de Pago</div>
+        <div>Fecha de Emisión: {% now "d/m/Y" %}</div>
+    </div>
+
+    <table style="width: 100%; border: none;">
+        <tr>
+            <td style="border: none; width: 50%;">
+                <div class="box">
+                    <div class="label">Pagado Por (Inquilino):</div>
+                    <div class="value">{{ contrato.inquilino.nombre }}</div>
+                    <div class="label">Propiedad:</div>
+                    <div class="value">{{ propiedad.nombre_o_numero }}</div>
+                    <div class="value" style="font-size: 10px; color: #777;">{{ propiedad.grupo_o_residencial|default:"" }}</div>
+                </div>
+            </td>
+            <td style="border: none; width: 50%;">
+                <div class="box">
+                    <div class="label">Recibo No.</div>
+                    <div class="value">#000{{ recibo.id }}</div>
+                    <div class="label">Fecha de Pago:</div>
+                    <div class="value">{{ recibo.fecha_pago|date:"d M Y" }}</div>
+                    <div class="label">Método:</div>
+                    <div class="value">{{ recibo.get_metodo_pago_display }}</div>
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Concepto / Descripción</th>
+                <th style="text-align: right;">Monto</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>
+                    <strong>{{ factura.concepto }}</strong><br>
+                    <span style="font-size: 10px; color: #666;">Factura Ref: #{{ factura.id }} (Vencimiento: {{ factura.fecha_vencimiento }})</span>
+                </td>
+                <td style="text-align: right;">${{ recibo.monto_pagado|floatformat:2 }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="total-section">
+        <span class="total-label">TOTAL PAGADO:</span>
+        <span class="total-amount">${{ recibo.monto_pagado|floatformat:2 }}</span>
+    </div>
+
+    {% if recibo.referencia_transaccion %}
+    <div style="margin-top: 20px; font-size: 11px; color: #555;">
+        <strong>Referencia Bancaria / Notas:</strong> {{ recibo.referencia_transaccion }}
+    </div>
+    {% endif %}
+
+    <div class="footer">
+        Este documento es un comprobante de pago válido emitido por el sistema Alquilo.<br>
+        Generado por: {{ usuario.username }}
+    </div>
+
+</body>
+</html>

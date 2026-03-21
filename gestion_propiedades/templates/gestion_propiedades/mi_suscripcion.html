@@ -1,0 +1,102 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+
+{% block contenido %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="mb-3 text-secondary border-bottom pb-2">Facturación y Consumos</h2>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm rounded-4 h-100 bg-primary text-white text-center">
+            <div class="card-body py-4">
+                <div class="fs-1 mb-2">🏢</div>
+                <h6 class="text-uppercase fw-bold opacity-75">Unidades Activas</h6>
+                <h2 class="display-5 fw-bold mb-0">{{ propiedades_activas }}</h2>
+                <small class="opacity-75">Costo fijo: $1.00 por unidad/mes</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm rounded-4 h-100 bg-success text-white text-center">
+            <div class="card-body py-4">
+                <div class="fs-1 mb-2">💳</div>
+                <h6 class="text-uppercase fw-bold opacity-75">Proyección del Mes</h6>
+                <h2 class="display-5 fw-bold mb-0">${{ costo_proyectado|floatformat:2 }}</h2>
+                <small class="opacity-75">Corte generado cada fin de mes</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm rounded-4 h-100 bg-dark text-white text-center">
+            <div class="card-body py-4">
+                <div class="fs-1 mb-2">🏷️</div>
+                <h6 class="text-uppercase fw-bold text-white-50">Estado de Cuenta B2B</h6>
+                {% if suscripcion %}
+                    <h3 class="fw-bold mb-0">{{ suscripcion.get_estado_display }}</h3>
+                {% else %}
+                    <h3 class="fw-bold mb-0 text-warning">Prueba Gratuita</h3>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-header bg-white py-3 border-0">
+        <h5 class="mb-0 fw-bold">Historial de Facturas (Uso de Sistema)</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="px-4 py-3">Fecha Emisión</th>
+                        <th>Fecha Límite</th>
+                        <th class="text-center">Propiedades Medidas</th>
+                        <th class="text-end">Total a Pagar</th>
+                        <th class="text-center">Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for factura in facturas_saas %}
+                    <tr>
+                        <td class="px-4 py-3 text-muted">
+                            {{ factura.fecha_emision|date:"d M Y" }}
+                        </td>
+                        <td>
+                            <strong>{{ factura.fecha_vencimiento|date:"d M Y" }}</strong>
+                        </td>
+                        <td class="text-center">
+                            {{ factura.propiedades_cobradas }} unidades
+                        </td>
+                        <td class="text-end fw-bold text-success">
+                            ${{ factura.monto_total }}
+                        </td>
+                        <td class="text-center">
+                            {% if factura.estado == 'PENDIENTE' %}
+                                <span class="badge bg-warning text-dark px-3 py-2 rounded-pill">🔴 Pendiente</span>
+                            {% elif factura.estado == 'PAGADA' %}
+                                <span class="badge bg-success px-3 py-2 rounded-pill">🟢 Pagada</span>
+                            {% else %}
+                                <span class="badge bg-danger px-3 py-2 rounded-pill">⚫ Vencida</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center py-5 text-muted">
+                            <span class="fs-1 d-block mb-3">🧾</span>
+                            <strong>Aún no se han generado cobros.</strong>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

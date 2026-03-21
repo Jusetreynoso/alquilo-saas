@@ -1,0 +1,60 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+
+{% block encabezado %}
+    <a href="{% url 'detalle_propiedad' factura.contrato.propiedad.id %}" class="btn btn-sm btn-outline-secondary me-3">⬅ Cancelar</a>
+    {{ titulo_pagina }}
+{% endblock %}
+
+{% block contenido %}
+<div class="row justify-content-center">
+    <div class="col-md-6 mb-4">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white fw-bold text-secondary py-3">
+                🏢 Propiedad: {{ factura.contrato.propiedad.nombre_o_numero }} | Inquilino: {{ factura.contrato.inquilino.nombre }}
+            </div>
+            <div class="card-body p-4">
+                
+                <div class="alert alert-info text-center">
+                    <h5 class="mb-1">Total a Cobrar</h5>
+                    <h2 class="fw-bold mb-0">${{ factura.monto_total_con_mora|floatformat:2 }}</h2>
+                    <small>{{ factura.concepto }}</small>
+                </div>
+
+                <form method="POST">
+                    {% csrf_token %} <div class="mb-3">
+                        <label class="form-label fw-bold">Fecha del Pago</label>
+                        <input type="date" name="fecha_pago" class="form-control" required value="{% now 'Y-m-d' %}">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Monto Recibido</label>
+                        <input type="number" step="0.01" name="monto" class="form-control" required value="{{ factura.monto_total_con_mora }}">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Método de Pago</label>
+                        <select name="metodo_pago" class="form-select" required>
+                            <option value="TRANSFERENCIA">Transferencia Bancaria</option>
+                            <option value="EFECTIVO">Efectivo</option>
+                            <option value="CHEQUE">Cheque</option>
+                            <option value="OTRO">Otro</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Número de Referencia (Opcional)</label>
+                        <input type="text" name="referencia" class="form-control" placeholder="Ej: TXN-123456789">
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-success btn-lg">💰 Registrar Pago</button>
+                    </div>
+                </form>
+
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

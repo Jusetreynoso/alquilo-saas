@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alquilo | Software Premium B2B para Real Estate</title>
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Iconos -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #03040b;
+            --text-main: #f8f9fa;
+            --text-muted: #9ca3af;
+            --accent: #8b5cf6;
+            --accent-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+        }
+        
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Navbar Glassmorphism */
+        .navbar {
+            background: rgba(3, 4, 11, 0.7) !important;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .navbar-brand {
+            font-weight: 800;
+            font-size: 1.6rem;
+            letter-spacing: -0.5px;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .nav-link {
+            color: var(--text-muted) !important;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+        .nav-link:hover {
+            color: #fff !important;
+        }
+
+        /* Hero Styling */
+        .hero {
+            position: relative;
+            padding: 160px 0 120px;
+            overflow: hidden;
+        }
+        
+        .hero-glow {
+            position: absolute;
+            top: 30%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 70vw;
+            height: 70vw;
+            max-width: 800px;
+            max-height: 800px;
+            background: radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, rgba(0,0,0,0) 60%);
+            z-index: -1;
+            filter: blur(60px);
+        }
+
+        .hero h1 {
+            font-size: clamp(3rem, 6vw, 4.5rem);
+            font-weight: 800;
+            line-height: 1.1;
+            letter-spacing: -0.04em;
+            margin-bottom: 1.5rem;
+        }
+        
+        .text-gradient {
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .btn-gradient {
+            background: var(--accent-gradient);
+            color: white;
+            border: none;
+            padding: 16px 36px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border-radius: 50px;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-gradient:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(139, 92, 246, 0.4);
+            color: white;
+        }
+
+        .btn-glass {
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+            border: 1px solid var(--glass-border);
+            padding: 16px 36px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border-radius: 50px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-glass:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        /* Features Section */
+        .features-section {
+            padding: 80px 0 120px;
+            position: relative;
+        }
+
+        .glass-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 40px 30px;
+            height: 100%;
+            backdrop-filter: blur(12px);
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .glass-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+        }
+
+        .glass-card:hover {
+            transform: translateY(-10px);
+            border-color: rgba(139, 92, 246, 0.4);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5), 0 0 20px rgba(139, 92, 246, 0.1);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .icon-box {
+            width: 64px;
+            height: 64px;
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            margin-bottom: 2rem;
+            background: rgba(139, 92, 246, 0.1);
+            color: #c084fc;
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            transition: all 0.3s;
+        }
+
+        .glass-card:hover .icon-box {
+            transform: scale(1.1) rotate(5deg);
+            background: var(--accent-gradient);
+            color: white;
+            border-color: transparent;
+        }
+
+        .glass-card h4 {
+            font-weight: 700;
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+        }
+        
+        .glass-card p {
+            color: var(--text-muted);
+            line-height: 1.6;
+            margin-bottom: 0;
+            font-size: 0.95rem;
+        }
+
+        /* Animations */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-up {
+            opacity: 0;
+            animation: fadeUp 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .delay-1 { animation-delay: 0.1s; }
+        .delay-2 { animation-delay: 0.2s; }
+        .delay-3 { animation-delay: 0.3s; }
+        .delay-4 { animation-delay: 0.4s; }
+        
+        /* Footer */
+        footer {
+            border-top: 1px solid var(--glass-border);
+            padding: 40px 0;
+            background: #000;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- NAVEGACIÓN -->
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top py-3">
+        <div class="container">
+            <a class="navbar-brand" href="#">🏢 Alquilo</a>
+            <button class="navbar-toggler border-0 shadow-none" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <i class="bi bi-list fs-1 text-white"></i>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto align-items-center gap-2">
+                    <li class="nav-item"><a class="nav-link px-3" href="#beneficios">Funcionalidades</a></li>
+                    
+                    <li class="nav-item ms-lg-3 mt-3 mt-lg-0">
+                        <a href="{% url 'login' %}" class="btn btn-outline-light rounded-pill px-4 fw-bold" style="border-width: 2px;">Entrar al Panel</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- HERO SECTION -->
+    <section class="hero text-center">
+        <div class="hero-glow"></div>
+        <div class="container position-relative z-1">
+            <div class="row justify-content-center">
+                <div class="col-lg-10 col-xl-8">
+                    <div class="animate-up">
+                        <span class="badge border border-secondary text-light px-3 py-2 rounded-pill mb-4 fw-semibold" style="background: var(--glass-bg);">
+                            ✨ El futuro del Software B2B de Bienes Raíces
+                        </span>
+                    </div>
+                    
+                    <h1 class="animate-up delay-1">Domina tus propiedades,<br><span class="text-gradient">maximiza tus ganancias.</span></h1>
+                    
+                    <p class="lead text-muted mb-5 px-md-5 animate-up delay-2" style="font-size: 1.25rem;">
+                        El centro de control financiero definitivo. Lleva la contabilidad de tus contratos, cobros, moras y mantenimiento industrial en piloto automático.
+                    </p>
+                    
+                    <div class="d-flex flex-column flex-sm-row justify-content-center gap-3 animate-up delay-3">
+                        <a href="https://wa.me/18493532097?text=Hola,%20me%20interesa%20solicitar%20una%20demostración%20Premium%20de%20Alquilo." target="_blank" class="btn-gradient">
+                            <i class="bi bi-lightning-charge-fill me-2"></i> Solicitar Demo
+                        </a>
+                        <a href="{% url 'login' %}" class="btn-glass">
+                            Ir al Dashboard Interactivo
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FUNCIONALIDADES / BENEFICIOS -->
+    <section id="beneficios" class="features-section">
+        <div class="container">
+            <div class="text-center mb-5 pb-3 animate-up delay-2">
+                <h2 class="fw-bold fs-1 mb-3">Auditoría y control absoluto.</h2>
+                <p class="text-muted fs-5">Tecnología de punta diseñada para inversores corporativos.</p>
+            </div>
+            
+            <div class="row g-4">
+                <!-- Card 1 -->
+                <div class="col-md-6 col-lg-3 animate-up delay-1">
+                    <div class="glass-card">
+                        <div class="icon-box">
+                            <i class="bi bi-building"></i>
+                        </div>
+                        <h4>Gestión Multi-Portafolio</h4>
+                        <p>Agrupa propiedades ilimitadas por edificios o regiones. Monitorea la ocupación y vacancia en tiempo real a escala global.</p>
+                    </div>
+                </div>
+                <!-- Card 2 -->
+                <div class="col-md-6 col-lg-3 animate-up delay-2">
+                    <div class="glass-card">
+                        <div class="icon-box">
+                            <i class="bi bi-receipt-cutoff"></i>
+                        </div>
+                        <h4>Disparadores de Cobro</h4>
+                        <p>Olvídate del trabajo manual. El motor en segundo plano calcula fianzas, prorrateos y genera recargos por mora en piloto automático.</p>
+                    </div>
+                </div>
+                <!-- Card 3 -->
+                <div class="col-md-6 col-lg-3 animate-up delay-3">
+                    <div class="glass-card">
+                        <div class="icon-box">
+                            <i class="bi bi-shield-check"></i>
+                        </div>
+                        <h4>Mesa de Ayuda Integral</h4>
+                        <p>Triage y categorización de tickets de mantenimiento. Controla los costos operativos por cada avería de todo tu portafolio.</p>
+                    </div>
+                </div>
+                <!-- Card 4 -->
+                <div class="col-md-6 col-lg-3 animate-up delay-4">
+                    <div class="glass-card">
+                        <div class="icon-box">
+                            <i class="bi bi-graph-up-arrow"></i>
+                        </div>
+                        <h4>Finanzas P&L Exactas</h4>
+                        <p>Visualiza ingresos brutos, deduce costos operativos y conoce el flujo de caja neto exacto con métricas dignas de Wall Street.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CALL TO ACTION FINAL -->
+    <section class="py-5 my-5">
+        <div class="container">
+            <div class="glass-card text-center py-5 border-0" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(236, 72, 153, 0.05) 100%);">
+                <h2 class="fw-bold fs-1 mb-4">¿Listo para elevar tu corporación?</h2>
+                <p class="text-muted mb-5 mx-auto" style="max-width: 600px;">
+                    Únete a la nueva era de la administración inmobiliaria. Convierte el caos contable en una máquina predecible de alto rendimiento.
+                </p>
+                <a href="https://wa.me/18493532097?text=Hola,%20me%20interesa%20contratar%20el%20servicio%20Manejo%20B2B." target="_blank" class="btn-gradient">
+                    <i class="bi bi-whatsapp me-2"></i> Contactar a nuestro equipo Privado
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer>
+        <div class="container text-center">
+            <div class="d-flex justify-content-center align-items-center mb-4 gap-4">
+                <a href="#" class="text-muted text-decoration-none hover-white">Condiciones de Servicio</a>
+                <span class="text-muted">•</span>
+                <a href="#" class="text-muted text-decoration-none hover-white">Políticas de Privacidad</a>
+            </div>
+            <p class="text-muted small mb-0">
+                &copy; {% now "Y" %} Alquilo Suite. Una solución de élite para inversores y constructoras.
+            </p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

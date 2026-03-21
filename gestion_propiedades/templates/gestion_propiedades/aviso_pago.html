@@ -1,0 +1,46 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+
+{% block encabezado %}
+    {{ titulo_pagina }}
+{% endblock %}
+
+{% block contenido %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-7 text-center">
+            <div class="card shadow border-0">
+                <div class="card-body p-5">
+                    <h1 class="display-1 text-danger mb-4">⛔</h1>
+                    <h2 class="fw-bold mb-3">Acceso Suspendido</h2>
+                    
+                    {% if suscripcion %}
+                        <p class="lead text-muted">
+                            Tu plan <strong>{{ suscripcion.get_plan_display }}</strong> se encuentra actualmente en estado 
+                            <span class="badge bg-danger">{{ suscripcion.get_estado_display }}</span>.
+                        </p>
+                        <p class="text-secondary mb-4">
+                            Oops! Parece que hubo un problema procesando el pago o tu período de prueba expiró el 
+                            <strong>{{ suscripcion.fecha_proximo_pago|date:"d M Y"|default:"(Fecha no definida)" }}</strong>.
+                        </p>
+                    {% else %}
+                        <p class="lead text-muted">Aún no cuentas con un plan de suscripción activo asociado a tu cuenta.</p>
+                    {% endif %}
+                    
+                    <div class="mt-4 pt-3 border-top">
+                        <!-- En el futuro este botón enviará a Stripe Billing Portal -->
+                        <a href="#" class="btn btn-primary btn-lg px-5">💳 Ver Planes y Renovar</a>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <small class="text-muted">Si crees que esto es un error, por favor contacta a equipo de soporte.</small>
+                        <br>
+                        <a href="{% url 'dashboard' %}" class="small text-decoration-none text-secondary">Volver al inicio</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

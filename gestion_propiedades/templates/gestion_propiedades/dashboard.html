@@ -1,0 +1,103 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+
+{% block encabezado %}
+    {{ titulo_pagina }}
+{% endblock %}
+
+{% block contenido %}
+
+<div class="d-flex justify-content-end mb-4">
+    <a href="{% url 'crear_propiedad' %}" class="btn btn-outline-primary me-2">+ Propiedad</a>
+    <a href="{% url 'crear_contrato' %}" class="btn btn-outline-primary me-2">+ Contrato</a>
+    
+    <a href="{% url 'generar_facturas_masivas' %}" class="btn btn-success shadow-sm">
+        ⚡ Generar Facturas del Mes
+    </a>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card shadow-sm border-0 border-start border-primary border-4 h-100">
+            <div class="card-body">
+                <h6 class="text-muted fw-bold text-uppercase">Propiedades Administradas</h6>
+                <h2 class="mb-0 fw-bold">{{ total_propiedades }}</h2>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card shadow-sm border-0 border-start border-danger border-4 h-100">
+            <div class="card-body">
+                <h6 class="text-muted fw-bold text-uppercase">Cuentas por Cobrar</h6>
+                <h2 class="mb-0 fw-bold text-danger">${{ cuentas_por_cobrar|floatformat:2 }}</h2>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card shadow-sm border-0 border-start border-success border-4 h-100">
+            <div class="card-body">
+                <h6 class="text-muted fw-bold text-uppercase">Ingresos del Mes</h6>
+                <h2 class="mb-0 fw-bold text-success">${{ ingresos_mes|floatformat:2 }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0 mb-4 mt-4">
+    <div class="card-header bg-white fw-bold text-danger py-3">
+        ⚠️ Atención Requerida: Pagos Pendientes y Atrasados
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="px-4 py-3">Propiedad</th>
+                        <th class="py-3">Inquilino</th>
+                        <th class="py-3">Concepto</th>
+                        <th class="py-3">Vencimiento</th>
+                        <th class="py-3 text-end">Monto Adeudado</th>
+                        <th class="py-3 text-center px-4">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for factura in facturas_pendientes %}
+                    <tr>
+                        <td class="px-4 py-3 fw-bold">
+                            <a href="{% url 'detalle_propiedad' factura.contrato.propiedad.id %}" class="text-decoration-none text-dark">
+                                {{ factura.contrato.propiedad.nombre_o_numero }}
+                            </a>
+                        </td>
+                        <td class="py-3">{{ factura.contrato.inquilino.nombre }}</td>
+                        <td class="py-3 small text-muted">{{ factura.concepto }}</td>
+                        <td class="py-3">
+                            <span class="{% if factura.estado == 'ATRASADA' %}text-danger fw-bold{% endif %}">
+                                {{ factura.fecha_vencimiento|date:"d M Y" }}
+                            </span>
+                        </td>
+                        <td class="py-3 text-end fw-bold text-danger">
+                            ${{ factura.monto_total_con_mora|floatformat:2 }}
+                        </td>
+                        <td class="py-3 text-center px-4">
+                            <a href="{% url 'registrar_pago' factura.id %}" class="btn btn-sm btn-success shadow-sm">
+                                💰 Cobrar
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-muted">
+                            🎉 ¡Excelentes noticias! Todos tus inquilinos están al día. No hay pagos pendientes.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

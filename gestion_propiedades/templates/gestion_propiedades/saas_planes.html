@@ -1,0 +1,94 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+
+{% block contenido %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="h3 fw-bold text-dark">🏷️ {{ titulo_pagina }}</h2>
+    <a href="{% url 'saas_master_control' %}" class="btn btn-outline-secondary btn-sm">← Volver al Master Control</a>
+</div>
+
+<div class="row g-4">
+    <!-- Lista de Planes Actuales -->
+    <div class="col-md-8">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0 fw-bold">Planes Activos en el Sistema</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="px-4 py-3">Nombre del Plan</th>
+                                <th>Precio (Mensual)</th>
+                                <th>Límite Propiedades</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for plan in planes %}
+                            <tr>
+                                <td class="px-4 py-3 fw-bold">{{ plan.nombre }}</td>
+                                <td><span class="text-success fw-bold">${{ plan.precio_mensual }}</span></td>
+                                <td>{{ plan.limite_propiedades }} inmuebles</td>
+                                <td>
+                                    {% if plan.activo %}
+                                        <span class="badge bg-success">Público</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">Oculto</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-5 text-muted">
+                                    Aún no hay ningún plan comercial registrado en la base de datos de precios.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulario Nuevo Plan -->
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-primary text-white py-3">
+                <h5 class="mb-0 fw-bold">+ Nuevo Plan SaaS</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Nombre del Nivel (Ej. Premium)</label>
+                        {{ form.nombre }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Precio Cobro Mensual (USD)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light">$</span>
+                            {{ form.precio_mensual }}
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label fw-bold small text-muted">Límite de Propiedades</label>
+                        {{ form.limite_propiedades }}
+                        <div class="form-text mt-1">Cuántas entidades podrá crear un cliente bajo este plan.</div>
+                    </div>
+                    <div class="mb-4 form-check">
+                        {{ form.activo }}
+                        <label class="form-check-label fw-bold text-dark" for="{{ form.activo.id_for_label }}">
+                            Habilitar Plan Públicamente
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 fw-bold">Guardar Nuevo Plan</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

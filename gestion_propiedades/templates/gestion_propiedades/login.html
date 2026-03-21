@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar Sesión - Software de Alquileres B2B</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .login-card {
+            max-width: 400px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border: none;
+        }
+        .form-control:focus {
+            box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.25);
+            border-color: #0d6efd;
+        }
+    </style>
+</head>
+<body class="d-flex align-items-center justify-content-center vh-100">
+
+    <div class="card login-card w-100 mx-3">
+        <div class="card-body p-5">
+            <div class="text-center mb-4">
+                <h3 class="fw-bold text-primary mb-1">🏢 Alquilo Suite</h3>
+                <p class="text-muted small">Gestión Inteligente de Inmuebles</p>
+            </div>
+            
+            {% if form.errors %}
+                <div class="alert alert-danger py-2 small text-center rounded-3">
+                    Credenciales incorrectas. Verifique e intente nuevamente.
+                </div>
+            {% endif %}
+
+            <form method="post" action="{% url 'login' %}">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label class="form-label text-muted small fw-bold mb-1">Usuario o Correo Electrónico</label>
+                    <input type="text" name="username" class="form-control form-control-lg" required autofocus>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="form-label text-muted small fw-bold mb-1">Contraseña de Acceso</label>
+                    <input type="password" name="password" class="form-control form-control-lg" required>
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold rounded-3">Ingresar al Sistema</button>
+                {% url 'dashboard' as url_dashboard %}
+                <input type="hidden" name="next" value="{{ next|default:url_dashboard }}">
+            </form>
+            
+            <div class="text-center mt-4 text-muted small">
+                © {% now "Y" %} Alquilo. Todos los derechos reservados.
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

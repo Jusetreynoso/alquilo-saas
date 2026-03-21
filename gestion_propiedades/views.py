@@ -1,0 +1,988 @@
+from django.shortcuts import render, get_object_or_404, redirect
+from django.http import HttpResponse
+from django.contrib.auth.decorators import login_required
+from django.db.models import Sum, Q, Prefetch, F
+from django.contrib import messages
+from datetime import date
+from .models import Portafolio, Propiedad, Factura, CargoMora, ReciboPago, Contrato, SolicitudAlquiler, MantenimientoUnidad, Inquilino, PlanSaaS, SuscripcionCliente
+from .forms import NuevoClienteSaaSForm, EditarSuscripcionForm, PropiedadForm, ContratoForm, InquilinoForm, MantenimientoForm, PlanSaaSForm
+from .utils import render_to_pdf
+import calendar
+from django.db.models.functions import TruncMonth
+from collections import defaultdict
+
+
+# --- VISTA PÚBLICA COMERCIAL ---
+def inicio_comercial(request):
+    """
+    Landing Page (Página de Aterrizaje) Pública para ofertar el Software B2B Alquilo.
+    No requiere autenticación. Si el usuario ya inició sesión, puede enviarse al dashboard.
+    """
+    if request.user.is_authenticated:
+        pass # Podríamos redirigirlo, pero dejaremos que vea la página
+        
+    return render(request, 'gestion_propiedades/sitio_comercial.html')
+
+# --- PANEL PRINCIPAL INTERNO ---
+
+@login_required(login_url='/login/')
+def dashboard(request):
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+
+    total_propiedades = Propiedad.objects.filter(portafolio__in=portafolios).count()
+
+    # 1. Le agregamos el .order_by para que las deudas más viejas salgan primero
+    facturas_pendientes = Factura.objects.filter(
+        contrato__propiedad__portafolio__in=portafolios,
+        estado__in=['PENDIENTE', 'ATRASADA']
+    ).order_by('fecha_vencimiento')
+
+    suma_facturas = facturas_pendientes.aggregate(total=Sum('monto_base'))['total'] or 0
+    suma_moras = CargoMora.objects.filter(factura__in=facturas_pendientes).aggregate(total=Sum('monto'))['total'] or 0
+    cuentas_por_cobrar = suma_facturas + suma_moras
+
+    hoy = date.today()
+    ingresos_mes = ReciboPago.objects.filter(
+        factura__contrato__propiedad__portafolio__in=portafolios,
+        fecha_pago__year=hoy.year,
+        fecha_pago__month=hoy.month
+    ).aggregate(total=Sum('monto_pagado'))['total'] or 0
+
+    context = {
+        'titulo_pagina': 'Resumen de Portafolio',
+        'total_propiedades': total_propiedades,
+        'cuentas_por_cobrar': cuentas_por_cobrar,
+        'ingresos_mes': ingresos_mes,
+        # 2. ¡AGREGAMOS ESTA LÍNEA AL CONTEXTO!
+        'facturas_pendientes': facturas_pendientes, 
+    }
+    
+    return render(request, 'gestion_propiedades/dashboard.html', context)
+
+@login_required(login_url='/login/')
+def lista_propiedades(request):
+    # 1. Buscamos los portafolios a los que tiene acceso el usuario
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+
+    # 2. Traemos las propiedades. 
+    # Usamos Prefetch para buscar automáticamente el contrato activo de cada propiedad
+    # y así saber rápidamente a quién está alquilado sin saturar la base de datos.
+    contratos_activos = Contrato.objects.filter(activo=True)
+    propiedades = Propiedad.objects.filter(portafolio__in=portafolios).prefetch_related(
+        Prefetch('contratos', queryset=contratos_activos, to_attr='contrato_activo')
+    ).order_by('grupo_o_residencial', 'nombre_o_numero')
+
+    context = {
+        'titulo_pagina': 'Mis Propiedades',
+        'propiedades': propiedades,
+    }
+    return render(request, 'gestion_propiedades/lista_propiedades.html', context)
+
+@login_required(login_url='/login/')
+def detalle_propiedad(request, propiedad_id):
+    # 1. Seguridad: Asegurarnos de que el usuario tenga acceso al portafolio de esta propiedad
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+    
+    # Busca la propiedad, y si no existe o no es de él, da error 404
+    propiedad = get_object_or_404(Propiedad, id=propiedad_id, portafolio__in=portafolios)
+
+    # 2. Buscar el Inquilino actual (Contrato Activo)
+    contrato_activo = propiedad.contratos.filter(activo=True).first()
+
+    # 3. Historial de Facturas (De todos los contratos que haya tenido esta propiedad)
+    facturas = Factura.objects.filter(contrato__propiedad=propiedad).order_by('-fecha_emision')
+
+    # 4. Historial de Mantenimientos
+    mantenimientos = propiedad.historial_mantenimientos.all().order_by('-fecha_reporte')
+
+    # Buscar las solicitudes creadas para esta propiedad
+    solicitudes = propiedad.solicitudes.all().order_by('-creada_en')
+
+    context = {
+        'titulo_pagina': f'Detalle: {propiedad.nombre_o_numero}',
+        'propiedad': propiedad,
+        'contrato_activo': contrato_activo,
+        'facturas': facturas,
+        'mantenimientos': mantenimientos,
+        'solicitudes': solicitudes,
+    }
+    return render(request, 'gestion_propiedades/detalle_propiedad.html', context)
+
+@login_required(login_url='/login/')
+def registrar_pago(request, factura_id):
+    # Buscamos la factura
+    factura = get_object_or_404(Factura, id=factura_id)
+
+    # Si el usuario hace clic en el botón "Guardar Pago" (Método POST)
+    if request.method == 'POST':
+        monto = request.POST.get('monto')
+        metodo = request.POST.get('metodo_pago')
+        referencia = request.POST.get('referencia')
+        fecha = request.POST.get('fecha_pago')
+
+        # 1. Creamos el Recibo de Pago en la base de datos
+        ReciboPago.objects.create(
+            factura=factura,
+            fecha_pago=fecha,
+            monto_pagado=monto,
+            metodo_pago=metodo,
+            referencia_transaccion=referencia
+        )
+
+        # 2. Actualizamos la Factura para que ya no salga como deuda
+        factura.estado = 'PAGADA'
+        factura.save()
+
+        # 3. Lo devolvemos al expediente de la propiedad
+        return redirect('detalle_propiedad', propiedad_id=factura.contrato.propiedad.id)
+
+    # Si solo está entrando a ver la pantalla (Método GET), le mostramos el formulario
+    context = {
+        'titulo_pagina': f'Cobrar Factura #{factura.id}',
+        'factura': factura,
+    }
+    return render(request, 'gestion_propiedades/registrar_pago.html', context)
+
+@login_required(login_url='/login/')
+def lista_contratos(request):
+    # 1. Filtramos por los portafolios del usuario
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+
+    # 2. Buscamos los contratos de esas propiedades
+    # Los ordenamos para que los Activos salgan primero, y luego por el nombre de la propiedad
+    contratos = Contrato.objects.filter(
+        propiedad__portafolio__in=portafolios
+    ).select_related('propiedad').order_by('-activo', 'propiedad__nombre_o_numero')
+
+    context = {
+        'titulo_pagina': 'Gestión de Contratos',
+        'contratos': contratos,
+    }
+    return render(request, 'gestion_propiedades/lista_contratos.html', context)
+
+@login_required(login_url='/login/')
+def imprimir_recibo(request, recibo_id):
+    # 1. Buscamos el recibo (asegurando que pertenezca a un portafolio del usuario)
+    recibo = get_object_or_404(ReciboPago, id=recibo_id)
+
+    # Validación de seguridad simple:
+    # Si el usuario no es dueño ni asistente del portafolio, dar error 404
+    if recibo.factura.contrato.propiedad.portafolio.propietario != request.user:
+        # Aquí podríamos refinar la validación para asistentes, pero por ahora esto protege
+        pass 
+
+    # 2. Preparamos los datos
+    data = {
+        'recibo': recibo,
+        'factura': recibo.factura,
+        'contrato': recibo.factura.contrato,
+        'propiedad': recibo.factura.contrato.propiedad,
+        'usuario': request.user,
+    }
+
+    # 3. Generamos el PDF
+    pdf = render_to_pdf('gestion_propiedades/recibo_pdf.html', data)
+
+    # 4. Devolvemos el archivo para descarga o visualización
+    if pdf:
+        response = HttpResponse(pdf, content_type='application/pdf')
+        filename = f"Recibo_{recibo.id}_{recibo.fecha_pago}.pdf"
+        content = f"inline; filename={filename}"
+        response['Content-Disposition'] = content
+        return response
+    return HttpResponse("Error al generar el PDF", status=404)
+
+# --- Agrega esto AL FINAL del archivo, después de imprimir_recibo ---
+
+@login_required(login_url='/login/')
+def crear_propiedad(request):
+    # IMPORTACIÓN LOCAL (CRUCIAL):
+    from .forms import PropiedadForm 
+
+    if request.method == 'POST':
+        form = PropiedadForm(request.POST)
+        if form.is_valid():
+            nueva_propiedad = form.save(commit=False)
+            # Buscamos el portafolio principal del usuario
+            portafolio_principal = Portafolio.objects.filter(propietario=request.user).first()
+            
+            if not portafolio_principal:
+                acceso = request.user.portafolios_asignados.first()
+                if acceso:
+                    portafolio_principal = acceso.portafolio
+            
+            if portafolio_principal:
+                nueva_propiedad.portafolio = portafolio_principal
+                nueva_propiedad.save()
+                return redirect('lista_propiedades')
+            else:
+                return HttpResponse("Error: No tienes un portafolio asignado.")
+    else:
+        form = PropiedadForm()
+
+    context = {'titulo_pagina': 'Nueva Propiedad', 'form': form}
+    return render(request, 'gestion_propiedades/form_generico.html', context)
+
+@login_required(login_url='/login/')
+def crear_contrato(request):
+    from .forms import ContratoForm
+    
+    if request.method == 'POST':
+        # IMPORTANTE: Agregamos request.FILES aquí para guardar los PDFs/Fotos
+        form = ContratoForm(request.user, request.POST, request.FILES)
+        if form.is_valid():
+            nuevo_contrato = form.save()
+            propiedad = nuevo_contrato.propiedad
+            propiedad.estado = 'OCUPADO'
+            propiedad.save()
+            return redirect('lista_contratos')
+    else:
+        form = ContratoForm(request.user)
+
+    import json
+    portafolios = Portafolio.objects.filter(Q(propietario=request.user) | Q(accesos__usuario=request.user))
+    propiedades = Propiedad.objects.filter(portafolio__in=portafolios).select_related('portafolio')
+    config_depositos = {
+        str(p.id): {
+            'dep': p.portafolio.config_meses_deposito,
+            'adel': p.portafolio.config_meses_adelanto
+        } for p in propiedades
+    }
+
+    context = {
+        'titulo_pagina': 'Nuevo Contrato de Alquiler', 
+        'form': form,
+        'es_contrato': True,
+        'config_depositos': json.dumps(config_depositos)
+    }
+    return render(request, 'gestion_propiedades/form_generico.html', context)
+
+@login_required(login_url='/login/')
+def generar_facturas_masivas(request):
+    # 1. Buscamos los portafolios del usuario
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+
+    # 2. Buscamos contratos activos
+    contratos = Contrato.objects.filter(
+        propiedad__portafolio__in=portafolios,
+        activo=True
+    )
+
+    hoy = date.today()
+    facturas_creadas = 0
+
+    for contrato in contratos:
+        # 3. Verificamos si YA existe una factura para este mes y año
+        existe = Factura.objects.filter(
+            contrato=contrato,
+            fecha_emision__month=hoy.month,
+            fecha_emision__year=hoy.year
+        ).exists()
+
+        if not existe:
+            # Calcular fecha de vencimiento (Manejo de errores si el mes es febrero y el día es 30)
+            try:
+                fecha_vencimiento = date(hoy.year, hoy.month, contrato.dia_de_pago)
+            except ValueError:
+                # Si el día de pago es 31 y el mes solo tiene 30 (o 28), usamos el último día del mes
+                ultimo_dia_mes = calendar.monthrange(hoy.year, hoy.month)[1]
+                fecha_vencimiento = date(hoy.year, hoy.month, ultimo_dia_mes)
+
+            # 4. Crear la Factura
+            Factura.objects.create(
+                contrato=contrato,
+                fecha_emision=hoy,
+                fecha_vencimiento=fecha_vencimiento,
+                monto_base=contrato.monto_renta,
+                concepto=f"Renta {hoy.strftime('%B %Y')}", # Ej: Renta February 2026
+                estado='PENDIENTE'
+            )
+            facturas_creadas += 1
+
+    # 5. Mensaje de éxito
+    if facturas_creadas > 0:
+        messages.success(request, f'¡Éxito! Se han generado {facturas_creadas} facturas nuevas.')
+    else:
+        messages.info(request, 'No se generaron facturas. Todos tus inquilinos ya tienen su factura de este mes.')
+
+    return redirect('dashboard')
+
+@login_required(login_url='/login/')
+def registrar_gasto(request, propiedad_id):
+    from .forms import MantenimientoForm
+    
+    portafolios = Portafolio.objects.filter(Q(propietario=request.user) | Q(accesos__usuario=request.user))
+    propiedad = get_object_or_404(Propiedad, id=propiedad_id, portafolio__in=portafolios)
+
+    if request.method == 'POST':
+        # request.FILES es OBLIGATORIO para subir la 'factura_adjunta'
+        form = MantenimientoForm(request.POST, request.FILES)
+        if form.is_valid():
+            gasto = form.save(commit=False)
+            gasto.propiedad = propiedad
+            gasto.save()
+            messages.success(request, 'Gasto registrado correctamente.')
+            return redirect('detalle_propiedad', propiedad_id=propiedad.id)
+    else:
+        form = MantenimientoForm()
+
+    context = {
+        'titulo_pagina': f'Registrar Gasto: {propiedad.nombre_o_numero}',
+        'form': form
+    }
+    return render(request, 'gestion_propiedades/form_generico.html', context)
+
+@login_required(login_url='/login/')
+def finalizar_contrato(request, contrato_id):
+    # 1. Buscamos el contrato asegurando los permisos del usuario
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+    
+    contrato = get_object_or_404(Contrato, id=contrato_id, propiedad__portafolio__in=portafolios)
+
+    # Solo permitimos finalizar mediante el botón (método POST) por seguridad
+    if request.method == 'POST':
+        # 2. Desactivamos el contrato y le ponemos fecha de fin oficial
+        contrato.activo = False
+        contrato.fecha_fin = date.today()
+        contrato.save()
+
+        # 3. Liberamos la propiedad
+        propiedad = contrato.propiedad
+        propiedad.estado = 'DISPONIBLE'
+        propiedad.save()
+
+        messages.success(request, f'El contrato de {contrato.inquilino.nombre} ha sido finalizado. La propiedad vuelve a estar disponible.')
+        return redirect('detalle_propiedad', propiedad_id=propiedad.id)
+
+    # Si alguien intenta acceder por la barra de direcciones (GET), lo devolvemos
+    return redirect('detalle_propiedad', propiedad_id=contrato.propiedad.id)
+
+@login_required(login_url='/login/')
+def editar_propiedad(request, propiedad_id):
+    from .forms import PropiedadForm
+    
+    portafolios = Portafolio.objects.filter(Q(propietario=request.user) | Q(accesos__usuario=request.user))
+    propiedad = get_object_or_404(Propiedad, id=propiedad_id, portafolio__in=portafolios)
+
+    if request.method == 'POST':
+        # instance=propiedad le dice a Django "actualiza este registro, no crees uno nuevo"
+        form = PropiedadForm(request.POST, instance=propiedad)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Propiedad actualizada correctamente.')
+            return redirect('detalle_propiedad', propiedad_id=propiedad.id)
+    else:
+        form = PropiedadForm(instance=propiedad)
+
+    context = {'titulo_pagina': f'Editar Propiedad: {propiedad.nombre_o_numero}', 'form': form}
+    return render(request, 'gestion_propiedades/form_generico.html', context)
+
+@login_required(login_url='/login/')
+def editar_contrato(request, contrato_id):
+    from .forms import ContratoForm
+    
+    portafolios = Portafolio.objects.filter(Q(propietario=request.user) | Q(accesos__usuario=request.user))
+    contrato = get_object_or_404(Contrato, id=contrato_id, propiedad__portafolio__in=portafolios)
+
+    if request.method == 'POST':
+        form = ContratoForm(request.user, request.POST, request.FILES, instance=contrato)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Contrato actualizado correctamente.')
+            return redirect('detalle_propiedad', propiedad_id=contrato.propiedad.id)
+    else:
+        form = ContratoForm(request.user, instance=contrato)
+
+    import json
+    propiedades = Propiedad.objects.filter(portafolio__in=portafolios).select_related('portafolio')
+    config_depositos = {
+        str(p.id): {
+            'dep': p.portafolio.config_meses_deposito,
+            'adel': p.portafolio.config_meses_adelanto
+        } for p in propiedades
+    }
+
+    context = {
+        'titulo_pagina': f'Editar Contrato: {contrato.inquilino.nombre}', 
+        'form': form,
+        'es_contrato': True,
+        'config_depositos': json.dumps(config_depositos)
+    }
+    return render(request, 'gestion_propiedades/form_generico.html', context)
+
+@login_required(login_url='/login/')
+def generar_solicitud(request, propiedad_id):
+    from .forms import SolicitudAdminForm
+    
+    portafolios = Portafolio.objects.filter(Q(propietario=request.user) | Q(accesos__usuario=request.user))
+    propiedad = get_object_or_404(Propiedad, id=propiedad_id, portafolio__in=portafolios)
+
+    if request.method == 'POST':
+        form = SolicitudAdminForm(request.POST)
+        if form.is_valid():
+            solicitud = form.save(commit=False)
+            solicitud.propiedad = propiedad
+            solicitud.estado = 'ENVIADA' # Lo marcamos como listo para enviar
+            solicitud.save()
+            messages.success(request, '¡Link de solicitud generado exitosamente!')
+            return redirect('detalle_propiedad', propiedad_id=propiedad.id)
+    else:
+        form = SolicitudAdminForm()
+
+    context = {
+        'titulo_pagina': f'Generar Solicitud: {propiedad.nombre_o_numero}',
+        'form': form
+    }
+    return render(request, 'gestion_propiedades/form_generico.html', context)
+
+# --- IMPORTANTE: NO PONER @login_required AQUÍ ---
+def solicitud_publica(request, codigo_secreto):
+    from .forms import SolicitudPublicaForm
+    
+    # Buscamos la solicitud usando el código secreto largo (UUID)
+    solicitud = get_object_or_404(SolicitudAlquiler, codigo_secreto=codigo_secreto)
+
+    # Si ya la llenó antes, no le dejamos llenarla de nuevo
+    if solicitud.estado in ['RECIBIDA', 'APROBADA', 'RECHAZADA']:
+        return HttpResponse("<h2 style='text-align:center; padding:50px; font-family:sans-serif;'>Esta solicitud ya fue completada y enviada. ¡Gracias!</h2>")
+
+    if request.method == 'POST':
+        form = SolicitudPublicaForm(request.POST, instance=solicitud)
+        if form.is_valid():
+            solicitud_guardada = form.save(commit=False)
+            solicitud_guardada.estado = 'RECIBIDA' # ¡Cambia el estado para avisarte!
+            solicitud_guardada.save()
+            # Mensaje de éxito gigante para el celular del prospecto
+            return HttpResponse("<h2 style='text-align:center; padding:50px; color:green; font-family:sans-serif;'>✅ ¡Solicitud enviada con éxito! El propietario se pondrá en contacto contigo.</h2>")
+    else:
+        form = SolicitudPublicaForm(instance=solicitud)
+
+    context = {
+        'solicitud': solicitud,
+        'form': form
+    }
+    return render(request, 'gestion_propiedades/solicitud_publica.html', context)
+
+@login_required(login_url='/login/')
+def ver_solicitud(request, solicitud_id):
+    from .models import SolicitudAlquiler, Portafolio
+    from django.db.models import Q
+    
+    # Seguridad: Validamos que la solicitud sea de una propiedad tuya
+    portafolios = Portafolio.objects.filter(Q(propietario=request.user) | Q(accesos__usuario=request.user))
+    solicitud = get_object_or_404(SolicitudAlquiler, id=solicitud_id, propiedad__portafolio__in=portafolios)
+
+    context = {
+        'titulo_pagina': f'Evaluación de Prospecto: {solicitud.nombre_completo}',
+        'solicitud': solicitud
+    }
+    return render(request, 'gestion_propiedades/ver_solicitud.html', context)
+
+@login_required(login_url='/login/')
+def reporte_financiero(request):
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+
+    ingresos_qs = ReciboPago.objects.filter(
+        factura__contrato__propiedad__portafolio__in=portafolios
+    ).annotate(
+        mes=TruncMonth('fecha_pago')
+    ).values(
+        'mes',
+        'factura__contrato__propiedad__id',
+        'factura__contrato__propiedad__nombre_o_numero'
+    ).annotate(total_ingresos=Sum('monto_pagado'))
+
+    egresos_qs = MantenimientoUnidad.objects.filter(
+        propiedad__portafolio__in=portafolios
+    ).annotate(
+        mes=TruncMonth('fecha_reporte') 
+    ).values(
+        'mes',
+        'propiedad__id',
+        'propiedad__nombre_o_numero'
+    ).annotate(total_egresos=Sum('costo'))
+
+    datos_financieros = defaultdict(lambda: {
+        'nombre_propiedad': '',
+        'mes_formateado': '',
+        'mes_date': None,
+        'ingresos': 0.0,
+        'egresos': 0.0,
+        'neto': 0.0
+    })
+
+    for ingreso in ingresos_qs:
+        if not ingreso['mes']: continue
+        llave = (ingreso['mes'], ingreso['factura__contrato__propiedad__id'])
+        datos = datos_financieros[llave]
+        
+        datos['nombre_propiedad'] = ingreso['factura__contrato__propiedad__nombre_o_numero']
+        datos['mes_formateado'] = ingreso['mes'].strftime('%Y-%m')
+        datos['mes_date'] = ingreso['mes']
+        datos['ingresos'] += float(ingreso['total_ingresos'] or 0)
+
+    for egreso in egresos_qs:
+        if not egreso['mes']: continue
+        llave = (egreso['mes'], egreso['propiedad__id'])
+        datos = datos_financieros[llave]
+        
+        if not datos['nombre_propiedad']:
+            datos['nombre_propiedad'] = egreso['propiedad__nombre_o_numero']
+            datos['mes_formateado'] = egreso['mes'].strftime('%Y-%m')
+            datos['mes_date'] = egreso['mes']
+            
+        datos['egresos'] += float(egreso['total_egresos'] or 0)
+
+    lista_finanzas = []
+    for llave, datos in datos_financieros.items():
+        datos['neto'] = datos['ingresos'] - datos['egresos']
+        lista_finanzas.append(datos)
+    
+    lista_finanzas.sort(key=lambda x: (x['mes_date'], x['nombre_propiedad']), reverse=True)
+
+    print("--- DEBUG P&L ---")
+    for row in lista_finanzas:
+        print(f"Mes: {row['mes_formateado']} | Prop: {row['nombre_propiedad']} | In: ${row['ingresos']} | Out: ${row['egresos']} | NETO: ${row['neto']}")
+    print("-----------------")
+
+    context = {
+        'titulo_pagina': 'Reporte Financiero (P&L)',
+        'finanzas': lista_finanzas
+    }
+    
+    return render(request, 'gestion_propiedades/reporte_financiero.html', context)
+
+
+# --- MÓDULO DE INQUILINOS ---
+
+@login_required
+def lista_mantenimientos_global(request):
+    from django.db.models import Case, When, Value, IntegerField, Q
+    
+    mantenimientos = MantenimientoUnidad.objects.filter(
+        Q(propiedad__portafolio__propietario=request.user) |
+        Q(propiedad__portafolio__accesos__usuario=request.user)
+    ).distinct().annotate(
+        estado_order=Case(
+            When(estado='PENDIENTE', then=Value(1)),
+            When(estado='PROGRESO', then=Value(2)),
+            When(estado='COMPLETADO', then=Value(3)),
+            default=Value(4),
+            output_field=IntegerField()
+        )
+    ).order_by('estado_order', '-fecha_reporte')
+    
+    context = {
+        'titulo_pagina': 'Mantenimiento Global (Helpdesk)',
+        'mantenimientos': mantenimientos,
+    }
+    return render(request, 'gestion_propiedades/mantenimientos_global.html', context)
+
+@login_required(login_url='/login/')
+def lista_inquilinos(request):
+    from .models import Inquilino
+    from django.db.models import Q
+    inquilinos = Inquilino.objects.filter(
+        Q(creado_por=request.user) | 
+        Q(contratos__propiedad__portafolio__propietario=request.user) |
+        Q(contratos__propiedad__portafolio__accesos__usuario=request.user)
+    ).distinct().order_by('nombre')
+    
+    context = {
+        'titulo_pagina': 'Directorio de Inquilinos',
+        'inquilinos': inquilinos,
+    }
+    return render(request, 'gestion_propiedades/lista_inquilinos.html', context)
+
+@login_required(login_url='/login/')
+def crear_inquilino(request):
+    from .forms import InquilinoForm
+    if request.method == 'POST':
+        form = InquilinoForm(request.POST)
+        if form.is_valid():
+            inquilino = form.save(commit=False)
+            inquilino.creado_por = request.user
+            inquilino.save()
+            messages.success(request, 'Inquilino registrado con éxito.')
+            return redirect('lista_inquilinos')
+    else:
+        form = InquilinoForm()
+
+    context = {'titulo_pagina': 'Nuevo Inquilino', 'form': form}
+    return render(request, 'gestion_propiedades/form_generico.html', context)
+
+@login_required(login_url='/login/')
+def editar_inquilino(request, inquilino_id):
+    from .forms import InquilinoForm
+    from .models import Inquilino
+    inquilino = get_object_or_404(Inquilino, id=inquilino_id)
+    if request.method == 'POST':
+        form = InquilinoForm(request.POST, instance=inquilino)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Datos del inquilino actualizados.')
+            return redirect('detalle_inquilino', inquilino_id=inquilino.id)
+    else:
+        form = InquilinoForm(instance=inquilino)
+
+    context = {'titulo_pagina': f'Editar Inquilino: {inquilino.nombre}', 'form': form}
+    return render(request, 'gestion_propiedades/form_generico.html', context)
+
+@login_required(login_url='/login/')
+def detalle_inquilino(request, inquilino_id):
+    from .models import Inquilino
+    inquilino = get_object_or_404(Inquilino, id=inquilino_id)
+    # Historial de contratos vinculados a este inquilino
+    contratos = inquilino.contratos.all().select_related('propiedad').order_by('-fecha_inicio')
+    
+    context = {
+        'titulo_pagina': f'Perfil de Inquilino: {inquilino.nombre}',
+        'inquilino': inquilino,
+        'contratos': contratos,
+    }
+    return render(request, 'gestion_propiedades/detalle_inquilino.html', context)
+
+
+# --- MÓDULO DE FACTURACIÓN GLOBAL ---
+
+@login_required(login_url='/login/')
+def lista_facturas_global(request):
+    from django.db.models import Case, When, Value, IntegerField
+    portafolios = Portafolio.objects.filter(Q(propietario=request.user) | Q(accesos__usuario=request.user)).distinct()
+    
+    # Facturas ordenadas priorizando las deudas (ATRASADA, PENDIENTE) y luego orden cronológico
+    facturas = Factura.objects.filter(
+        contrato__propiedad__portafolio__in=portafolios
+    ).select_related(
+        'contrato', 'contrato__propiedad', 'contrato__inquilino'
+    ).annotate(
+        orden_estado=Case(
+            When(estado='ATRASADA', then=Value(1)),
+            When(estado='PENDIENTE', then=Value(2)),
+            When(estado='PAGADA', then=Value(3)),
+            When(estado='ANULADA', then=Value(4)),
+            default=Value(5),
+            output_field=IntegerField(),
+        )
+    ).order_by('orden_estado', '-fecha_vencimiento')
+    
+    # Últimos recibos (historial de pagos recientes)
+    recibos = ReciboPago.objects.filter(
+        factura__contrato__propiedad__portafolio__in=portafolios
+    ).select_related(
+        'factura', 'factura__contrato__propiedad', 'factura__contrato__inquilino'
+    ).order_by('-fecha_pago')[:50]
+    
+    context = {
+        'titulo_pagina': 'Facturación y Pagos',
+        'facturas': facturas,
+        'recibos': recibos,
+    }
+    return render(request, 'gestion_propiedades/facturacion_global.html', context)
+
+
+# --- MÓDULO B2B SAAS ---
+
+@login_required(login_url='/login/')
+def aviso_pago(request):
+    try:
+        suscripcion = request.user.suscripcion
+    except Exception:
+        suscripcion = None
+        
+    context = {'titulo_pagina': 'Aviso de Pago Requerido', 'suscripcion': suscripcion}
+    return render(request, 'gestion_propiedades/aviso_pago.html', context)
+
+
+@login_required(login_url='/login/')
+def saas_master_control(request):
+    from django.contrib.auth.models import User
+    
+    # DENEGAR ACCESO a clientes ordinarios
+    if not request.user.is_superuser:
+        return redirect('dashboard')
+        
+    usuarios_saas = User.objects.filter(is_superuser=False).prefetch_related('suscripcion', 'portafolios', 'portafolios__propiedades')
+    
+    clientes_data = []
+    for u in usuarios_saas:
+        # Calcular cuantas propiedades gestionan en total entre sus portafolios
+        props_count = sum(p.propiedades.count() for p in u.portafolios.all())
+        
+        try:
+            plan = u.suscripcion.plan_saas.nombre if u.suscripcion.plan_saas else (u.suscripcion.plan or "SaaS Automático")
+            estado = u.suscripcion.estado
+            estado_display = u.suscripcion.get_estado_display()
+            fecha_prox = u.suscripcion.fecha_proximo_pago
+        except Exception:
+            plan = "Sin asignar"
+            estado = "INACTIVO"
+            estado_display = "No Instalado"
+            fecha_prox = None
+            
+        clientes_data.append({
+            'id': u.id,
+            'nombre': u.get_full_name() or u.username,
+            'email': u.email,
+            'fecha_registro': u.date_joined,
+            'plan': plan,
+            'estado': estado,
+            'estado_display': estado_display,
+            'fecha_proximo_pago': fecha_prox,
+            'propiedades': props_count
+        })
+        
+    context = {
+        'titulo_pagina': 'Centro de Mando SaaS',
+        'clientes': clientes_data,
+        'total_clientes': len(clientes_data),
+        'total_activos': sum(1 for c in clientes_data if c['estado'] == 'ACTIVA'),
+        'total_suspendidos': sum(1 for c in clientes_data if c['estado'] == 'SUSPENDIDA'),
+        'total_trials': sum(1 for c in clientes_data if c['estado'] == 'TRIAL'),
+    }
+    return render(request, 'gestion_propiedades/saas_master.html', context)
+
+
+@login_required(login_url='/login/')
+def crear_cliente_saas(request):
+    from django.contrib.auth.models import User
+    if not request.user.is_superuser:
+        return redirect('dashboard')
+        
+    if request.method == 'POST':
+        form = NuevoClienteSaaSForm(request.POST)
+        if form.is_valid():
+            email = form.cleaned_data['email']
+            user = User.objects.create_user(
+                username=email,
+                email=email,
+                password=form.cleaned_data['password'],
+                first_name=form.cleaned_data['nombre'],
+                last_name=form.cleaned_data['apellidos']
+            )
+            # Portafolio inicial
+            nombre_portf = form.cleaned_data['nombre_portafolio'] or f"Portafolio de {user.first_name}"
+            Portafolio.objects.create(nombre=nombre_portf, propietario=user)
+            
+            # Suscripcion Trial
+            plan_trial = PlanSaaS.objects.filter(activo=True).first()
+            from datetime import timedelta
+            from django.utils import timezone
+            SuscripcionCliente.objects.create(
+                usuario=user,
+                plan_saas=plan_trial,
+                estado='TRIAL',
+                fecha_proximo_pago=timezone.now().date() + timedelta(days=14)
+            )
+            messages.success(request, f"Cliente {user.first_name} creado con éxito.")
+            return redirect('saas_master_control')
+    else:
+        form = NuevoClienteSaaSForm()
+        
+    context = {'titulo_pagina': 'Alta de Cliente B2B', 'form': form}
+    return render(request, 'gestion_propiedades/form_generico.html', context)
+
+@login_required(login_url='/login/')
+def editar_suscripcion_saas(request, cliente_id):
+    from django.contrib.auth.models import User
+    if not request.user.is_superuser:
+        return redirect('dashboard')
+        
+    cliente = get_object_or_404(User, id=cliente_id)
+    try:
+        suscripcion = cliente.suscripcion
+    except Exception:
+        suscripcion = None
+    
+    if request.method == 'POST':
+        form = EditarSuscripcionForm(request.POST, instance=suscripcion)
+        if form.is_valid():
+            sub = form.save(commit=False)
+            if not suscripcion:
+                sub.usuario = cliente
+            sub.save()
+            messages.success(request, f"Suscripción de {cliente.first_name} actualizada.")
+            return redirect('saas_master_control')
+    else:
+        form = EditarSuscripcionForm(instance=suscripcion)
+        
+    context = {'titulo_pagina': f'Suscripción de: {cliente.get_full_name() or cliente.username}', 'form': form}
+    return render(request, 'gestion_propiedades/form_generico.html', context)
+
+@login_required
+def saas_planes(request):
+    if not request.user.is_superuser:
+        return redirect('dashboard')
+    
+    planes = PlanSaaS.objects.all().order_by('precio_mensual')
+    if request.method == 'POST':
+        form = PlanSaaSForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'El nuevo plan fue añadido exitosamente a la plataforma.')
+            return redirect('saas_planes')
+    else:
+        form = PlanSaaSForm()
+        
+    context = {'titulo_pagina': 'Configurar Planes SaaS', 'planes': planes, 'form': form}
+    return render(request, 'gestion_propiedades/saas_planes.html', context)
+
+
+# --- FACTURACIÓN SAAS (PAY-AS-YOU-GROW) ---
+
+@login_required(login_url='/login/')
+def mi_suscripcion(request):
+    """
+    Vista B2B para que el cliente vea su facturación SaaS ($1 por propiedad).
+    """
+    from .models import Propiedad, FacturaSaaS
+    
+    propiedades_activas = Propiedad.objects.filter(
+        portafolio__propietario=request.user
+    ).exclude(estado='INACTIVO').count()
+    
+    costo_proyectado = propiedades_activas * 1.00
+    facturas_saas = FacturaSaaS.objects.filter(usuario=request.user).order_by('-fecha_emision')
+    
+    try:
+        suscripcion = request.user.suscripcion
+    except Exception:
+        suscripcion = None
+        
+    context = {
+        'titulo_pagina': 'Mi Facturación B2B',
+        'propiedades_activas': propiedades_activas,
+        'costo_proyectado': costo_proyectado,
+        'facturas_saas': facturas_saas,
+        'suscripcion': suscripcion,
+    }
+    return render(request, 'gestion_propiedades/mi_suscripcion.html', context)
+
+@login_required(login_url='/login/')
+def generar_corte_saas(request):
+    """
+    Botón maestro (Superadmin) para facturar a todos los clientes.
+    """
+    if not request.user.is_superuser:
+        messages.error(request, "Acceso denegado. Solo el Administrador Global puede emitir cortes.")
+        return redirect('dashboard')
+        
+    from django.utils import timezone
+    from datetime import timedelta
+    from django.contrib.auth.models import User
+    from .models import Propiedad, FacturaSaaS
+    
+    hoy = timezone.now().date()
+    # Filtramos clientes SaaS ignorando superusuarios
+    clientes = User.objects.filter(is_superuser=False, suscripcion__isnull=False)
+    facturas_creadas = 0
+    
+    for cliente in clientes:
+        suscripcion = cliente.suscripcion
+        
+        # Guard 1: Solo facturar a cuentas que ya son de PAGO (ACTIVA). Excluir TRIAL y SUSPENDIDAS.
+        if suscripcion.estado != 'ACTIVA':
+            continue
+        
+        # Guard 2: Si ya le facturamos y no ha llegado su proxima fecha de corte, lo saltamos
+        if suscripcion.fecha_proximo_pago and hoy < suscripcion.fecha_proximo_pago:
+            continue
+            
+        cant_propiedades = Propiedad.objects.filter(
+            portafolio__propietario=cliente
+        ).exclude(estado='INACTIVO').count()
+        
+        if cant_propiedades > 0:
+            monto = cant_propiedades * 1.00
+            fecha_venc = hoy + timedelta(days=5)
+            FacturaSaaS.objects.create(
+                usuario=cliente,
+                fecha_vencimiento=fecha_venc,
+                monto_total=monto,
+                propiedades_cobradas=cant_propiedades,
+                estado='PENDIENTE'
+            )
+            facturas_creadas += 1
+            
+            # Reprogramar próximo cobro (1 mes)
+            suscripcion.fecha_proximo_pago = hoy + timedelta(days=30)
+            suscripcion.save()
+            
+    if facturas_creadas > 0:
+        messages.success(request, f"Éxito: Se generaron {facturas_creadas} facturas para clientes en fecha de corte.")
+    else:
+        messages.info(request, "Protección Activa: Ningún cliente necesita facturación hoy. No se duplicaron cobros.")
+        
+    return redirect('saas_master_control')
+
+@login_required(login_url='/login/')
+def eliminar_propiedad(request, propiedad_id):
+    """
+    Archiva una propiedad para que ya no cuente en la facturación del usuario.
+    """
+    propiedad = get_object_or_404(Propiedad, id=propiedad_id)
+    
+    if request.user != propiedad.portafolio.propietario:
+        messages.error(request, 'No tienes permiso para archivar esta propiedad.')
+        return redirect('lista_propiedades')
+        
+    propiedad.estado = 'INACTIVO'
+    propiedad.save()
+    messages.success(request, f'La propiedad "{propiedad.nombre_o_numero}" ha sido archivada y dejará de generar cargos a tu suscripción.')
+    return redirect('lista_propiedades')
+
+@login_required(login_url='/login/')
+def saas_facturacion(request):
+    """
+    Panel para que el Superadmin vea TODAS las Facturas SaaS emitidas a los clientes y el dinero recaudado.
+    """
+    if not request.user.is_superuser:
+        return redirect('dashboard')
+        
+    from django.db.models import Sum
+    from .models import FacturaSaaS
+    
+    facturas = FacturaSaaS.objects.select_related('usuario').order_by('-fecha_emision')
+    
+    total_cobrado = facturas.filter(estado='PAGADA').aggregate(total=Sum('monto_total'))['total'] or 0.00
+    total_pendiente = facturas.filter(estado='PENDIENTE').aggregate(total=Sum('monto_total'))['total'] or 0.00
+    
+    context = {
+        'titulo_pagina': 'Reporte de Recaudación B2B',
+        'facturas': facturas,
+        'total_cobrado': total_cobrado,
+        'total_pendiente': total_pendiente
+    }
+    return render(request, 'gestion_propiedades/saas_facturacion.html', context)
+
+@login_required(login_url='/login/')
+def marcar_factura_saas_pagada(request, factura_id):
+    """
+    Permite al Superadmin marcar una Factura SaaS como PAGADA (dinero recibido).
+    """
+    if not request.user.is_superuser:
+        return redirect('dashboard')
+        
+    from .models import FacturaSaaS
+    factura = get_object_or_404(FacturaSaaS, id=factura_id)
+    
+    if request.method == 'POST':
+        factura.estado = 'PAGADA'
+        factura.save()
+        messages.success(request, f'La factura de {factura.usuario.username} por ${factura.monto_total} ha sido registrada como PAGADA.')
+        
+    return redirect('saas_facturacion')

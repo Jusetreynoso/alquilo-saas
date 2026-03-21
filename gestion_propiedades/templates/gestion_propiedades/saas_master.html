@@ -1,0 +1,122 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+
+{% block encabezado %}
+    <div class="d-flex justify-content-between align-items-center w-100">
+        <h2 class="h4 mb-0 text-warning fw-bold">👑 {{ titulo_pagina }}</h2>
+        <div>
+            <a href="{% url 'saas_facturacion' %}" class="btn btn-success btn-sm me-2 fw-bold shadow-sm">💸 Tesorería B2B (Cobros)</a>
+            <a href="{% url 'saas_planes' %}" class="btn btn-primary btn-sm me-2 fw-bold shadow-sm">🏷️ Gestor de Precios</a>
+            <a href="{% url 'admin:index' %}" class="btn btn-outline-warning btn-sm" target="_blank">
+                Abrir Django Admin ↗
+            </a>
+        </div>
+    </div>
+{% endblock %}
+
+{% block contenido %}
+<!-- Métricas Superiores -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white border-0 shadow-sm h-100">
+            <div class="card-body">
+                <h6 class="text-uppercase text-white-50 fw-bold mb-1">Total Clientes</h6>
+                <h2 class="display-6 fw-bold mb-0">{{ total_clientes }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white border-0 shadow-sm h-100">
+            <div class="card-body">
+                <h6 class="text-uppercase text-white-50 fw-bold mb-1">Suscripciones Activas</h6>
+                <h2 class="display-6 fw-bold mb-0">{{ total_activos }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white border-0 shadow-sm h-100">
+            <div class="card-body">
+                <h6 class="text-uppercase text-white-50 fw-bold mb-1">En Período Prueba</h6>
+                <h2 class="display-6 fw-bold mb-0">{{ total_trials }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-danger text-white border-0 shadow-sm h-100">
+            <div class="card-body">
+                <h6 class="text-uppercase text-white-50 fw-bold mb-1">Bloqueos de Pago</h6>
+                <h2 class="display-6 fw-bold mb-0">{{ total_suspendidos }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla de Clientes SaaS -->
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 fw-bold">Directorio de Cuentas B2B</h5>
+        <div>
+            <form method="POST" action="{% url 'generar_corte_saas' %}" style="display:inline;" onsubmit="return confirm('¿Confirmas generar matemáticamente el corte masivo de facturas de $1 USD por propiedad para todos los clientes activos?');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-dark fw-bold me-2">💳 Generar Corte de Mes</button>
+            </form>
+            <a href="{% url 'crear_cliente_saas' %}" class="btn btn-sm btn-primary fw-bold">+ Nuevo Cliente B2B</a>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="px-4 py-3">Cliente / Administrador</th>
+                        <th>Email de Cuenta</th>
+                        <th class="text-center">Propiedades Gest.</th>
+                        <th>Plan Actual</th>
+                        <th>Estado del Plan</th>
+                        <th>Próximo Pago</th>
+                        <th class="text-center">Suscripción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cliente in clientes %}
+                    <tr>
+                        <td class="px-4 py-3 fw-bold">{{ cliente.nombre }}</td>
+                        <td class="text-muted">{{ cliente.email }}</td>
+                        <td class="text-center">
+                            <span class="badge bg-secondary rounded-pill px-3">{{ cliente.propiedades }}</span>
+                        </td>
+                        <td><span class="fw-bold">{{ cliente.plan }}</span></td>
+                        <td>
+                            {% if cliente.estado == 'ACTIVA' %}
+                                <span class="badge bg-success">Activa</span>
+                            {% elif cliente.estado == 'TRIAL' %}
+                                <span class="badge bg-info text-dark">Trial</span>
+                            {% elif cliente.estado == 'SUSPENDIDA' %}
+                                <span class="badge bg-danger">Suspendida</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ cliente.estado_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted small">
+                            {{ cliente.fecha_proximo_pago|date:"d M Y"|default:"Sin definir" }}
+                        </td>
+                        <td class="text-center">
+                            <a href="{% url 'editar_suscripcion_saas' cliente.id %}" class="btn btn-sm btn-outline-primary fw-bold px-3">
+                                ⚙️ Configurar
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            Aún no tienes clientes SaaS registrados comerciales en tu base de datos.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

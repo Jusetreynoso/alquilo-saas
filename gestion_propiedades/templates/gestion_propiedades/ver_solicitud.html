@@ -1,0 +1,113 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+
+{% block encabezado %}
+    <div class="d-flex w-100 justify-content-between align-items-center">
+        <div>
+            <a href="{% url 'detalle_propiedad' solicitud.propiedad.id %}" class="btn btn-sm btn-outline-secondary me-3">⬅ Volver a Propiedad</a>
+            {{ titulo_pagina }}
+        </div>
+        <span class="badge bg-success fs-6">{{ solicitud.get_estado_display }}</span>
+    </div>
+{% endblock %}
+
+{% block contenido %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white fw-bold text-secondary py-3">
+                🏢 Solicitud para: {{ solicitud.propiedad.nombre_o_numero }}
+                <span class="float-end text-muted small">Recibida el: {{ solicitud.creada_en|date:"d M Y - H:i" }}</span>
+            </div>
+            
+            <div class="card-body">
+                <h5 class="fw-bold text-primary mb-3 border-bottom pb-2">1. Datos Personales</h5>
+                <div class="row mb-4">
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Nombre Completo</small>
+                        <span class="fw-bold fs-5">{{ solicitud.nombre_completo }}</span>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Cédula / Pasaporte</small>
+                        <span class="fw-bold">{{ solicitud.cedula }}</span>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Teléfono / Celular</small>
+                        <span class="fw-bold">{{ solicitud.telefono }}</span>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Estado Civil</small>
+                        <span>{{ solicitud.estado_civil|default:"No especificado" }}</span>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Personas a vivir en la propiedad</small>
+                        <span class="fw-bold fs-5">{{ solicitud.cantidad_personas }}</span>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Mascotas</small>
+                        {% if solicitud.tiene_mascotas %}
+                            <span class="badge bg-warning text-dark">Sí: {{ solicitud.detalles_mascotas }}</span>
+                        {% else %}
+                            <span class="badge bg-secondary">No tiene</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <h5 class="fw-bold text-success mb-3 border-bottom pb-2">2. Perfil Financiero</h5>
+                <div class="row mb-4 bg-light p-3 rounded">
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Profesión / Ocupación</small>
+                        <span class="fw-bold">{{ solicitud.profesion|default:"No especificada" }}</span>
+                    </div>
+
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Empresa donde labora</small>
+                        <span class="fw-bold">{{ solicitud.empresa_trabajo|default:"No especificada" }}</span>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Teléfono de la empresa</small>
+                        <span class="fw-bold">{{ solicitud.telefono_empresa|default:"No especificado" }}</span>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Ingresos Mensuales Declarados</small>
+                        <span class="fw-bold fs-4 text-success">${{ solicitud.ingresos_mensuales|floatformat:2 }}</span>
+                    </div>
+                    
+                    <div class="col-12 mt-3 pt-2 border-top">
+                        <small class="text-muted d-block mb-1">Análisis Rápido:</small>
+                        {% if solicitud.ingresos_mensuales and solicitud.propiedad.precio_renta_estimado %}
+                            {% if solicitud.ingresos_mensuales >= solicitud.propiedad.precio_renta_estimado|add:solicitud.propiedad.precio_renta_estimado %}
+                                <span class="text-success fw-bold">✅ Sus ingresos superan ampliamente el costo de la renta.</span>
+                            {% else %}
+                                <span class="text-warning fw-bold">⚠️ Sus ingresos podrían ser ajustados para esta renta. Evaluar capacidad de pago.</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-muted">Asegúrate de tener un 'Precio de renta estimado' configurado en la propiedad para ver el análisis.</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {% if solicitud.preguntas_extra %}
+                <h5 class="fw-bold text-info mb-3 border-bottom pb-2">3. Respuestas Personalizadas</h5>
+                <div class="mb-4">
+                    <div class="bg-light p-3 rounded mb-3">
+                        <small class="text-muted d-block fw-bold mb-1">Tus Preguntas:</small>
+                        <p class="mb-0">{{ solicitud.preguntas_extra|linebreaksbr }}</p>
+                    </div>
+                    <div class="p-3 border rounded">
+                        <small class="text-muted d-block fw-bold mb-1">Respuesta del Prospecto:</small>
+                        <p class="mb-0 fs-5">{{ solicitud.respuestas_extra|default:"<i class='text-muted'>No respondió a estas preguntas.</i>"|safe|linebreaksbr }}</p>
+                    </div>
+                </div>
+                {% endif %}
+                
+                <div class="d-flex justify-content-end gap-2 mt-5">
+                    <button class="btn btn-outline-danger" onclick="alert('Esta función rechazará al candidato en el futuro.')">❌ Rechazar</button>
+                    <a href="{% url 'crear_contrato' %}" class="btn btn-primary fw-bold">✅ Aprobar y Crear Contrato</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

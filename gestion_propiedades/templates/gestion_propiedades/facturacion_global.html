@@ -1,0 +1,136 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+
+{% block encabezado %}
+    <div class="d-flex justify-content-between align-items-center w-100">
+        <span>{{ titulo_pagina }}</span>
+        <!-- Botón para correr la facturación masiva si es necesario -->
+        <a href="{% url 'generar_facturas_masivas' %}" class="btn btn-warning fw-bold text-dark">
+            ⚡ Correr Facturación Masiva
+        </a>
+    </div>
+{% endblock %}
+
+{% block contenido %}
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-white pt-3 pb-0 border-bottom-0">
+        <ul class="nav nav-tabs" id="billingTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active fw-bold text-secondary" id="facturas-tab" data-bs-toggle="tab" data-bs-target="#facturas" type="button" role="tab" aria-controls="facturas" aria-selected="true">
+                    📋 Facturas
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link fw-bold text-secondary" id="recibos-tab" data-bs-toggle="tab" data-bs-target="#recibos" type="button" role="tab" aria-controls="recibos" aria-selected="false">
+                    📄 Historial de Recibos
+                </button>
+            </li>
+        </ul>
+    </div>
+    
+    <div class="card-body p-0">
+        <div class="tab-content" id="myTabContent">
+            
+            <!-- TAB FACTURAS -->
+            <div class="tab-pane fade show active" id="facturas" role="tabpanel" aria-labelledby="facturas-tab">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="px-4 py-3">Vencimiento</th>
+                                <th>Propiedad & Inquilino</th>
+                                <th>Concepto</th>
+                                <th>Monto</th>
+                                <th>Estado</th>
+                                <th class="text-center">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for factura in facturas %}
+                            <tr>
+                                <td class="px-4 py-3 fw-bold text-muted">{{ factura.fecha_vencimiento|date:"d M Y" }}</td>
+                                <td>
+                                    <strong>{{ factura.contrato.propiedad.nombre_o_numero }}</strong><br>
+                                    <small class="text-muted">👤 {{ factura.contrato.inquilino.nombre }}</small>
+                                </td>
+                                <td>{{ factura.concepto }}</td>
+                                <td class="fw-bold">${{ factura.total_a_pagar|floatformat:2 }}</td>
+                                <td>
+                                    {% if factura.estado == 'PENDIENTE' %}
+                                        <span class="badge bg-warning text-dark">Pendiente</span>
+                                    {% elif factura.estado == 'ATRASADA' %}
+                                        <span class="badge bg-danger">Atrasada</span>
+                                    {% elif factura.estado == 'PAGADA' %}
+                                        <span class="badge bg-success">Pagada</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ factura.estado }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if factura.estado != 'PAGADA' and factura.estado != 'ANULADA' %}
+                                        <a href="{% url 'registrar_pago' factura.id %}" class="btn btn-sm btn-primary">Registrar Pago</a>
+                                    {% else %}
+                                        <span class="text-success small fw-bold">✓ Completado</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="6" class="text-center py-5 text-muted">
+                                    No hay facturas registradas en el sistema.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- TAB RECIBOS -->
+            <div class="tab-pane fade" id="recibos" role="tabpanel" aria-labelledby="recibos-tab">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="px-4 py-3">Nº Recibo</th>
+                                <th>Fecha de Pago</th>
+                                <th>Propiedad & Inquilino</th>
+                                <th>Monto Cobrado</th>
+                                <th>Método</th>
+                                <th class="text-center">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for recibo in recibos %}
+                            <tr>
+                                <td class="px-4 py-3 fw-bold text-secondary">#{{ recibo.id|stringformat:"04d" }}</td>
+                                <td>{{ recibo.fecha_pago|date:"d M Y" }}</td>
+                                <td>
+                                    <strong>{{ recibo.factura.contrato.propiedad.nombre_o_numero }}</strong><br>
+                                    <small class="text-muted">👤 {{ recibo.factura.contrato.inquilino.nombre }}</small>
+                                </td>
+                                <td class="fw-bold text-success">${{ recibo.monto_pagado|floatformat:2 }}</td>
+                                <td>{{ recibo.metodo_pago }}</td>
+                                <td class="text-center">
+                                    <a href="{% url 'imprimir_recibo' recibo.id %}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                                        🖨️ Imprimir PDF
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="6" class="text-center py-5 text-muted">
+                                    Aún no hay recibos de pago registrados.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}

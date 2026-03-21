@@ -1,0 +1,86 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+{% block encabezado %}
+    Perfil del Cliente
+    <a href="{% url 'editar_inquilino' inquilino.id %}" class="btn btn-outline-secondary btn-sm">Editar Inquilino</a>
+{% endblock %}
+
+{% block contenido %}
+<div class="row">
+    <!-- Información de Contacto -->
+    <div class="col-md-4 mb-4">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white fw-bold text-secondary py-3">
+                👤 Detalles Personales
+            </div>
+            
+            <div class="card-body text-center pt-4">
+                <div class="bg-light rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 80px; height: 80px; font-size: 2rem;">
+                    🏢
+                </div>
+                <h5 class="fw-bold">{{ inquilino.nombre }}</h5>
+                <p class="mb-1"><strong>📞 Teléfono:</strong> {{ inquilino.telefono }}</p>
+                <p class="mb-1"><strong>📧 Correo:</strong> {{ inquilino.correo|default:"No especificado" }}</p>
+                <p class="mb-0"><strong>🆔 Cédula/Pasaporte:</strong> {{ inquilino.cedula_o_pasaporte|default:"No especificado" }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Historial de Propiedades Alquiladas -->
+    <div class="col-md-8 mb-4">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white fw-bold text-secondary py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span>🏠 Historial de Contratos / Estancias</span>
+                    <!-- Botón rápido para vincular a una nueva propiedad -->
+                    <a href="{% url 'crear_contrato' %}" class="btn btn-sm btn-primary">+ Nuevo Contrato</a>
+                </div>
+            </div>
+            
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="px-4 py-3">Propiedad</th>
+                                <th>Período</th>
+                                <th>Renta Mensual</th>
+                                <th>Fianzas</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for contrato in contratos %}
+                            <tr>
+                                <td class="px-4 py-3 fw-bold">
+                                    <a href="{% url 'detalle_propiedad' contrato.propiedad.id %}" class="text-decoration-none">
+                                        {{ contrato.propiedad.nombre_o_numero }}
+                                    </a>
+                                </td>
+                                <td>{{ contrato.fecha_inicio|date:"M Y" }} - {% if contrato.fecha_fin %}{{ contrato.fecha_fin|date:"M Y" }}{% else %}Presente{% endif %}</td>
+                                <td class="text-success">${{ contrato.monto_renta|floatformat:2 }}</td>
+                                <td><small class="text-muted">Dep: ${{ contrato.monto_deposito|floatformat:2 }}<br>A: ${{ contrato.monto_adelanto|floatformat:2 }}</small></td>
+                                <td>
+                                    {% if contrato.activo %}
+                                        <span class="badge bg-success">Activo</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Finalizado</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-5 text-muted">
+                                    Este inquilino no tiene contratos registrados en el historial.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
