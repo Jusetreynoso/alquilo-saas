@@ -1,0 +1,30 @@
+{% extends 'gestion_propiedades/portal/portal_base.html' %}
+
+{% block title %}Reportar Problema{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{% url 'portal_dashboard' %}" class="text-decoration-none text-muted mb-3 d-inline-block"><i class="fa-solid fa-arrow-left"></i> Volver al panel</a>
+    <h3 class="fw-bold">🔧 Reportar Avería</h3>
+    <p class="text-muted">Describa la situación que presenta en la propiedad y se le enviará un reporte directo al administrador.</p>
+</div>
+
+<div class="card-elegant">
+    <form method="POST">
+        {% csrf_token %}
+        <div class="mb-3 text-start">
+            <label class="form-label fw-bold small text-secondary">Avería o Titulo Principal</label>
+            <input type="text" name="titulo" class="form-control bg-light border-0" placeholder="Ej: Fuga de agua en el baño principal" required>
+        </div>
+        
+        <div class="mb-4 text-start">
+            <label class="form-label fw-bold small text-secondary">Explicación Detallada</label>
+            <textarea name="descripcion" class="form-control bg-light border-0" rows="4" placeholder="Háblenos sobre el problema, desde cuándo ocurre y cualquier detalle que el técnico deba saber." required></textarea>
+        </div>
+        
+        <button type="submit" class="btn btn-portal d-flex align-items-center justify-content-center gap-2">
+            <i class="fa-solid fa-paper-plane"></i> Enviar Reporte Ahora
+        </button>
+    </form>
+</div>
+{% endblock %}

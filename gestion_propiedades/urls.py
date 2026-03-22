@@ -1,6 +1,7 @@
 from django.urls import path
 from django.contrib.auth import views as auth_views
 from . import views
+from . import views_portal
 
 urlpatterns = [
     # Autenticación B2B SaaS
@@ -65,4 +66,10 @@ urlpatterns = [
     path('master-control/recaudacion/', views.saas_facturacion, name='saas_facturacion'),
     path('master-control/factura/<int:factura_id>/pagar/', views.marcar_factura_saas_pagada, name='marcar_factura_saas_pagada'),
     path('mi-suscripcion/', views.mi_suscripcion, name='mi_suscripcion'),
+    
+    # --- PORTAL DEL INQUILINO (B2C) ---
+    path('portal/login/', views_portal.portal_login, name='portal_login'),
+    path('portal/dashboard/', views_portal.portal_dashboard, name='portal_dashboard'),
+    path('portal/mantenimiento/', views_portal.portal_mantenimiento, name='portal_mantenimiento'),
+    path('portal/logout/', views_portal.portal_logout, name='portal_logout'),
 ]
