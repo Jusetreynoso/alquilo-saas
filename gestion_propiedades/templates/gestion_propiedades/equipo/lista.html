@@ -1,0 +1,54 @@
+{% extends 'gestion_propiedades/base.html' %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="h4 fw-bold text-gray-800">Cuentas Secundarias y Empleados</h2>
+    <a href="{% url 'crear_asistente' %}" class="btn btn-primary shadow-sm"><i class="fas fa-plus fa-sm text-white-50"></i> Agregar Asistente</a>
+</div>
+
+<div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">Permisos Activos de tu Portafolio</h6>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Correo (Usuario)</th>
+                        <th>Nivel de Acceso</th>
+                        <th>Registrado el</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- El Dueño siempre va primero de forma visual -->
+                    <tr class="table-primary">
+                        <td>{{ portafolio.propietario.first_name|default:portafolio.propietario.username }} <i class="fa-solid fa-crown text-warning" title="Propietario"></i></td>
+                        <td>{{ portafolio.propietario.email }}</td>
+                        <td><span class="badge bg-primary">Administrador Total</span></td>
+                        <td>-</td>
+                        <td>Inamovible</td>
+                    </tr>
+                    
+                    {% for acceso in accesos %}
+                    <tr>
+                        <td>{{ acceso.usuario.first_name|default:acceso.usuario.username }}</td>
+                        <td>{{ acceso.usuario.email }}</td>
+                        <td><span class="badge bg-secondary">{{ acceso.get_rol_display }}</span></td>
+                        <td>{{ acceso.creado_en|date:"d M, Y" }}</td>
+                        <td>
+                            <a href="{% url 'eliminar_asistente' acceso.id %}" class="btn btn-sm btn-danger shadow-sm" onclick="return confirm('¿Seguro que deseas eliminar el acceso de este asistente? Toda su sesión se destruirá.');"><i class="fa-solid fa-trash"></i> Revocar</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted">No tienes ningún asistente registrado aun. Administras tú solo.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

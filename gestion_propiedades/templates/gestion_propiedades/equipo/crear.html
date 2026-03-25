@@ -1,0 +1,39 @@
+{% extends 'gestion_propiedades/base.html' %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-xl-6 col-lg-8 col-md-10">
+        <div class="card shadow-sm border-0 my-5">
+            <div class="card-body p-5">
+                <div class="text-center mb-4">
+                    <h1 class="h3 text-gray-900 mb-2">Invitar Asistente B2B</h1>
+                    <p class="text-muted">Créele un usuario en su portafolio para que pueda cobrar rentas sin poderes catastróficos.</p>
+                </div>
+                
+                <form class="user" method="POST">
+                    {% csrf_token %}
+                    <div class="form-group mb-3">
+                        <label class="form-label fw-bold">Nombre del Empleado o Asistente</label>
+                        <input type="text" name="nombre" class="form-control form-control-user" placeholder="Ej: Ana Pérez" required>
+                    </div>
+                    
+                    <div class="form-group mb-3">
+                        <label class="form-label fw-bold">Correo (Usuario de Acceso)</label>
+                        <input type="email" name="correo" class="form-control form-control-user" placeholder="ana@tuempresa.com" required>
+                        <small class="form-text text-muted">Asegúrate de poner un correo real o inventado, ej: ana.miempresa@gmail.com</small>
+                    </div>
+                    
+                    <div class="form-group mb-4">
+                        <label class="form-label fw-bold">Contraseña Temporal</label>
+                        <input type="password" name="password" class="form-control form-control-user" placeholder="Mínimo 8 caracteres" required minlength="8">
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary btn-user btn-block w-100 fw-bold">
+                        <i class="fa-solid fa-user-plus me-2"></i> Crear Accesos
+                    </button>
+                    <a href="{% url 'mi_equipo' %}" class="btn btn-light btn-user btn-block w-100 mt-2 text-danger fw-bold">Cancelar</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

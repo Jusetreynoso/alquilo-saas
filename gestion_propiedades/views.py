@@ -9,6 +9,7 @@ from .forms import NuevoClienteSaaSForm, EditarSuscripcionForm, PropiedadForm, C
 from .utils import render_to_pdf
 import calendar
 from django.db.models.functions import TruncMonth
+from .utils_rbac import propietario_requerido
 from collections import defaultdict
 
 
@@ -203,6 +204,7 @@ def imprimir_recibo(request, recibo_id):
 # --- Agrega esto AL FINAL del archivo, después de imprimir_recibo ---
 
 @login_required(login_url='/login/')
+@propietario_requerido  # ESCUDO RBAC (Solo admins)
 def crear_propiedad(request):
     # IMPORTACIÓN LOCAL (CRUCIAL):
     from .forms import PropiedadForm 
@@ -845,6 +847,7 @@ def saas_planes(request):
 # --- FACTURACIÓN SAAS (PAY-AS-YOU-GROW) ---
 
 @login_required(login_url='/login/')
+@propietario_requerido
 def mi_suscripcion(request):
     """
     Vista B2B para que el cliente vea su facturación SaaS ($1 por propiedad).
@@ -946,6 +949,7 @@ def eliminar_propiedad(request, propiedad_id):
     return redirect('lista_propiedades')
 
 @login_required(login_url='/login/')
+@propietario_requerido
 def saas_facturacion(request):
     """
     Panel para que el Superadmin vea TODAS las Facturas SaaS emitidas a los clientes y el dinero recaudado.

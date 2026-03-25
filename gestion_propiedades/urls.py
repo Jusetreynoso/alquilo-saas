@@ -2,6 +2,7 @@ from django.urls import path
 from django.contrib.auth import views as auth_views
 from . import views
 from . import views_portal
+from . import views_equipo
 
 urlpatterns = [
     # Autenticación B2B SaaS
@@ -72,4 +73,9 @@ urlpatterns = [
     path('portal/dashboard/', views_portal.portal_dashboard, name='portal_dashboard'),
     path('portal/mantenimiento/', views_portal.portal_mantenimiento, name='portal_mantenimiento'),
     path('portal/logout/', views_portal.portal_logout, name='portal_logout'),
+
+    # --- EQUIPO OPERATIVO (RBAC B2B) ---
+    path('mi-equipo/', views_equipo.mi_equipo, name='mi_equipo'),
+    path('mi-equipo/invitar/', views_equipo.crear_asistente, name='crear_asistente'),
+    path('mi-equipo/revocar/<int:acceso_id>/', views_equipo.eliminar_asistente, name='eliminar_asistente'),
 ]
