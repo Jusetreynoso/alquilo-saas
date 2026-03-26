@@ -41,6 +41,8 @@ urlpatterns = [
     path('factura/<int:factura_id>/pagar/', views.registrar_pago, name='registrar_pago'),
     path('recibo/<int:recibo_id>/imprimir/', views.imprimir_recibo, name='imprimir_recibo'),
     path('finanzas/reporte/', views.reporte_financiero, name='reporte_financiero'),
+    path('reportes/rentabilidad/', views.reporte_rentabilidad, name='reporte_rentabilidad'),
+    path('reportes/ocupacion/', views.reporte_ocupacion, name='reporte_ocupacion'),
 
     # Rutas limpias
     path('propiedad/<int:propiedad_id>/solicitud/nueva/', views.generar_solicitud, name='generar_solicitud'),

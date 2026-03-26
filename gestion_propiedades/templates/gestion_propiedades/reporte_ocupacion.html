@@ -1,0 +1,68 @@
+{% extends 'gestion_propiedades/base.html' %}
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+{% block encabezado %}
+    <div class="d-flex w-100 justify-content-between align-items-center">
+        <span>{{ titulo_pagina }}</span>
+        <a href="{% url 'reporte_rentabilidad' %}" class="btn btn-sm btn-outline-secondary">🏆 Ver Rentabilidad</a>
+    </div>
+{% endblock %}
+{% block contenido %}
+
+<div class="alert alert-info border-0 shadow-sm">
+    <strong>📅 Ocupación {{ anio }}:</strong> Calcula matemáticamente cuántos días del año cada propiedad estuvo con un contrato activo vs. disponible.
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th class="px-4 py-3">Propiedad</th>
+                        <th class="py-3 text-center">📊 Ocupación</th>
+                        <th class="py-3 text-center">Días Ocupados</th>
+                        <th class="py-3 text-center">Días Vacíos</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in resultado %}
+                    <tr>
+                        <td class="px-4 py-3 fw-bold">
+                            <a href="{% url 'detalle_propiedad' row.propiedad.id %}" class="text-decoration-none text-dark">
+                                {{ row.propiedad.nombre_o_numero }}
+                                {% if row.propiedad.grupo_o_residencial %}
+                                <small class="text-muted fw-normal">— {{ row.propiedad.grupo_o_residencial }}</small>
+                                {% endif %}
+                            </a>
+                        </td>
+                        <td class="py-3 text-center" style="min-width: 180px;">
+                            <div class="d-flex align-items-center justify-content-center gap-2">
+                                <div class="progress flex-grow-1" style="height: 12px; max-width: 120px;">
+                                    <div class="progress-bar {% if row.porcentaje >= 75 %}bg-success{% elif row.porcentaje >= 40 %}bg-warning{% else %}bg-danger{% endif %}"
+                                         role="progressbar"
+                                         style="width: {{ row.porcentaje }}%;"
+                                         aria-valuenow="{{ row.porcentaje }}"
+                                         aria-valuemin="0"
+                                         aria-valuemax="100">
+                                    </div>
+                                </div>
+                                <span class="fw-bold {% if row.porcentaje >= 75 %}text-success{% elif row.porcentaje >= 40 %}text-warning{% else %}text-danger{% endif %}">
+                                    {{ row.porcentaje }}%
+                                </span>
+                            </div>
+                        </td>
+                        <td class="py-3 text-center text-success fw-bold">{{ row.dias_ocupados }} días</td>
+                        <td class="py-3 text-center text-muted">{{ row.dias_disponibles }} días</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-center py-5 text-muted">No hay contratos para calcular la ocupación anual.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

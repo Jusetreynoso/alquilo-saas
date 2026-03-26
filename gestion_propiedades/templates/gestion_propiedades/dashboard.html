@@ -8,40 +8,54 @@
 
 {% block contenido %}
 
-<div class="d-flex justify-content-end mb-4">
-    {% if request.user.portafolios.all %}
-    <a href="{% url 'crear_propiedad' %}" class="btn btn-outline-primary me-2">+ Propiedad</a>
-    {% endif %}
-    <a href="{% url 'crear_contrato' %}" class="btn btn-outline-primary me-2">+ Contrato</a>
-    
-    <a href="{% url 'generar_facturas_masivas' %}" class="btn btn-success shadow-sm">
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div class="d-flex gap-2 flex-wrap">
+        {% if request.user.portafolios.all %}
+        <a href="{% url 'crear_propiedad' %}" class="btn btn-outline-secondary">🏠 + Propiedad</a>
+        {% endif %}
+        <a href="{% url 'crear_contrato' %}" class="btn btn-outline-secondary">📝 + Contrato</a>
+        <a href="{% url 'crear_inquilino' %}" class="btn btn-primary shadow-sm fw-bold">👤 + Agregar Inquilino</a>
+    </div>
+    <a href="{% url 'generar_facturas_masivas' %}" class="btn btn-success shadow-sm fw-bold">
         ⚡ Generar Facturas del Mes
     </a>
 </div>
 
-<div class="row mb-4">
-    <div class="col-md-4">
+<div class="row mb-4 g-3">
+    <div class="col-md-3">
         <div class="card shadow-sm border-0 border-start border-primary border-4 h-100">
             <div class="card-body">
-                <h6 class="text-muted fw-bold text-uppercase">Propiedades Administradas</h6>
+                <h6 class="text-muted fw-bold text-uppercase small">Total Propiedades</h6>
                 <h2 class="mb-0 fw-bold">{{ total_propiedades }}</h2>
             </div>
         </div>
     </div>
-    
-    <div class="col-md-4">
+
+    <div class="col-md-3">
+        <a href="{% url 'lista_propiedades' %}?estado=disponible" class="text-decoration-none">
+            <div class="card shadow-sm border-0 border-start border-warning border-4 h-100" style="cursor:pointer; transition: transform .15s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                <div class="card-body">
+                    <h6 class="text-muted fw-bold text-uppercase small">Disponibles 🔑</h6>
+                    <h2 class="mb-0 fw-bold text-warning">{{ propiedades_disponibles }}</h2>
+                    <small class="text-muted">Click para ver →</small>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-md-3">
         <div class="card shadow-sm border-0 border-start border-danger border-4 h-100">
             <div class="card-body">
-                <h6 class="text-muted fw-bold text-uppercase">Cuentas por Cobrar</h6>
+                <h6 class="text-muted fw-bold text-uppercase small">Cuentas por Cobrar</h6>
                 <h2 class="mb-0 fw-bold text-danger">${{ cuentas_por_cobrar|floatformat:2 }}</h2>
             </div>
         </div>
     </div>
     
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card shadow-sm border-0 border-start border-success border-4 h-100">
             <div class="card-body">
-                <h6 class="text-muted fw-bold text-uppercase">Ingresos del Mes</h6>
+                <h6 class="text-muted fw-bold text-uppercase small">Ingresos del Mes</h6>
                 <h2 class="mb-0 fw-bold text-success">${{ ingresos_mes|floatformat:2 }}</h2>
             </div>
         </div>

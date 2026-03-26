@@ -33,6 +33,7 @@ def dashboard(request):
     ).distinct()
 
     total_propiedades = Propiedad.objects.filter(portafolio__in=portafolios).count()
+    propiedades_disponibles = Propiedad.objects.filter(portafolio__in=portafolios, estado='DISPONIBLE').count()
 
     # 1. Le agregamos el .order_by para que las deudas más viejas salgan primero
     facturas_pendientes = Factura.objects.filter(
@@ -54,10 +55,10 @@ def dashboard(request):
     context = {
         'titulo_pagina': 'Resumen de Portafolio',
         'total_propiedades': total_propiedades,
+        'propiedades_disponibles': propiedades_disponibles,
         'cuentas_por_cobrar': cuentas_por_cobrar,
         'ingresos_mes': ingresos_mes,
-        # 2. ¡AGREGAMOS ESTA LÍNEA AL CONTEXTO!
-        'facturas_pendientes': facturas_pendientes, 
+        'facturas_pendientes': facturas_pendientes,
     }
     
     return render(request, 'gestion_propiedades/dashboard.html', context)
@@ -70,16 +71,22 @@ def lista_propiedades(request):
     ).distinct()
 
     # 2. Traemos las propiedades. 
-    # Usamos Prefetch para buscar automáticamente el contrato activo de cada propiedad
-    # y así saber rápidamente a quién está alquilado sin saturar la base de datos.
     contratos_activos = Contrato.objects.filter(activo=True)
-    propiedades = Propiedad.objects.filter(portafolio__in=portafolios).prefetch_related(
+    qs = Propiedad.objects.filter(portafolio__in=portafolios)
+    
+    # Filtro por estado via URL param (ej: ?estado=disponible desde el Dashboard)
+    estado_filtro = request.GET.get('estado', '').upper()
+    if estado_filtro in ['DISPONIBLE', 'OCUPADO', 'MANTENIMIENTO', 'INACTIVO']:
+        qs = qs.filter(estado=estado_filtro)
+
+    propiedades = qs.prefetch_related(
         Prefetch('contratos', queryset=contratos_activos, to_attr='contrato_activo')
     ).order_by('grupo_o_residencial', 'nombre_o_numero')
 
     context = {
         'titulo_pagina': 'Mis Propiedades',
         'propiedades': propiedades,
+        'estado_filtro': estado_filtro,
     }
     return render(request, 'gestion_propiedades/lista_propiedades.html', context)
 
@@ -568,6 +575,104 @@ def reporte_financiero(request):
     
     return render(request, 'gestion_propiedades/reporte_financiero.html', context)
 
+
+# --- MÓDULO DE REPORTES AVANZADOS ---
+
+@login_required(login_url='/login/')
+def reporte_rentabilidad(request):
+    """
+    Reporte de Rentabilidad Comparativa:
+    Para cada propiedad: suma de pagos recibidos - suma de mantenimientos.
+    Devuelve la lista ordenada de mayor a menor rentabilidad neta.
+    """
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+
+    propiedades = Propiedad.objects.filter(portafolio__in=portafolios)
+
+    resultado = []
+    for prop in propiedades:
+        ingresos = ReciboPago.objects.filter(
+            factura__contrato__propiedad=prop
+        ).aggregate(total=Sum('monto_pagado'))['total'] or 0
+
+        egresos = MantenimientoUnidad.objects.filter(
+            propiedad=prop
+        ).aggregate(total=Sum('costo'))['total'] or 0
+
+        neto = float(ingresos) - float(egresos)
+        resultado.append({
+            'propiedad': prop,
+            'ingresos': float(ingresos),
+            'egresos': float(egresos),
+            'neto': neto,
+        })
+
+    resultado.sort(key=lambda x: x['neto'], reverse=True)
+
+    context = {
+        'titulo_pagina': 'Reportes Avanzados: Rentabilidad Comparativa',
+        'resultado': resultado,
+    }
+    return render(request, 'gestion_propiedades/reporte_rentabilidad.html', context)
+
+
+@login_required(login_url='/login/')
+def reporte_ocupacion(request):
+    """
+    Reporte de Ocupación Anual:
+    Por cada propiedad, calcula qué porcentaje del año actual estuvo ocupada,
+    basado en los días cubiertos por contratos activos o finalizados en ese año.
+    """
+    from datetime import date, timedelta
+
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+
+    hoy = date.today()
+    inicio_anio = date(hoy.year, 1, 1)
+    fin_anio = date(hoy.year, 12, 31)
+    dias_anio = 365
+
+    propiedades = Propiedad.objects.filter(portafolio__in=portafolios)
+    resultado = []
+
+    for prop in propiedades:
+        contratos = Contrato.objects.filter(
+            propiedad=prop,
+            fecha_inicio__lte=fin_anio
+        ).exclude(
+            fecha_fin__lt=inicio_anio
+        )
+
+        dias_ocupados = 0
+        for contrato in contratos:
+            inicio = max(contrato.fecha_inicio, inicio_anio)
+            fin = contrato.fecha_fin if contrato.fecha_fin else hoy
+            fin = min(fin, fin_anio)
+            if fin >= inicio:
+                dias_ocupados += (fin - inicio).days + 1
+
+        dias_ocupados = min(dias_ocupados, dias_anio)
+        porcentaje = round((dias_ocupados / dias_anio) * 100, 1)
+
+        resultado.append({
+            'propiedad': prop,
+            'dias_ocupados': dias_ocupados,
+            'dias_disponibles': dias_anio - dias_ocupados,
+            'porcentaje': porcentaje,
+        })
+
+    resultado.sort(key=lambda x: x['porcentaje'], reverse=True)
+
+    context = {
+        'titulo_pagina': f'Reportes Avanzados: Ocupación Anual {hoy.year}',
+        'resultado': resultado,
+        'anio': hoy.year,
+    }
+    return render(request, 'gestion_propiedades/reporte_ocupacion.html', context)
 
 # --- MÓDULO DE INQUILINOS ---
 

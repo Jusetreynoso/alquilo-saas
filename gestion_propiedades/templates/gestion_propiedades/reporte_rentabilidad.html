@@ -1,0 +1,58 @@
+{% extends 'gestion_propiedades/base.html' %}
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+{% block encabezado %}
+    <div class="d-flex w-100 justify-content-between align-items-center">
+        <span>{{ titulo_pagina }}</span>
+        <a href="{% url 'reporte_ocupacion' %}" class="btn btn-sm btn-outline-secondary">📅 Ver Ocupación Anual</a>
+    </div>
+{% endblock %}
+{% block contenido %}
+
+<div class="alert alert-info border-0 shadow-sm">
+    <strong>🏆 Propiedades Estrella:</strong> Esta tabla compara el total histórico de pagos cobrados vs. gastos de mantenimiento, ordenando de mayor a menor rentabilidad neta.
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th class="px-4 py-3">#</th>
+                        <th class="py-3">Propiedad</th>
+                        <th class="py-3 text-end">💰 Ingresos Históricos</th>
+                        <th class="py-3 text-end">🔧 Egresos (Mantenimiento)</th>
+                        <th class="py-3 text-end">📈 Rentabilidad Neta</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in resultado %}
+                    <tr>
+                        <td class="px-4 py-3 fw-bold text-muted">{{ forloop.counter }}</td>
+                        <td class="py-3 fw-bold">
+                            <a href="{% url 'detalle_propiedad' row.propiedad.id %}" class="text-decoration-none text-dark">
+                                {{ row.propiedad.nombre_o_numero }}
+                                {% if row.propiedad.grupo_o_residencial %}
+                                <small class="text-muted fw-normal">— {{ row.propiedad.grupo_o_residencial }}</small>
+                                {% endif %}
+                            </a>
+                        </td>
+                        <td class="py-3 text-end text-success fw-bold">${{ row.ingresos|floatformat:2 }}</td>
+                        <td class="py-3 text-end text-danger">${{ row.egresos|floatformat:2 }}</td>
+                        <td class="py-3 text-end fw-bold {% if row.neto >= 0 %}text-success{% else %}text-danger{% endif %}">
+                            {% if row.neto >= 0 %}▲{% else %}▼{% endif %}
+                            ${{ row.neto|floatformat:2 }}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center py-5 text-muted">No hay datos suficientes para generar el reporte.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
