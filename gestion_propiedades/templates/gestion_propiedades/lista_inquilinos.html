@@ -7,6 +7,9 @@
 {% endblock %}
 
 {% block contenido %}
+    <div class="mb-3">
+        <input type="text" id="buscadorInquilinos" class="form-control form-control-lg shadow-sm" placeholder="🔍 Buscar inquilinos por nombre, cédula o teléfono...">
+    </div>
     <div class="card shadow-sm border-0">
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -41,4 +44,14 @@
             </div>
         </div>
     </div>
+
+    <script>
+        document.getElementById("buscadorInquilinos").addEventListener("keyup", function() {
+            let filter = this.value.toLowerCase();
+            let rows = document.querySelectorAll("tbody tr");
+            rows.forEach(row => {
+                row.style.display = row.innerText.toLowerCase().includes(filter) ? "" : "none";
+            });
+        });
+    </script>
 {% endblock %}

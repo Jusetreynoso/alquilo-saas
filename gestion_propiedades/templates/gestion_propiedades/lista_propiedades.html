@@ -9,6 +9,9 @@
 {% endblock %}
 
 {% block contenido %}
+    <div class="mb-3">
+        <input type="text" id="buscador" class="form-control form-control-lg shadow-sm" placeholder="🔍 Buscar propiedades por unidad, residencial o estado...">
+    </div>
     <div class="card shadow-sm border-0">
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -51,4 +54,14 @@
             </div>
         </div>
     </div>
+    
+    <script>
+        document.getElementById("buscador").addEventListener("keyup", function() {
+            let filter = this.value.toLowerCase();
+            let rows = document.querySelectorAll("tbody tr");
+            rows.forEach(row => {
+                row.style.display = row.innerText.toLowerCase().includes(filter) ? "" : "none";
+            });
+        });
+    </script>
 {% endblock %}
