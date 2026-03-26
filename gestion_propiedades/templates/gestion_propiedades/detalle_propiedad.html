@@ -12,10 +12,12 @@
             <a href="{% url 'editar_propiedad' propiedad.id %}" class="btn btn-sm btn-outline-primary shadow-sm">
                 ✏️ Editar Propiedad
             </a>
+            {% if request.user.portafolios.all %}
             <form method="POST" action="{% url 'eliminar_propiedad' propiedad.id %}" onsubmit="return confirm('¿Estás seguro de archivar esta propiedad? Dejará de contar en la facturación SaaS y pasará al archivo muerto de tu inventario.');" class="m-0 p-0">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-sm btn-outline-danger shadow-sm">🗑️ Archivar (Excluir del Cobro)</button>
             </form>
+            {% endif %}
         </div>
     </div>
 {% endblock %}

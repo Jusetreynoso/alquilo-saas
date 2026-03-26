@@ -3,7 +3,9 @@
 {% block titulo %}{{ titulo_pagina }}{% endblock %}
 {% block encabezado %}
     {{ titulo_pagina }}
+    {% if request.user.portafolios.all %}
     <a href="{% url 'crear_propiedad' %}" class="btn btn-primary">+ Nueva Propiedad</a>
+    {% endif %}
 {% endblock %}
 
 {% block contenido %}

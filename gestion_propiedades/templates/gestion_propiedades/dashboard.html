@@ -9,7 +9,9 @@
 {% block contenido %}
 
 <div class="d-flex justify-content-end mb-4">
+    {% if request.user.portafolios.all %}
     <a href="{% url 'crear_propiedad' %}" class="btn btn-outline-primary me-2">+ Propiedad</a>
+    {% endif %}
     <a href="{% url 'crear_contrato' %}" class="btn btn-outline-primary me-2">+ Contrato</a>
     
     <a href="{% url 'generar_facturas_masivas' %}" class="btn btn-success shadow-sm">

@@ -23,6 +23,11 @@ def mi_equipo(request):
 @propietario_requerido
 def crear_asistente(request):
     portafolio = Portafolio.objects.filter(propietario=request.user).first()
+    
+    # Validar que no haya ya un asistente
+    if AccesoPortafolio.objects.filter(portafolio=portafolio, rol='ASISTENTE').exists():
+        messages.error(request, "Solo puedes tener un (1) asistente operativo asociado a tu portafolio.")
+        return redirect('mi_equipo')
 
     if request.method == 'POST':
         nombre = request.POST.get('nombre')
