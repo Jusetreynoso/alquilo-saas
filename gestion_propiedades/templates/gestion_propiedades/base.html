@@ -43,13 +43,18 @@
                         <a class="nav-link text-white-50" href="{% url 'lista_facturas_global' %}">💰 Facturación y Pagos</a>
                     </li>
                     <li class="nav-item mb-2">
-                        <a class="nav-link text-white-50" href="{% url 'reporte_financiero' %}">📊 Reporte P&L</a>
-                    </li>
-                    <li class="nav-item mb-2">
-                        <a class="nav-link text-white-50" href="{% url 'reporte_rentabilidad' %}">🏆 Rentabilidad</a>
-                    </li>
-                    <li class="nav-item mb-2">
-                        <a class="nav-link text-white-50" href="{% url 'reporte_ocupacion' %}">📅 Ocupación Anual</a>
+                        <a class="nav-link text-white-50 d-flex justify-content-between align-items-center"
+                           href="#submenuReportes"
+                           data-bs-toggle="collapse"
+                           aria-expanded="false">
+                            📊 Reportes
+                            <span class="small">▾</span>
+                        </a>
+                        <div class="collapse ps-3" id="submenuReportes">
+                            <a class="nav-link text-white-50 py-1 small" href="{% url 'reporte_financiero' %}">📈 P&amp;L Financiero</a>
+                            <a class="nav-link text-white-50 py-1 small" href="{% url 'reporte_rentabilidad' %}">🏆 Rentabilidad</a>
+                            <a class="nav-link text-white-50 py-1 small" href="{% url 'reporte_ocupacion' %}">📅 Ocupación Anual</a>
+                        </div>
                     </li>
                     <li class="nav-item mb-2">
                         <a class="nav-link {% if request.resolver_match.url_name == 'lista_mantenimientos_global' %}text-white fw-bold{% else %}text-white-50{% endif %}" href="{% url 'lista_mantenimientos_global' %}">🔧 Mantenimientos</a>
