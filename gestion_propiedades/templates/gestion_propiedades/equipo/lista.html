@@ -30,7 +30,9 @@
                         <td>{{ portafolio.propietario.email }}</td>
                         <td><span class="badge bg-primary">Administrador Total</span></td>
                         <td>-</td>
-                        <td>Inamovible</td>
+                        <td>
+                            <a href="{% url 'cambiar_password' portafolio.propietario.id %}" class="btn btn-sm btn-outline-dark me-1"><i class="fa-solid fa-key"></i> Editar Mi Clave</a>
+                        </td>
                     </tr>
                     
                     {% for acceso in accesos %}
@@ -40,6 +42,7 @@
                         <td><span class="badge bg-secondary">{{ acceso.get_rol_display }}</span></td>
                         <td>{{ acceso.creado_en|date:"d M, Y" }}</td>
                         <td>
+                            <a href="{% url 'cambiar_password' acceso.usuario.id %}" class="btn btn-sm btn-outline-dark me-1"><i class="fa-solid fa-key"></i> Editar Clave</a>
                             <a href="{% url 'eliminar_asistente' acceso.id %}" class="btn btn-sm btn-danger shadow-sm" onclick="return confirm('¿Seguro que deseas eliminar el acceso de este asistente? Toda su sesión se destruirá.');"><i class="fa-solid fa-trash"></i> Revocar</a>
                         </td>
                     </tr>

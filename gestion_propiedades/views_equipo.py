@@ -72,5 +72,45 @@ def eliminar_asistente(request, acceso_id):
     user_purgar = acceso.usuario
     user_purgar.delete() # Esto hace on_delete=CASCADE en AccesoPortafolio
     
+    
     messages.success(request, "Asistente revocado y eliminado permanentemente.")
     return redirect('mi_equipo')
+
+@login_required(login_url='/login/')
+def cambiar_password(request, usuario_id):
+    TargetUser = get_object_or_404(User, id=usuario_id)
+    es_propietario = False
+    
+    if request.user.id != TargetUser.id:
+        acceso = AccesoPortafolio.objects.filter(usuario=TargetUser, portafolio__propietario=request.user).first()
+        if not acceso:
+            messages.error(request, "Acción denegada. No tienes permisos para cambiar la clave de este usuario.")
+            return redirect('dashboard')
+        es_propietario = True
+    else:
+        if Portafolio.objects.filter(propietario=request.user).exists():
+            es_propietario = True
+
+    if request.method == 'POST':
+        nueva_clave = request.POST.get('password')
+        if nueva_clave and len(nueva_clave) >= 8:
+            TargetUser.set_password(nueva_clave)
+            TargetUser.save()
+            
+            if request.user.id == TargetUser.id:
+                from django.contrib.auth import update_session_auth_hash
+                update_session_auth_hash(request, TargetUser)
+                messages.success(request, "Tu contraseña ha sido actualizada con éxito.")
+                return redirect('dashboard')
+            else:
+                messages.success(request, f"La contraseña del asistente {TargetUser.first_name} ha sido actualizada.")
+                return redirect('mi_equipo')
+        else:
+            messages.error(request, "La contraseña no es válida o es muy corta (mínimo 8 caracteres).")
+
+    context = {
+        'titulo_pagina': f'Cambiar Contraseña: {TargetUser.first_name or TargetUser.username}',
+        'target_user': TargetUser,
+        'es_propietario': es_propietario
+    }
+    return render(request, 'gestion_propiedades/equipo/cambiar_password.html', context)

@@ -77,5 +77,6 @@ urlpatterns = [
     # --- EQUIPO OPERATIVO (RBAC B2B) ---
     path('mi-equipo/', views_equipo.mi_equipo, name='mi_equipo'),
     path('mi-equipo/invitar/', views_equipo.crear_asistente, name='crear_asistente'),
+    path('mi-equipo/password/<int:usuario_id>/', views_equipo.cambiar_password, name='cambiar_password'),
     path('mi-equipo/revocar/<int:acceso_id>/', views_equipo.eliminar_asistente, name='eliminar_asistente'),
 ]
