@@ -59,6 +59,11 @@
                     <li class="nav-item mb-2">
                         <a class="nav-link {% if request.resolver_match.url_name == 'lista_mantenimientos_global' %}text-white fw-bold{% else %}text-white-50{% endif %}" href="{% url 'lista_mantenimientos_global' %}">🔧 Mantenimientos</a>
                     </li>
+                    {% if request.user.portafolios.all or request.user.is_superuser %}
+                    <li class="nav-item mb-2">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'auditoria' %}text-white fw-bold{% else %}text-white-50{% endif %}" href="{% url 'auditoria' %}">🕵️ Auditoría</a>
+                    </li>
+                    {% endif %}
                     
                     <li class="nav-item mt-4 pt-4 border-top border-secondary">
                     {% if user.is_superuser %}

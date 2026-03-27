@@ -1,6 +1,21 @@
 from django.shortcuts import redirect
 from django.urls import reverse
 from .models import AccesoPortafolio
+import threading
+
+_thread_local = threading.local()
+
+
+class CurrentUserMiddleware:
+    """Inyecta el usuario logueado en un thread-local para que los signals puedan acceder a él."""
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        _thread_local.usuario = getattr(request, 'user', None)
+        response = self.get_response(request)
+        return response
+
 
 class SuscripcionMiddleware:
     """

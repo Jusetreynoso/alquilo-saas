@@ -43,6 +43,7 @@ urlpatterns = [
     path('finanzas/reporte/', views.reporte_financiero, name='reporte_financiero'),
     path('reportes/rentabilidad/', views.reporte_rentabilidad, name='reporte_rentabilidad'),
     path('reportes/ocupacion/', views.reporte_ocupacion, name='reporte_ocupacion'),
+    path('auditoria/', views.vista_auditoria, name='auditoria'),
 
     # Rutas limpias
     path('propiedad/<int:propiedad_id>/solicitud/nueva/', views.generar_solicitud, name='generar_solicitud'),

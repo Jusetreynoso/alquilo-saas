@@ -4,7 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Sum, Q, Prefetch, F
 from django.contrib import messages
 from datetime import date
-from .models import Portafolio, Propiedad, Factura, CargoMora, ReciboPago, Contrato, SolicitudAlquiler, MantenimientoUnidad, Inquilino, PlanSaaS, SuscripcionCliente
+from .models import Portafolio, Propiedad, Factura, CargoMora, ReciboPago, Contrato, SolicitudAlquiler, MantenimientoUnidad, Inquilino, PlanSaaS, SuscripcionCliente, AuditLog
 from .forms import NuevoClienteSaaSForm, EditarSuscripcionForm, PropiedadForm, ContratoForm, InquilinoForm, MantenimientoForm, PlanSaaSForm
 from .utils import render_to_pdf
 import calendar
@@ -1095,3 +1095,27 @@ def marcar_factura_saas_pagada(request, factura_id):
         messages.success(request, f'La factura de {factura.usuario.username} por ${factura.monto_total} ha sido registrada como PAGADA.')
         
     return redirect('saas_facturacion')
+
+
+# --- MÓDULO DE AUDITORÍA ---
+
+@login_required(login_url='/login/')
+def vista_auditoria(request):
+    """
+    Bitácora de Auditoría con control multi-tenant:
+    - SuperAdmin: ve TODOS los AuditLogs del sistema.
+    - Propietario de portafolio: ve solo los logs de sus portafolios.
+    """
+    if request.user.is_superuser:
+        logs = AuditLog.objects.select_related('usuario', 'portafolio').all()[:500]
+    else:
+        portafolios = Portafolio.objects.filter(propietario=request.user)
+        logs = AuditLog.objects.filter(
+            portafolio__in=portafolios
+        ).select_related('usuario', 'portafolio').all()[:500]
+
+    context = {
+        'titulo_pagina': 'Bitácora de Auditoría',
+        'logs': logs,
+    }
+    return render(request, 'gestion_propiedades/auditoria.html', context)

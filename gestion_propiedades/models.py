@@ -273,3 +273,24 @@ class SolicitudAlquiler(models.Model):
 
     def __str__(self):
         return f"Solicitud para {self.propiedad} - {self.nombre_completo or 'Prospecto Pendiente'}"
+
+
+class AuditLog(models.Model):
+    ACCION_CHOICES = [
+        ('CREAR', 'Creó'),
+        ('EDITAR', 'Editó'),
+        ('ELIMINAR', 'Eliminó'),
+    ]
+
+    accion = models.CharField(max_length=10, choices=ACCION_CHOICES)
+    modulo = models.CharField(max_length=50, help_text="Ej: Contrato, Factura, ReciboPago, Mantenimiento")
+    descripcion = models.TextField()
+    usuario = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='auditlogs')
+    portafolio = models.ForeignKey(Portafolio, on_delete=models.SET_NULL, null=True, blank=True, related_name='auditlogs')
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"[{self.timestamp:%Y-%m-%d %H:%M}] {self.get_accion_display()} {self.modulo} por {self.usuario}"
