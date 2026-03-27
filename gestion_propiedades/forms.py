@@ -53,9 +53,10 @@ class ContratoForm(forms.ModelForm):
             self.fields['inquilino'].queryset = inquilinos_propios
             self.fields['inquilino'].empty_label = "--- SELECCIONAR INQUILINO EXISTENTE ---"
 
-        # Filtramos para que solo salgan las propiedades de este usuario
+        # Filtramos para que solo salgan las propiedades de este usuario que estén DISPONIBLES
         portafolios = Portafolio.objects.filter(Q(propietario=user) | Q(accesos__usuario=user))
-        self.fields['propiedad'].queryset = Propiedad.objects.filter(portafolio__in=portafolios)
+        self.fields['propiedad'].queryset = Propiedad.objects.filter(portafolio__in=portafolios, estado='DISPONIBLE')
+        self.fields['propiedad'].empty_label = "--- SELECCIONAR PROPIEDAD DISPONIBLE ---"
 
 class InquilinoForm(forms.ModelForm):
     class Meta:
