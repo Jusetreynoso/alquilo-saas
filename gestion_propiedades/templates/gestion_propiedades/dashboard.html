@@ -47,7 +47,7 @@
         <div class="card shadow-sm border-0 border-start border-danger border-4 h-100">
             <div class="card-body">
                 <h6 class="text-muted fw-bold text-uppercase small">Cuentas por Cobrar</h6>
-                <h2 class="mb-0 fw-bold text-danger">${{ cuentas_por_cobrar|floatformat:2 }}</h2>
+                <h2 class="mb-0 fw-bold text-danger">${{ cuentas_por_cobrar|dinero }}</h2>
             </div>
         </div>
     </div>
@@ -56,7 +56,7 @@
         <div class="card shadow-sm border-0 border-start border-success border-4 h-100">
             <div class="card-body">
                 <h6 class="text-muted fw-bold text-uppercase small">Ingresos del Mes</h6>
-                <h2 class="mb-0 fw-bold text-success">${{ ingresos_mes|floatformat:2 }}</h2>
+                <h2 class="mb-0 fw-bold text-success">${{ ingresos_mes|dinero }}</h2>
             </div>
         </div>
     </div>
@@ -95,7 +95,7 @@
                             </span>
                         </td>
                         <td class="py-3 text-end fw-bold text-danger">
-                            ${{ factura.monto_total_con_mora|floatformat:2 }}
+                            ${{ factura.monto_total_con_mora|dinero }}
                         </td>
                         <td class="py-3 text-center px-4">
                             <a href="{% url 'registrar_pago' factura.id %}" class="btn btn-sm btn-success shadow-sm">

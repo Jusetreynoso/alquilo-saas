@@ -68,14 +68,14 @@
                     <strong>{{ factura.concepto }}</strong><br>
                     <span style="font-size: 10px; color: #666;">Factura Ref: #{{ factura.id }} (Vencimiento: {{ factura.fecha_vencimiento }})</span>
                 </td>
-                <td style="text-align: right;">${{ recibo.monto_pagado|floatformat:2 }}</td>
+                <td style="text-align: right;">${{ recibo.monto_pagado|dinero }}</td>
             </tr>
         </tbody>
     </table>
 
     <div class="total-section">
         <span class="total-label">TOTAL PAGADO:</span>
-        <span class="total-amount">${{ recibo.monto_pagado|floatformat:2 }}</span>
+        <span class="total-amount">${{ recibo.monto_pagado|dinero }}</span>
     </div>
 
     {% if recibo.referencia_transaccion %}

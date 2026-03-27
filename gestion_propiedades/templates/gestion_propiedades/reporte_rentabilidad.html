@@ -37,11 +37,11 @@
                                 {% endif %}
                             </a>
                         </td>
-                        <td class="py-3 text-end text-success fw-bold">${{ row.ingresos|floatformat:2 }}</td>
-                        <td class="py-3 text-end text-danger">${{ row.egresos|floatformat:2 }}</td>
+                        <td class="py-3 text-end text-success fw-bold">${{ row.ingresos|dinero }}</td>
+                        <td class="py-3 text-end text-danger">${{ row.egresos|dinero }}</td>
                         <td class="py-3 text-end fw-bold {% if row.neto >= 0 %}text-success{% else %}text-danger{% endif %}">
                             {% if row.neto >= 0 %}▲{% else %}▼{% endif %}
-                            ${{ row.neto|floatformat:2 }}
+                            ${{ row.neto|dinero }}
                         </td>
                     </tr>
                     {% empty %}

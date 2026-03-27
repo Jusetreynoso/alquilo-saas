@@ -55,7 +55,7 @@
                                     <small class="text-muted">👤 {{ factura.contrato.inquilino.nombre }}</small>
                                 </td>
                                 <td>{{ factura.concepto }}</td>
-                                <td class="fw-bold">${{ factura.total_a_pagar|floatformat:2 }}</td>
+                                <td class="fw-bold">${{ factura.total_a_pagar|dinero }}</td>
                                 <td>
                                     {% if factura.estado == 'PENDIENTE' %}
                                         <span class="badge bg-warning text-dark">Pendiente</span>
@@ -110,7 +110,7 @@
                                     <strong>{{ recibo.factura.contrato.propiedad.nombre_o_numero }}</strong><br>
                                     <small class="text-muted">👤 {{ recibo.factura.contrato.inquilino.nombre }}</small>
                                 </td>
-                                <td class="fw-bold text-success">${{ recibo.monto_pagado|floatformat:2 }}</td>
+                                <td class="fw-bold text-success">${{ recibo.monto_pagado|dinero }}</td>
                                 <td>{{ recibo.metodo_pago }}</td>
                                 <td class="text-center">
                                     <a href="{% url 'imprimir_recibo' recibo.id %}" target="_blank" class="btn btn-sm btn-outline-secondary">

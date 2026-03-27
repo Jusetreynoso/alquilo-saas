@@ -18,7 +18,7 @@
                 
                 <div class="alert alert-info text-center">
                     <h5 class="mb-1">Total a Cobrar</h5>
-                    <h2 class="fw-bold mb-0">${{ factura.monto_total_con_mora|floatformat:2 }}</h2>
+                    <h2 class="fw-bold mb-0">${{ factura.monto_total_con_mora|dinero }}</h2>
                     <small>{{ factura.concepto }}</small>
                 </div>
 

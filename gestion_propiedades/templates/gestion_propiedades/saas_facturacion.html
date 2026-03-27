@@ -26,7 +26,7 @@
                 </div>
                 <div>
                     <h6 class="text-uppercase text-white-50 fw-bold mb-1">Ingresos Recaudados</h6>
-                    <h1 class="display-5 fw-bold mb-0">${{ total_cobrado|floatformat:2 }}</h1>
+                    <h1 class="display-5 fw-bold mb-0">${{ total_cobrado|dinero }}</h1>
                 </div>
             </div>
         </div>
@@ -39,7 +39,7 @@
                 </div>
                 <div>
                     <h6 class="text-uppercase text-dark opacity-50 fw-bold mb-1">Cuentas por Cobrar (SaaS)</h6>
-                    <h1 class="display-5 fw-bold mb-0">${{ total_pendiente|floatformat:2 }}</h1>
+                    <h1 class="display-5 fw-bold mb-0">${{ total_pendiente|dinero }}</h1>
                 </div>
             </div>
         </div>

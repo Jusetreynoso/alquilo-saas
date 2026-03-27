@@ -59,8 +59,8 @@
                                     </a>
                                 </td>
                                 <td>{{ contrato.fecha_inicio|date:"M Y" }} - {% if contrato.fecha_fin %}{{ contrato.fecha_fin|date:"M Y" }}{% else %}Presente{% endif %}</td>
-                                <td class="text-success">${{ contrato.monto_renta|floatformat:2 }}</td>
-                                <td><small class="text-muted">Dep: ${{ contrato.monto_deposito|floatformat:2 }}<br>A: ${{ contrato.monto_adelanto|floatformat:2 }}</small></td>
+                                <td class="text-success">${{ contrato.monto_renta|dinero }}</td>
+                                <td><small class="text-muted">Dep: ${{ contrato.monto_deposito|dinero }}<br>A: ${{ contrato.monto_adelanto|dinero }}</small></td>
                                 <td>
                                     {% if contrato.activo %}
                                         <span class="badge bg-success">Activo</span>

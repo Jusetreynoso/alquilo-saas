@@ -72,6 +72,9 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'gestion_propiedades.context_processors.avisos_globales',
             ],
+            'builtins': [
+                'gestion_propiedades.templatetags.filtros_dinero',
+            ],
         },
     },
 ]
@@ -117,6 +120,8 @@ LANGUAGE_CODE = 'es-DO'
 TIME_ZONE = 'America/Santo_Domingo'
 
 USE_I18N = True
+
+USE_L10N = False   # Desactiva formato europeo de números (coma como decimal)
 
 USE_TZ = True
 

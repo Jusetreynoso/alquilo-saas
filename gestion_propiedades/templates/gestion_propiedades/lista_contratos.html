@@ -35,7 +35,7 @@
                                 {{ contrato.propiedad.nombre_o_numero }}
                             </a>
                         </td>
-                        <td class="py-3 fw-bold text-success">${{ contrato.monto_renta|floatformat:2 }}</td>
+                        <td class="py-3 fw-bold text-success">${{ contrato.monto_renta|dinero }}</td>
                         <td class="py-3">Los días {{ contrato.dia_de_pago }}</td>
                         <td class="py-3 small">
                             {{ contrato.fecha_inicio|date:"d M Y" }} <br>

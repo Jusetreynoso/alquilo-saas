@@ -48,8 +48,8 @@
                 {% if contrato_activo %}
                     <h5 class="fw-bold">{{ contrato_activo.inquilino.nombre }}</h5>
                     <p class="mb-1"><strong>Teléfono:</strong> {{ contrato_activo.inquilino.telefono }}</p>
-                    <p class="mb-1"><strong>Renta:</strong> ${{ contrato_activo.monto_renta|floatformat:2 }}</p>
-                    <p class="mb-1 text-primary"><strong>Fianza Retenida:</strong> ${{ contrato_activo.monto_deposito|floatformat:2 }} <small class="text-muted">(Adelanto: ${{ contrato_activo.monto_adelanto|floatformat:2 }})</small></p>
+                    <p class="mb-1"><strong>Renta:</strong> ${{ contrato_activo.monto_renta|dinero }}</p>
+                    <p class="mb-1 text-primary"><strong>Fianza Retenida:</strong> ${{ contrato_activo.monto_deposito|dinero }} <small class="text-muted">(Adelanto: ${{ contrato_activo.monto_adelanto|dinero }})</small></p>
                     <p class="mb-1"><strong>Día de Pago:</strong> Los días {{ contrato_activo.dia_de_pago }} de cada mes</p>
                     <p class="mb-0 text-muted small">Días de gracia: {{ contrato_activo.dias_gracia }}</p>
                     
@@ -163,7 +163,7 @@
                                         </a>
                                     {% endif %}
                                 </div>
-                                <span class="fw-bold text-danger small">Costo: ${{ trabajo.costo|floatformat:2 }}</span>
+                                <span class="fw-bold text-danger small">Costo: ${{ trabajo.costo|dinero }}</span>
                             </div>
                         </li>
                     {% empty %}
@@ -195,7 +195,7 @@
                             {% for factura in facturas %}
                             <tr>
                                 <td class="px-4 py-3 text-muted small">{{ factura.concepto }}</td>
-                                <td class="py-3 fw-bold">${{ factura.monto_total_con_mora|floatformat:2 }}</td>
+                                <td class="py-3 fw-bold">${{ factura.monto_total_con_mora|dinero }}</td>
                                 <td class="py-3 small">{{ factura.fecha_vencimiento|date:"d M Y" }}</td>
                                 <td class="py-3">
                                     {% if factura.estado == 'PAGADA' %}
