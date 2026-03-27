@@ -44,6 +44,7 @@ urlpatterns = [
     path('reportes/rentabilidad/', views.reporte_rentabilidad, name='reporte_rentabilidad'),
     path('reportes/ocupacion/', views.reporte_ocupacion, name='reporte_ocupacion'),
     path('auditoria/', views.vista_auditoria, name='auditoria'),
+    path('reportes/transparencia/', views.reporte_transparencia, name='reporte_transparencia'),
 
     # Rutas limpias
     path('propiedad/<int:propiedad_id>/solicitud/nueva/', views.generar_solicitud, name='generar_solicitud'),

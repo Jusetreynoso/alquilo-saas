@@ -1119,3 +1119,80 @@ def vista_auditoria(request):
         'logs': logs,
     }
     return render(request, 'gestion_propiedades/auditoria.html', context)
+
+
+# --- REPORTE DE TRANSPARENCIA ---
+
+@login_required(login_url='/login/')
+def reporte_transparencia(request):
+    """
+    Reporte de Transparencia Financiera:
+    - Eficiencia de Recaudación: % de lo facturado que fue cobrado en el mes filtrado.
+    - Distribución de Gastos: egresos de mantenimiento agrupados por categoría.
+    """
+    hoy = date.today()
+    mes = int(request.GET.get('mes', hoy.month))
+    anio = int(request.GET.get('anio', hoy.year))
+
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+
+    # --- 1. EFICIENCIA DE RECAUDACIÓN ---
+    debimos_cobrar = Factura.objects.filter(
+        contrato__propiedad__portafolio__in=portafolios,
+        fecha_emision__year=anio,
+        fecha_emision__month=mes,
+    ).exclude(estado='ANULADA').aggregate(total=Sum('monto_base'))['total'] or 0
+
+    hemos_cobrado = ReciboPago.objects.filter(
+        factura__contrato__propiedad__portafolio__in=portafolios,
+        fecha_pago__year=anio,
+        fecha_pago__month=mes,
+    ).aggregate(total=Sum('monto_pagado'))['total'] or 0
+
+    faltan_cobrar = max(float(debimos_cobrar) - float(hemos_cobrado), 0)
+    eficiencia = round((float(hemos_cobrado) / float(debimos_cobrar) * 100), 1) if debimos_cobrar else 0
+
+    # --- 2. DISTRIBUCIÓN DE GASTOS (Mantenimientos del mes) ---
+    COLORES = ['#e74c3c', '#3498db', '#f39c12', '#27ae60', '#9b59b6']
+    categoria_labels = dict(MantenimientoUnidad.CATEGORIA_CHOICES)
+    gastos_raw = MantenimientoUnidad.objects.filter(
+        propiedad__portafolio__in=portafolios,
+        fecha_reporte__year=anio,
+        fecha_reporte__month=mes,
+    ).values('categoria').annotate(total=Sum('costo')).order_by('-total')
+
+    total_gastos = sum(float(g['total']) for g in gastos_raw) or 1
+    gastos = [
+        {
+            'label': categoria_labels.get(g['categoria'], g['categoria']),
+            'total': float(g['total']),
+            'pct': round(float(g['total']) / total_gastos * 100, 1),
+            'color': COLORES[i % len(COLORES)],
+        }
+        for i, g in enumerate(gastos_raw)
+    ]
+
+    import json
+    chart_labels = json.dumps([g['label'] for g in gastos])
+    chart_data = json.dumps([g['total'] for g in gastos])
+    chart_colors = json.dumps([g['color'] for g in gastos])
+
+    context = {
+        'titulo_pagina': 'Reporte de Transparencia',
+        'mes': mes,
+        'anio': anio,
+        'debimos_cobrar': debimos_cobrar,
+        'hemos_cobrado': hemos_cobrado,
+        'faltan_cobrar': faltan_cobrar,
+        'eficiencia': eficiencia,
+        'gastos': gastos,
+        'total_gastos': total_gastos,
+        'chart_labels': chart_labels,
+        'chart_data': chart_data,
+        'chart_colors': chart_colors,
+        'meses': [(i, date(2000, i, 1).strftime('%B')) for i in range(1, 13)],
+        'anios': list(range(hoy.year - 3, hoy.year + 1)),
+    }
+    return render(request, 'gestion_propiedades/reporte_transparencia.html', context)
