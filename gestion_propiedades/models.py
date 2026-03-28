@@ -111,6 +111,7 @@ class Propiedad(models.Model):
     direccion_completa = models.TextField(blank=True, null=True)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='DISPONIBLE')
     detalles = models.TextField(blank=True, null=True, help_text="Ej: 2 habitaciones, 1 baño")
+    is_deleted = models.BooleanField(default=False, help_text="Indica si la propiedad fue eliminada lógicamente (Soft Delete)")
 
     def __str__(self):
         if self.grupo_o_residencial:

@@ -63,7 +63,12 @@
                                 <td><small class="text-muted">Dep: ${{ contrato.monto_deposito|dinero }}<br>A: ${{ contrato.monto_adelanto|dinero }}</small></td>
                                 <td>
                                     {% if contrato.activo %}
-                                        <span class="badge bg-success">Activo</span>
+                                        <div class="d-flex flex-column gap-1 align-items-center">
+                                            <span class="badge bg-success w-100">Activo</span>
+                                            <a href="{% url 'registrar_pago_anticipado' contrato.id %}" class="btn btn-sm btn-outline-success w-100" style="font-size: 0.75rem;">
+                                                💰 Recibir Adelanto
+                                            </a>
+                                        </div>
                                     {% else %}
                                         <span class="badge bg-secondary">Finalizado</span>
                                     {% endif %}

@@ -1,0 +1,78 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+{% block encabezado %}
+    {{ titulo_pagina }}
+    <a href="{% url 'detalle_inquilino' contrato.inquilino.id %}" class="btn btn-outline-secondary btn-sm">⬅ Volver al Perfil</a>
+{% endblock %}
+
+{% block contenido %}
+<div class="row justify-content-center">
+    <div class="col-md-7">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white fw-bold text-success py-3 d-flex align-items-center gap-2">
+                💰 Cobrar Adelanto de Renta Mensual
+            </div>
+            
+            <div class="card-body p-4 bg-light">
+                <div class="alert alert-info border-0 shadow-sm d-flex align-items-center mb-4">
+                    <span class="fs-2 me-3">ℹ️</span>
+                    <div>
+                        <strong>¿Qué hace esta acción?</strong><br>
+                        Esta acción generará inmediatamente la factura correspondiente al <strong>próximo mes disponible</strong> del contrato y registrará tu recibo de pago para que la contabilidad quede cuadrada y el robot de cobranza ignore ese mes.
+                    </div>
+                </div>
+
+                <div class="bg-white rounded p-3 mb-4 border text-center">
+                    <p class="text-muted mb-1 text-uppercase small fw-bold">Mes a Cubrir con este Adelanto</p>
+                    <h3 class="fw-bold text-primary mb-0">{{ fecha_proxima_emision|date:"F Y"|title }}</h3>
+                    <p class="text-secondary small mt-1 mb-0">(Vencimiento programado: {{ fecha_vencimiento_proxima|date:"d M Y" }})</p>
+                </div>
+            </div>
+
+            <div class="card-body border-top p-4">
+                <form method="POST">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label class="form-label text-muted fw-bold small">Monto a Pagar</label>
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text border-end-0 bg-white text-success fw-bold">$</span>
+                            <input type="text" class="form-control border-start-0 text-success fw-bold" value="{{ monto_renta }}" disabled>
+                            <input type="hidden" name="monto" value="{{ monto_renta }}">
+                        </div>
+                        <small class="text-muted mt-1 d-block">El anticipo cubrirá la totalidad de la renta base de ese mes.</small>
+                    </div>
+
+                    <div class="row mb-4">
+                        <div class="col-md-6 mb-3 mb-md-0">
+                            <label class="form-label text-muted fw-bold small">Método de Pago</label>
+                            <select name="metodo_pago" class="form-select form-select-lg" required>
+                                <option value="TRANSFERENCIA">Transferencia Bancaria</option>
+                                <option value="EFECTIVO">Efectivo</option>
+                                <option value="CHEQUE">Cheque</option>
+                                <option value="OTRO">Otro</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted fw-bold small">Fecha de Recepción del Dinero</label>
+                            <input type="date" name="fecha_pago" class="form-control form-control-lg" required value="{% now 'Y-m-d' %}">
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label text-muted fw-bold small">Referencia (Opcional)</label>
+                        <input type="text" name="referencia" class="form-control form-control-lg" placeholder="Número de confirmación, ID de transacción, etc.">
+                    </div>
+
+                    <div class="d-grid mt-4">
+                        <button type="submit" class="btn btn-success btn-lg shadow-sm">
+                            Generar Factura y Aplicar Pago Anticipado
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

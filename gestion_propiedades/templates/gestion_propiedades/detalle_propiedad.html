@@ -12,11 +12,34 @@
             <a href="{% url 'editar_propiedad' propiedad.id %}" class="btn btn-sm btn-outline-primary shadow-sm">
                 ✏️ Editar Propiedad
             </a>
-            {% if request.user.portafolios.all %}
-            <form method="POST" action="{% url 'eliminar_propiedad' propiedad.id %}" onsubmit="return confirm('¿Estás seguro de archivar esta propiedad? Dejará de contar en la facturación SaaS y pasará al archivo muerto de tu inventario.');" class="m-0 p-0">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-sm btn-outline-danger shadow-sm">🗑️ Archivar (Excluir del Cobro)</button>
-            </form>
+            {% if request.user == propiedad.portafolio.propietario or request.user.is_superuser %}
+            <!-- Botón que activa el Modal -->
+            <button type="button" class="btn btn-sm btn-danger shadow-sm" data-bs-toggle="modal" data-bs-target="#modalEliminarPropiedad">
+                🗑️ Eliminar Definitivamente
+            </button>
+            
+            <!-- Modal Bootstrap -->
+            <div class="modal fade" id="modalEliminarPropiedad" tabindex="-1" aria-labelledby="modalEliminarLabel" aria-hidden="true">
+              <div class="modal-dialog">
+                <div class="modal-content">
+                  <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title" id="modalEliminarLabel">⚠️ Eliminar Propiedad</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body text-black">
+                    <p>¿Estás completamente seguro de que deseas eliminar <strong>{{ propiedad.nombre_o_numero }}</strong>?</p>
+                    <p class="text-danger">Esta acción es irreversible. La propiedad desaparecerá del panel y dejará de ser contada para el cobro de la suscripción mensual.</p>
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <form method="POST" action="{% url 'eliminar_propiedad' propiedad.id %}" class="m-0 p-0">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-danger">Sí, Eliminar Propiedad</button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            </div>
             {% endif %}
         </div>
     </div>

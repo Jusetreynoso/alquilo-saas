@@ -34,6 +34,7 @@ urlpatterns = [
     path('contratos/crear/', views.crear_contrato, name='crear_contrato'),
     path('contrato/<int:contrato_id>/editar/', views.editar_contrato, name='editar_contrato'), # NUEVA
     path('contrato/<int:contrato_id>/finalizar/', views.finalizar_contrato, name='finalizar_contrato'),
+    path('contrato/<int:contrato_id>/pago-anticipado/', views.registrar_pago_anticipado, name='registrar_pago_anticipado'),
     
     # Finanzas y Pagos
     path('facturacion/', views.lista_facturas_global, name='lista_facturas_global'),

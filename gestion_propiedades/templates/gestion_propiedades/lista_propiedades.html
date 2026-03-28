@@ -21,6 +21,7 @@
                             <th class="px-4 py-3">Unidad</th>
                             <th class="py-3">Residencial / Grupo</th>
                             <th class="py-3">Estado</th>
+                            <th class="py-3 text-end px-4">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -39,6 +40,37 @@
                                     <span class="badge bg-primary">Ocupado</span>
                                 {% else %}
                                     <span class="badge bg-warning text-dark">Mantenimiento</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-3 text-end px-4">
+                                <a href="{% url 'detalle_propiedad' propiedad.id %}" class="btn btn-sm btn-outline-primary">Ver</a>
+                                {% if request.user == propiedad.portafolio.propietario or request.user.is_superuser %}
+                                    <!-- Botón Eliminar Modal -->
+                                    <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalEliminarPropLista-{{ propiedad.id }}">
+                                        🗑️
+                                    </button>
+                                    
+                                    <!-- Modal -->
+                                    <div class="modal fade" id="modalEliminarPropLista-{{ propiedad.id }}" tabindex="-1" aria-hidden="true" style="text-align: left;">
+                                      <div class="modal-dialog">
+                                        <div class="modal-content">
+                                          <div class="modal-header bg-danger text-white">
+                                            <h5 class="modal-title">⚠️ Eliminar {{ propiedad.nombre_o_numero }}</h5>
+                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                          </div>
+                                          <div class="modal-body">
+                                            <p>¿Seguro que deseas eliminar esta propiedad lógicamente? Esto la ocultará y suspenderá su cobro SaaS futuro de forma irreversible.</p>
+                                          </div>
+                                          <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                            <form method="POST" action="{% url 'eliminar_propiedad' propiedad.id %}" class="m-0 p-0">
+                                                {% csrf_token %}
+                                                <button type="submit" class="btn btn-danger">Sí, Eliminar</button>
+                                            </form>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
                                 {% endif %}
                             </td>
                         </tr>

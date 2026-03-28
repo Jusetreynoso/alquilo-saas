@@ -32,8 +32,8 @@ def dashboard(request):
         Q(propietario=request.user) | Q(accesos__usuario=request.user)
     ).distinct()
 
-    total_propiedades = Propiedad.objects.filter(portafolio__in=portafolios).count()
-    propiedades_disponibles = Propiedad.objects.filter(portafolio__in=portafolios, estado='DISPONIBLE').count()
+    total_propiedades = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False).count()
+    propiedades_disponibles = Propiedad.objects.filter(portafolio__in=portafolios, estado='DISPONIBLE', is_deleted=False).count()
 
     # 1. Le agregamos el .order_by para que las deudas más viejas salgan primero
     facturas_pendientes = Factura.objects.filter(
@@ -72,7 +72,7 @@ def lista_propiedades(request):
 
     # 2. Traemos las propiedades. 
     contratos_activos = Contrato.objects.filter(activo=True)
-    qs = Propiedad.objects.filter(portafolio__in=portafolios)
+    qs = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False)
     
     # Filtro por estado via URL param (ej: ?estado=disponible desde el Dashboard)
     estado_filtro = request.GET.get('estado', '').upper()
@@ -258,7 +258,7 @@ def crear_contrato(request):
 
     import json
     portafolios = Portafolio.objects.filter(Q(propietario=request.user) | Q(accesos__usuario=request.user))
-    propiedades = Propiedad.objects.filter(portafolio__in=portafolios).select_related('portafolio')
+    propiedades = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False).select_related('portafolio')
     config_depositos = {
         str(p.id): {
             'dep': p.portafolio.config_meses_deposito,
@@ -415,7 +415,7 @@ def editar_contrato(request, contrato_id):
         form = ContratoForm(request.user, instance=contrato)
 
     import json
-    propiedades = Propiedad.objects.filter(portafolio__in=portafolios).select_related('portafolio')
+    propiedades = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False).select_related('portafolio')
     config_depositos = {
         str(p.id): {
             'dep': p.portafolio.config_meses_deposito,
@@ -589,7 +589,7 @@ def reporte_rentabilidad(request):
         Q(propietario=request.user) | Q(accesos__usuario=request.user)
     ).distinct()
 
-    propiedades = Propiedad.objects.filter(portafolio__in=portafolios)
+    propiedades = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False)
 
     resultado = []
     for prop in propiedades:
@@ -636,7 +636,7 @@ def reporte_ocupacion(request):
     fin_anio = date(hoy.year, 12, 31)
     dias_anio = 365
 
-    propiedades = Propiedad.objects.filter(portafolio__in=portafolios)
+    propiedades = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False)
     resultado = []
 
     for prop in propiedades:
@@ -823,7 +823,7 @@ def saas_master_control(request):
     if not request.user.is_superuser:
         return redirect('dashboard')
         
-    usuarios_saas = User.objects.filter(is_superuser=False).prefetch_related('suscripcion', 'portafolios', 'portafolios__propiedades')
+    usuarios_saas = User.objects.filter(is_superuser=False).prefetch_related('suscripcion', 'portafolios', Prefetch('portafolios__propiedades', queryset=Propiedad.objects.filter(is_deleted=False)))
     
     clientes_data = []
     for u in usuarios_saas:
@@ -960,8 +960,9 @@ def mi_suscripcion(request):
     from .models import Propiedad, FacturaSaaS
     
     propiedades_activas = Propiedad.objects.filter(
-        portafolio__propietario=request.user
-    ).exclude(estado='INACTIVO').count()
+        portafolio__propietario=request.user,
+        is_deleted=False
+    ).count()
     
     costo_proyectado = propiedades_activas * 1.00
     facturas_saas = FacturaSaaS.objects.filter(usuario=request.user).order_by('-fecha_emision')
@@ -1011,8 +1012,9 @@ def generar_corte_saas(request):
             continue
             
         cant_propiedades = Propiedad.objects.filter(
-            portafolio__propietario=cliente
-        ).exclude(estado='INACTIVO').count()
+            portafolio__propietario=cliente,
+            is_deleted=False
+        ).count()
         
         if cant_propiedades > 0:
             monto = cant_propiedades * 1.00
@@ -1040,18 +1042,27 @@ def generar_corte_saas(request):
 @login_required(login_url='/login/')
 def eliminar_propiedad(request, propiedad_id):
     """
-    Archiva una propiedad para que ya no cuente en la facturación del usuario.
+    Realiza un Soft Delete de la propiedad, verificando permisos estrictos.
+    Solo el Administrador del Portafolio o el SuperAdmin pueden hacerlo.
     """
     propiedad = get_object_or_404(Propiedad, id=propiedad_id)
     
-    if request.user != propiedad.portafolio.propietario:
-        messages.error(request, 'No tienes permiso para archivar esta propiedad.')
+    # Validar permisos
+    es_propietario = request.user == propiedad.portafolio.propietario
+    es_superadmin = request.user.is_superuser
+    
+    if not (es_propietario or es_superadmin):
+        messages.error(request, 'No tienes permiso para eliminar esta propiedad permanentemente. Se requiere rol de Propietario o Superadmin.')
+        return redirect('lista_propiedades')
+    
+    if request.method == 'POST':
+        propiedad.is_deleted = True
+        propiedad.save()
+        messages.success(request, f'La propiedad "{propiedad.nombre_o_numero}" ha sido eliminada permanentemente del sistema y su facturación ha sido detenida.')
         return redirect('lista_propiedades')
         
-    propiedad.estado = 'INACTIVO'
-    propiedad.save()
-    messages.success(request, f'La propiedad "{propiedad.nombre_o_numero}" ha sido archivada y dejará de generar cargos a tu suscripción.')
-    return redirect('lista_propiedades')
+    # Si le pega por GET por error, lo mandamos a detalle propiedad
+    return redirect('detalle_propiedad', propiedad_id=propiedad.id)
 
 @login_required(login_url='/login/')
 @propietario_requerido
@@ -1196,3 +1207,80 @@ def reporte_transparencia(request):
         'anios': list(range(hoy.year - 3, hoy.year + 1)),
     }
     return render(request, 'gestion_propiedades/reporte_transparencia.html', context)
+
+@login_required(login_url='/login/')
+def registrar_pago_anticipado(request, contrato_id):
+    """
+    Permite registrar un pago por adelantado.
+    Localiza la fecha de la última factura y genera la siguiente de forma diferida o futura.
+    """
+    from django.utils import timezone
+    from datetime import date, timedelta
+    import calendar
+    
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+    
+    contrato = get_object_or_404(Contrato, id=contrato_id, propiedad__portafolio__in=portafolios)
+    
+    # 1. Determinar cuál sería el próximo mes a facturar.
+    ultima_factura = contrato.facturas.order_by('-fecha_emision').first()
+    if ultima_factura:
+        ultimo_mes = ultima_factura.fecha_emision.month
+        ultimo_anio = ultima_factura.fecha_emision.year
+        prox_mes = ultimo_mes + 1
+        prox_anio = ultimo_anio
+        if prox_mes > 12:
+            prox_mes = 1
+            prox_anio += 1
+    else:
+        hoy = timezone.now().date()
+        prox_mes = hoy.month
+        prox_anio = hoy.year
+        
+    # Calcular fecha de emisión de esa factura
+    try:
+        fecha_proxima_emision = date(prox_anio, prox_mes, contrato.dia_de_pago)
+    except ValueError:
+        ultimo_dia_mes = calendar.monthrange(prox_anio, prox_mes)[1]
+        fecha_proxima_emision = date(prox_anio, prox_mes, ultimo_dia_mes)
+        
+    fecha_vencimiento_proxima = fecha_proxima_emision + timedelta(days=contrato.dias_gracia)
+    
+    if request.method == 'POST':
+        # 1. Generar la Factura "del futuro"
+        nueva_factura = Factura.objects.create(
+            contrato=contrato,
+            fecha_emision=fecha_proxima_emision,
+            fecha_vencimiento=fecha_vencimiento_proxima,
+            monto_base=contrato.monto_renta,
+            concepto=f"Pago Anticipado Renta ({fecha_proxima_emision.strftime('%m/%Y')})",
+            estado='PAGADA'
+        )
+        
+        # 2. Registrar el ReciboPago
+        metodo = request.POST.get('metodo_pago', 'TRANSFERENCIA')
+        referencia = request.POST.get('referencia', '')
+        # Si el usuario quiere, asume la fecha real de hoy como pago
+        fecha_pago = request.POST.get('fecha_pago', timezone.now().date())
+        
+        ReciboPago.objects.create(
+            factura=nueva_factura,
+            fecha_pago=fecha_pago,
+            monto_pagado=contrato.monto_renta,
+            metodo_pago=metodo,
+            referencia_transaccion=referencia
+        )
+        
+        messages.success(request, f'Generado recibo de pago anticipado para el mes de {fecha_proxima_emision.strftime("%m/%Y")}.')
+        return redirect('detalle_inquilino', inquilino_id=contrato.inquilino.id)
+        
+    context = {
+        'titulo_pagina': 'Recibir Pago Anticipado',
+        'contrato': contrato,
+        'fecha_proxima_emision': fecha_proxima_emision,
+        'fecha_vencimiento_proxima': fecha_vencimiento_proxima,
+        'monto_renta': contrato.monto_renta,
+    }
+    return render(request, 'gestion_propiedades/pago_anticipado.html', context)

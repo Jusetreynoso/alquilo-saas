@@ -27,8 +27,9 @@ class Command(BaseCommand):
                 continue
                 
             cant_propiedades = Propiedad.objects.filter(
-                portafolio__propietario=cliente
-            ).exclude(estado='INACTIVO').count()
+                portafolio__propietario=cliente,
+                is_deleted=False
+            ).count()
             
             if cant_propiedades > 0:
                 monto = cant_propiedades * 1.00
