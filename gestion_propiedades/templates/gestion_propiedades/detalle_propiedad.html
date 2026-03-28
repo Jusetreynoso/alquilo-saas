@@ -56,6 +56,9 @@
 
                 {% if contrato_activo %}
                 <div class="d-flex gap-2">
+                    <a href="{% url 'registrar_pago_anticipado' contrato_activo.id %}" class="btn btn-sm btn-outline-success">
+                        💰 Recibir Adelanto
+                    </a>
                     <a href="{% url 'editar_contrato' contrato_activo.id %}" class="btn btn-sm btn-outline-secondary">
                         ✏️ Editar
                     </a>
