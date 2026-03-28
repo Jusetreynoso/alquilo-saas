@@ -218,6 +218,7 @@ class MantenimientoUnidad(models.Model):
         ('PREVENTIVO', 'Mantenimiento Preventivo'),
         ('MEJORA', 'Mejora'),
         ('LIMPIEZA', 'Limpieza y Acondicionamiento'),
+        ('OTRO', 'Otros Gastos / Misceláneos'),
     ]
     ESTADO_CHOICES = [
         ('PENDIENTE', 'Pendiente'),
