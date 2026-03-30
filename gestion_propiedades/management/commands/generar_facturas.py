@@ -14,7 +14,7 @@ class Command(BaseCommand):
         hoy = timezone.localtime().date()
         dia_actual = hoy.day
         
-        # Diccionario simple para traducir el mes al español en el concepto
+        # Diccionario simple
         meses_espanol = {
             1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril', 5: 'Mayo', 6: 'Junio',
             7: 'Julio', 8: 'Agosto', 9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
@@ -24,18 +24,22 @@ class Command(BaseCommand):
         self.stdout.write(mensaje_inicio)
         logger.info(mensaje_inicio)
 
-        # Buscamos contratos activos cuyo día de pago sea hoy
         contratos = Contrato.objects.filter(activo=True, dia_de_pago=dia_actual)
         facturas_creadas = 0
 
         for contrato in contratos:
+            # Validación segura para evitar crasheos si el contrato tiene datos huérfanos
+            nombre_inquilino = "Sin Inquilino"
+            if getattr(contrato, 'inquilino', None):
+                nombre_inquilino = getattr(contrato.inquilino, 'nombre_completo', f"ID: {contrato.inquilino.id}")
+
             try:
-                msg_eval = f"Evaluando contrato ID {contrato.id} ({contrato.inquilino.nombre_completo})..."
+                msg_eval = f"Evaluando contrato ID {contrato.id} ({nombre_inquilino})..."
                 self.stdout.write(msg_eval)
                 logger.info(msg_eval)
 
                 with transaction.atomic():
-                    # Validación de seguridad: Verificar que no hayamos facturado este mes ya
+                    # Verificar si no facturamos este mes ya
                     factura_existe = Factura.objects.filter(
                         contrato=contrato,
                         fecha_emision__year=hoy.year,
@@ -43,7 +47,6 @@ class Command(BaseCommand):
                     ).exists()
 
                     if not factura_existe:
-                        # Damos 5 días de gracia para el vencimiento
                         fecha_vence = hoy + timedelta(days=5)
                         nombre_mes = meses_espanol[hoy.month]
 
@@ -56,7 +59,8 @@ class Command(BaseCommand):
                             estado='PENDIENTE'
                         )
                         facturas_creadas += 1
-                        msg_exito = f"Factura generada con éxito para contrato ID {contrato.id} ({contrato.inquilino.nombre_completo} - Apt {contrato.apartamento.numero_unidad})"
+                        numero_apto = getattr(contrato.apartamento, 'numero_unidad', 'N/A') if getattr(contrato, 'apartamento', None) else 'N/A'
+                        msg_exito = f"Factura generada con éxito: Contrato ID {contrato.id} ({nombre_inquilino} - Apt {numero_apto})"
                         self.stdout.write(self.style.SUCCESS(msg_exito))
                         logger.info(msg_exito)
                     else:
@@ -65,10 +69,11 @@ class Command(BaseCommand):
                         logger.info(msg_existe)
 
             except Exception as e:
-                msg_error = f"Fallo en contrato ID {contrato.id} ({contrato.inquilino.nombre_completo}): {str(e)}"
+                msg_error = f"Fallo en contrato ID {contrato.id} ({nombre_inquilino}): {str(e)}"
                 self.stdout.write(self.style.ERROR(msg_error))
                 logger.error(msg_error, exc_info=True)
 
         mensaje_fin = f"Proceso terminado. Se generaron {facturas_creadas} facturas nuevas hoy."
         self.stdout.write(self.style.SUCCESS(mensaje_fin))
-        logger.info(mensaje_fin)
+        logger.info(mensaje_fin)
+
