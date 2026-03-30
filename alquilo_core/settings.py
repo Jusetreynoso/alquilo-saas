@@ -30,6 +30,12 @@ DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 ALLOWED_HOSTS = ['*']
 CSRF_TRUSTED_ORIGINS = ['https://*.railway.app', 'https://*.up.railway.app']
 
+# Configuración automática para soportar Dominios Propios comprados en el futuro
+custom_domain = os.environ.get('CUSTOM_DOMAIN')
+if custom_domain:
+    CSRF_TRUSTED_ORIGINS.append(f'https://{custom_domain}')
+    CSRF_TRUSTED_ORIGINS.append(f'https://www.{custom_domain}')
+
 
 # Application definition
 
@@ -156,3 +162,9 @@ STORAGES = {
 # --- RAILWAY PRODUCTION CONFIGS ---
 if 'DATABASE_URL' in os.environ:
     DATABASES['default'] = dj_database_url.config(conn_max_age=600, conn_health_checks=True)
+    
+    # Forzar Conexión Segura (Candadito Verde) siempre en Producción
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
