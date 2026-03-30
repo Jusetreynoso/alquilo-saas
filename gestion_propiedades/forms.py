@@ -61,12 +61,13 @@ class ContratoForm(forms.ModelForm):
 class InquilinoForm(forms.ModelForm):
     class Meta:
         model = Inquilino
-        fields = ['nombre', 'telefono', 'cedula_o_pasaporte', 'correo']
+        fields = ['nombre', 'telefono', 'cedula_o_pasaporte', 'correo', 'recibir_alertas_correo']
         widgets = {
             'nombre': forms.TextInput(attrs={'class': 'form-control', 'required': True}),
             'telefono': forms.TextInput(attrs={'class': 'form-control', 'required': True}),
             'cedula_o_pasaporte': forms.TextInput(attrs={'class': 'form-control'}),
-            'correo': forms.EmailInput(attrs={'class': 'form-control'}),
+            'correo': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'Para enviarle cuenta de cobro y recordatorios'}),
+            'recibir_alertas_correo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
 class MantenimientoForm(forms.ModelForm):

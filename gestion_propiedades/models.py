@@ -123,6 +123,7 @@ class Inquilino(models.Model):
     telefono = models.CharField(max_length=20)
     cedula_o_pasaporte = models.CharField(max_length=50, blank=True, null=True)
     correo = models.EmailField(blank=True, null=True)
+    recibir_alertas_correo = models.BooleanField(default=True, help_text="Apaga este interruptor si el inquilino prefiere no recibir correos automáticos de cobranza.")
     creado_por = models.ForeignKey(User, on_delete=models.CASCADE, related_name='inquilinos_registrados', null=True, blank=True)
     usuario_sistema = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, help_text="Solo si tendrá acceso al portal web")
 
