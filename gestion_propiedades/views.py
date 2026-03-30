@@ -801,6 +801,53 @@ def lista_facturas_global(request):
     }
     return render(request, 'gestion_propiedades/facturacion_global.html', context)
 
+@login_required(login_url='/login/')
+def prorratear_factura_inicial(request, factura_id):
+    """
+    Recibe un POST para ajustar el monto de la primera factura mensual de un contrato nuevo.
+    """
+    from .models import Factura, AuditLog
+    from django.db.models import Q
+    
+    portafolios = Portafolio.objects.filter(Q(propietario=request.user) | Q(accesos__usuario=request.user))
+    factura = get_object_or_404(Factura, id=factura_id, contrato__propiedad__portafolio__in=portafolios)
+    
+    if request.method == 'POST':
+        # Validar de nuevo por seguridad que es elegible
+        if not factura.es_prorrateable:
+            messages.error(request, 'Esta factura no es elegible para prorrateo inicial (han pasado más de 45 días o ya no está pendiente).')
+            return redirect('lista_facturas_global')
+            
+        try:
+            nuevo_monto = float(request.POST.get('monto_ajustado', 0.00))
+        except ValueError:
+            messages.error(request, 'El monto ingresado no es válido.')
+            return redirect('lista_facturas_global')
+            
+        monto_anterior = factura.monto_base
+        factura.monto_base = nuevo_monto
+        
+        if nuevo_monto == 0:
+            factura.concepto = f"{factura.concepto} (Regalo / Mes de Gracia)"
+        else:
+            factura.concepto = f"{factura.concepto} (Prorrateo 1er Mes Ajustado)"
+            
+        factura.save()
+        
+        # Registrar en Auditoría
+        AuditLog.objects.create(
+            accion='EDITAR',
+            modulo='Factura',
+            descripcion=f'Ajustó por prorrateo la factura #{factura.id} de {factura.contrato.inquilino.nombre}. Monto original: ${monto_anterior} -> Monto ajustado: ${nuevo_monto}',
+            usuario=request.user,
+            portafolio=factura.contrato.propiedad.portafolio
+        )
+        
+        messages.success(request, f'La factura se prorrateó correctamente a ${nuevo_monto}.')
+        
+    return redirect('lista_facturas_global')
+
+
 
 # --- MÓDULO B2B SAAS ---
 

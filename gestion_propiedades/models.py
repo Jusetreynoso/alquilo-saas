@@ -179,6 +179,17 @@ class Factura(models.Model):
         total_moras = sum(mora.monto for mora in self.moras.all())
         return self.monto_base + total_moras
 
+    @property
+    def es_prorrateable(self):
+        """
+        Determina si una factura es elegible para Ajuste manual de Primera Renta.
+        Aplica si está pendiente y han transcurrido menos de 45 días desde que inició el contrato.
+        """
+        if self.estado == 'PENDIENTE' and self.contrato:
+            diferencia = self.fecha_emision - self.contrato.fecha_inicio
+            return diferencia.days <= 45
+        return False
+
     def __str__(self):
         return f"Factura #{self.id} - {self.contrato.inquilino.nombre} ({self.estado})"
 

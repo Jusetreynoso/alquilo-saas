@@ -40,6 +40,7 @@ urlpatterns = [
     path('facturacion/', views.lista_facturas_global, name='lista_facturas_global'),
     path('facturacion/generar-masivo/', views.generar_facturas_masivas, name='generar_facturas_masivas'),
     path('factura/<int:factura_id>/pagar/', views.registrar_pago, name='registrar_pago'),
+    path('factura/<int:factura_id>/prorratear/', views.prorratear_factura_inicial, name='prorratear_factura_inicial'),
     path('recibo/<int:recibo_id>/imprimir/', views.imprimir_recibo, name='imprimir_recibo'),
     path('finanzas/reporte/', views.reporte_financiero, name='reporte_financiero'),
     path('reportes/rentabilidad/', views.reporte_rentabilidad, name='reporte_rentabilidad'),

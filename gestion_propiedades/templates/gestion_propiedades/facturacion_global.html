@@ -69,12 +69,57 @@
                                 </td>
                                 <td class="text-center">
                                     {% if factura.estado != 'PAGADA' and factura.estado != 'ANULADA' %}
-                                        <a href="{% url 'registrar_pago' factura.id %}" class="btn btn-sm btn-primary">Registrar Pago</a>
+                                        <div class="d-flex flex-column gap-1 align-items-center">
+                                            <a href="{% url 'registrar_pago' factura.id %}" class="btn btn-sm btn-primary w-100">Registrar Pago</a>
+                                            {% if factura.es_prorrateable %}
+                                                <button type="button" class="btn btn-sm btn-warning fw-bold text-dark w-100 shadow-sm border border-warning" data-bs-toggle="modal" data-bs-target="#modalProrrateo{{ factura.id }}">
+                                                    🌟 Prorrateo
+                                                </button>
+                                            {% endif %}
+                                        </div>
                                     {% else %}
                                         <span class="text-success small fw-bold">✓ Completado</span>
                                     {% endif %}
                                 </td>
                             </tr>
+                            
+                            <!-- Modal: Prorratear Factura Dinámica -->
+                            {% if factura.es_prorrateable %}
+                            <div class="modal fade" id="modalProrrateo{{ factura.id }}" tabindex="-1" aria-labelledby="modalProrrateoLabel{{ factura.id }}" aria-hidden="true">
+                              <div class="modal-dialog modal-dialog-centered">
+                                <div class="modal-content border-0 shadow-lg">
+                                  <div class="modal-header border-0 bg-warning bg-opacity-10">
+                                    <h5 class="modal-title fw-bold text-dark" id="modalProrrateoLabel{{ factura.id }}">🌟 Ajuste de Primera Factura</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                                  </div>
+                                  <form action="{% url 'prorratear_factura_inicial' factura.id %}" method="POST">
+                                      {% csrf_token %}
+                                      <div class="modal-body p-4">
+                                        <div class="alert alert-secondary border-0 small text-dark mb-4">
+                                            <i class="fas fa-info-circle me-1"></i> Este contrato inició hace pocos días. Modifica la <strong>Monto Base</strong> aquí (ej. cobro prorrateado de días consumidos). El sistema guardará el registro en Auditoría.
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold text-secondary text-uppercase small">Monto Exacto a Facturar</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text bg-light text-secondary fw-bold">$</span>
+                                                <input type="number" step="0.01" class="form-control form-control-lg fw-bold text-primary shadow-none" name="monto_ajustado" value="{{ factura.monto_base }}" required>
+                                            </div>
+                                            <div class="form-text text-muted mt-2 border-start border-3 border-danger ps-2">
+                                                Si deseas <strong>condonar</strong> la factura de este mes porque cerraste un acuerdo gratuito, escribe <strong>0.00</strong>.
+                                            </div>
+                                        </div>
+                                      </div>
+                                      <div class="modal-footer border-0 bg-light p-3">
+                                        <button type="button" class="btn btn-outline-secondary fw-bold px-3" data-bs-dismiss="modal">Cancelar</button>
+                                        <button type="submit" class="btn btn-warning fw-bold text-dark px-4 shadow-sm">🔄 Aplicar Ajuste Contable</button>
+                                      </div>
+                                  </form>
+                                </div>
+                              </div>
+                            </div>
+                            {% endif %}
+                            
                             {% empty %}
                             <tr>
                                 <td colspan="6" class="text-center py-5 text-muted">
