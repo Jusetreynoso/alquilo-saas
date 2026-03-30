@@ -1,13 +1,17 @@
+import logging
 from django.core.management.base import BaseCommand
 from django.utils import timezone
+from django.db import transaction
 from datetime import timedelta
 from gestion_propiedades.models import Contrato, Factura
+
+logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
     help = 'Genera facturas automáticas para los contratos en su día de cobro'
 
     def handle(self, *args, **kwargs):
-        hoy = timezone.now().date()
+        hoy = timezone.localtime().date()
         dia_actual = hoy.day
         
         # Diccionario simple para traducir el mes al español en el concepto
@@ -16,34 +20,55 @@ class Command(BaseCommand):
             7: 'Julio', 8: 'Agosto', 9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
         }
 
-        self.stdout.write(f"Iniciando revisión de facturación para el día {dia_actual}...")
+        mensaje_inicio = f"Iniciando proceso de facturación para el día {dia_actual} (Fecha: {hoy})..."
+        self.stdout.write(mensaje_inicio)
+        logger.info(mensaje_inicio)
 
         # Buscamos contratos activos cuyo día de pago sea hoy
         contratos = Contrato.objects.filter(activo=True, dia_de_pago=dia_actual)
         facturas_creadas = 0
 
         for contrato in contratos:
-            # Validación de seguridad: Verificar que no hayamos facturado este mes ya
-            factura_existe = Factura.objects.filter(
-                contrato=contrato,
-                fecha_emision__year=hoy.year,
-                fecha_emision__month=hoy.month
-            ).exists()
+            try:
+                msg_eval = f"Evaluando contrato ID {contrato.id} ({contrato.inquilino.nombre_completo})..."
+                self.stdout.write(msg_eval)
+                logger.info(msg_eval)
 
-            if not factura_existe:
-                # Damos 5 días de gracia para el vencimiento
-                fecha_vence = hoy + timedelta(days=5)
-                nombre_mes = meses_espanol[hoy.month]
+                with transaction.atomic():
+                    # Validación de seguridad: Verificar que no hayamos facturado este mes ya
+                    factura_existe = Factura.objects.filter(
+                        contrato=contrato,
+                        fecha_emision__year=hoy.year,
+                        fecha_emision__month=hoy.month
+                    ).exists()
 
-                Factura.objects.create(
-                    contrato=contrato,
-                    fecha_emision=hoy,
-                    fecha_vencimiento=fecha_vence,
-                    monto_total=contrato.monto_renta,
-                    concepto=f"Renta de {nombre_mes} {hoy.year}",
-                    estado='PENDIENTE'
-                )
-                facturas_creadas += 1
-                self.stdout.write(self.style.SUCCESS(f'Factura creada para: {contrato.inquilino.nombre_completo} - Apt {contrato.apartamento.numero_unidad}'))
+                    if not factura_existe:
+                        # Damos 5 días de gracia para el vencimiento
+                        fecha_vence = hoy + timedelta(days=5)
+                        nombre_mes = meses_espanol[hoy.month]
 
-        self.stdout.write(self.style.SUCCESS(f'Proceso terminado. Se generaron {facturas_creadas} facturas nuevas.'))
+                        Factura.objects.create(
+                            contrato=contrato,
+                            fecha_emision=hoy,
+                            fecha_vencimiento=fecha_vence,
+                            monto_total=contrato.monto_renta,
+                            concepto=f"Renta de {nombre_mes} {hoy.year}",
+                            estado='PENDIENTE'
+                        )
+                        facturas_creadas += 1
+                        msg_exito = f"Factura generada con éxito para contrato ID {contrato.id} ({contrato.inquilino.nombre_completo} - Apt {contrato.apartamento.numero_unidad})"
+                        self.stdout.write(self.style.SUCCESS(msg_exito))
+                        logger.info(msg_exito)
+                    else:
+                        msg_existe = f"Contrato ID {contrato.id} ya tiene factura procesada este mes."
+                        self.stdout.write(msg_existe)
+                        logger.info(msg_existe)
+
+            except Exception as e:
+                msg_error = f"Fallo en contrato ID {contrato.id} ({contrato.inquilino.nombre_completo}): {str(e)}"
+                self.stdout.write(self.style.ERROR(msg_error))
+                logger.error(msg_error, exc_info=True)
+
+        mensaje_fin = f"Proceso terminado. Se generaron {facturas_creadas} facturas nuevas hoy."
+        self.stdout.write(self.style.SUCCESS(mensaje_fin))
+        logger.info(mensaje_fin)
