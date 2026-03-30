@@ -54,7 +54,7 @@ class Command(BaseCommand):
                             contrato=contrato,
                             fecha_emision=hoy,
                             fecha_vencimiento=fecha_vence,
-                            monto_total=contrato.monto_renta,
+                            monto_base=contrato.monto_renta,
                             concepto=f"Renta de {nombre_mes} {hoy.year}",
                             estado='PENDIENTE'
                         )
