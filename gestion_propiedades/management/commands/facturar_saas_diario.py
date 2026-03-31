@@ -10,7 +10,9 @@ from gestion_propiedades.utils_correo import (
     enviar_aviso_factura_saas, 
     enviar_aviso_factura_generada, 
     enviar_aviso_vencimiento_cercano, 
-    enviar_aviso_mora_aplicada
+    enviar_aviso_mora_aplicada,
+    enviar_aviso_trial_por_vencer,
+    enviar_aviso_trial_vencido
 )
 
 class Command(BaseCommand):
@@ -119,6 +121,34 @@ class Command(BaseCommand):
                     if mora_obj:
                         enviar_aviso_mora_aplicada(factura, mora_obj)
 
-        self.stdout.write(self.style.SUCCESS(f"[OK] Alertas: {recordatorios} recordatorios de vencimiento enviados."))
-        self.stdout.write(self.style.SUCCESS(f"[OK] Morosidad: {moras} penalizaciones aplicadas exitosamente."))
+        # ---------------------------------------------------------
+        # FASE 4: CICLO DE VIDA DE CUENTAS TRIAL (B2B SaaS)
+        # ---------------------------------------------------------
+        trials_avisados = 0
+        trials_suspendidos = 0
+        
+        # Escaneamos propietarios cuyo estado es TRIAL
+        clientes_trial = User.objects.filter(suscripcion__estado='TRIAL').select_related('suscripcion')
+        
+        for cliente in clientes_trial:
+            sub = cliente.suscripcion
+            if not sub.fecha_proximo_pago:
+                continue
+                
+            # ¿Quedan exactamente 3 días para vencer?
+            if hoy == sub.fecha_proximo_pago - timedelta(days=3):
+                enviar_aviso_trial_por_vencer(cliente, dias=3)
+                trials_avisados += 1
+                
+            # ¿Vencido? (Si expiró hoy o un día anterior por error)
+            elif hoy >= sub.fecha_proximo_pago:
+                sub.estado = 'SUSPENDIDA'
+                sub.save()
+                enviar_aviso_trial_vencido(cliente)
+                trials_suspendidos += 1
+                
+        self.stdout.write(self.style.SUCCESS(f"[OK] Trials B2B: {trials_avisados} alertas enviadas, {trials_suspendidos} cancelados."))
+
+        self.stdout.write(self.style.SUCCESS(f"[OK] Alertas B2C: {recordatorios} recordatorios de vencimiento enviados."))
+        self.stdout.write(self.style.SUCCESS(f"[OK] Morosidad B2C: {moras} penalizaciones aplicadas exitosamente."))
         self.stdout.write(self.style.SUCCESS("=== Robot Finalizado de Manera Segura ==="))

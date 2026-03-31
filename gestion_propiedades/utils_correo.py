@@ -181,3 +181,39 @@ def enviar_aviso_factura_saas(factura_saas):
         link_url=f"{BASE_URL}/master-control/"
     )
     return _enviar_correo_seguro(asunto, cliente.email, html)
+
+def enviar_aviso_trial_por_vencer(cliente, dias=3):
+    if not cliente.email: return False
+    asunto = f"⏳ Tu prueba de Alquilo Software termina en {dias} días"
+    cuerpo = f"""
+        <p>Hola <strong>{cliente.first_name}</strong>,</p>
+        <p>Esperamos que estés disfrutando automatizar tu negocio de alquileres. Te escribimos para avisarte que <strong>tu cuenta de prueba gratuita expira en {dias} días.</strong></p>
+        <p>Si deseas continuar usando la plataforma para administrar tu portafolio, por favor ponte en contacto conmigo directamente a mi WhatsApp oficial o respondiedo este correo.</p>
+    """
+    html = _generar_plantilla_html(
+        titulo="Aviso de Prueba Gratuita", 
+        parrafos_html=cuerpo, 
+        link_texto="💬 Contactar por WhatsApp", 
+        link_url="https://wa.me/18493532097"
+    )
+    return _enviar_correo_seguro(asunto, cliente.email, html)
+
+def enviar_aviso_trial_vencido(cliente):
+    if not cliente.email: return False
+    asunto = "⛔ Tu período de prueba ha caducado - Suspensión de Acceso"
+    cuerpo = f"""
+        <p>Hola <strong>{cliente.first_name}</strong>,</p>
+        <p>El período de tiempo asignado a tu cuenta de prueba ha finalizado oficialmente y <strong>el acceso a tu panel ha sido suspendido de forma preventiva</strong>.</p>
+        <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; border-left: 5px solid #ffecb5; margin: 20px 0;">
+            <p style="margin: 0; color: #856404; font-weight: bold;">¡No te preocupes!</p>
+            <p style="margin: 5px 0 0 0; color: #856404;">La información de tu cuenta, contratos y propiedades no se ha perdido. Todo está seguro y protegido en la nube.</p>
+        </div>
+        <p>Sin embargo, necesitas reactivar tu cuenta para continuar usando la plataforma. Por favor ponte en contacto conmigo inmediatamente vía WhatsApp para restablecer tu acceso y asignarte tu Plan Profesional.</p>
+    """
+    html = _generar_plantilla_html(
+        titulo="Suspensión Temporal de Servicio", 
+        parrafos_html=cuerpo, 
+        link_texto="💬 Hablar por WhatsApp para Reactivar", 
+        link_url="https://wa.me/18493532097"
+    )
+    return _enviar_correo_seguro(asunto, cliente.email, html)

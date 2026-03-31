@@ -15,22 +15,35 @@
                     <h1 class="display-1 text-danger mb-4">⛔</h1>
                     <h2 class="fw-bold mb-3">Acceso Suspendido</h2>
                     
-                    {% if suscripcion %}
-                        <p class="lead text-muted">
-                            Tu plan <strong>{{ suscripcion.get_plan_display }}</strong> se encuentra actualmente en estado 
-                            <span class="badge bg-danger">{{ suscripcion.get_estado_display }}</span>.
-                        </p>
-                        <p class="text-secondary mb-4">
-                            Oops! Parece que hubo un problema procesando el pago o tu período de prueba expiró el 
-                            <strong>{{ suscripcion.fecha_proximo_pago|date:"d M Y"|default:"(Fecha no definida)" }}</strong>.
-                        </p>
+                    {% if suscripcion.estado == 'SUSPENDIDA' %}
+                        {% if suscripcion.plan == 'TRIAL' or suscripcion.plan_saas.nombre == 'TRIAL' or 'Prueba' in suscripcion.plan_saas.nombre %}
+                            <!-- Pantalla Especial: Vencimiento de Prueba -->
+                            <p class="lead text-muted">Aviso de Suspensión de Prueba</p>
+                            <p class="text-secondary mb-4" style="font-size: 1.1rem;">
+                                ¡No se alarme! La información de su portafolio, estados de cuenta, contratos e inquilinos <strong>no se ha perdido ni será eliminada.</strong> Todo se encuentra respaldado y protegido de por vida.
+                            </p>
+                            <p class="text-secondary mb-4">
+                                Sin embargo, el período de prueba de su sistema ha vencido y necesita <strong>Reactivar su Cuenta Profesional</strong> para continuar administrando su negocio en la plataforma.
+                            </p>
+                        {% else %}
+                            <!-- Pantalla Estándar de Falta de Pago B2B -->
+                            <p class="lead text-muted">
+                                Tu plan <strong>{{ suscripcion.plan_saas.nombre|default:suscripcion.plan }}</strong> se encuentra actualmente en estado 
+                                <span class="badge bg-danger">{{ suscripcion.get_estado_display }}</span>.
+                            </p>
+                            <p class="text-secondary mb-4">
+                                Oops! Parece que hubo un problema procesando el pago o tu período de uso expiró el 
+                                <strong>{{ suscripcion.fecha_proximo_pago|date:"d M Y"|default:"(Fecha no definida)" }}</strong>.
+                            </p>
+                        {% endif %}
                     {% else %}
-                        <p class="lead text-muted">Aún no cuentas con un plan de suscripción activo asociado a tu cuenta.</p>
+                        <p class="lead text-muted">Restricción de Acceso Identificada por el Sistema.</p>
                     {% endif %}
                     
                     <div class="mt-4 pt-3 border-top">
-                        <!-- En el futuro este botón enviará a Stripe Billing Portal -->
-                        <a href="#" class="btn btn-primary btn-lg px-5">💳 Ver Planes y Renovar</a>
+                        <a href="https://wa.me/18493532097" target="_blank" class="btn btn-success btn-lg px-5 shadow-sm fw-bold">
+                            💬 Hablar por WhatsApp para Reactivación Inmediata
+                        </a>
                     </div>
                     
                     <div class="mt-4">
