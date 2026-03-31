@@ -1087,6 +1087,51 @@ def generar_corte_saas(request):
     return redirect('saas_master_control')
 
 @login_required(login_url='/login/')
+def prueba_correo_saas(request):
+    """ Utilidad de diagnóstico para lanzar un correo de prueba SMTP """
+    if not request.user.is_superuser:
+        messages.error(request, "Acceso denegado. Solo el Administrador Global puede diagnosticar los servidores.")
+        return redirect('dashboard')
+        
+    from django.core.mail import send_mail
+    from django.conf import settings
+    import traceback
+    
+    correo_destino = request.user.email
+    if not correo_destino:
+        messages.error(request, "Error: Tu perfil de superusuario no tiene un correo configurado para enviar la prueba.")
+        return redirect('saas_master_control')
+        
+    html_msg = f"""
+    <div style="font-family: Arial, sans-serif; background-color: #1a252f; padding: 40px; text-align: center; border-radius: 10px;">
+        <h1 style="color: #f39c12;">¡Conexión Exitosa! 🚀</h1>
+        <p style="color: white; font-size: 16px;">
+            El sistema financiero <strong>Alquilo Software</strong>
+            se ha conectado correctamente con SendGrid desde la nube de Railway.
+        </p>
+        <p style="color: #bdc3c7;">El motor automático de cobranza ya puede hacer su trabajo a diario.</p>
+    </div>
+    """
+    
+    try:
+        send_mail(
+            subject='[Alquilo] 🤖 Diagnóstico de Notificaciones',
+            message='Esta es una prueba de conexión exitosa al servidor de correos.',
+            from_email=None, 
+            recipient_list=[correo_destino],
+            html_message=html_msg,
+            fail_silently=False,
+        )
+        messages.success(request, f"🚀 ÉXITO ROTUNDO: El correo fue entregado a SendGrid correctamente. Por favor revisa la bandeja de entrada de {correo_destino}.")
+    except Exception as e:
+        error_msg = str(e)
+        if hasattr(e, 'smtp_error'):
+            error_msg = str(getattr(e, 'smtp_error'))
+        messages.error(request, f"❌ FALLO DE CONEXIÓN SMTP: {error_msg}. Por favor revisa las credenciales en la pestaña Variables de Railway.")
+        
+    return redirect('saas_master_control')
+
+@login_required(login_url='/login/')
 def eliminar_propiedad(request, propiedad_id):
     """
     Realiza un Soft Delete de la propiedad, verificando permisos estrictos.

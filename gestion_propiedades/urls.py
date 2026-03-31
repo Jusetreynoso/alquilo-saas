@@ -71,6 +71,7 @@ urlpatterns = [
     path('master-control/cliente/<int:cliente_id>/editar/', views.editar_suscripcion_saas, name='editar_suscripcion_saas'),
     path('master-control/generar-corte/', views.generar_corte_saas, name='generar_corte_saas'),
     path('master-control/recaudacion/', views.saas_facturacion, name='saas_facturacion'),
+    path('master-control/test-email/', views.prueba_correo_saas, name='prueba_correo_saas'),
     path('master-control/factura/<int:factura_id>/pagar/', views.marcar_factura_saas_pagada, name='marcar_factura_saas_pagada'),
     path('mi-suscripcion/', views.mi_suscripcion, name='mi_suscripcion'),
     

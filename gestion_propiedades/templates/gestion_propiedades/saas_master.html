@@ -6,6 +6,9 @@
     <div class="d-flex justify-content-between align-items-center w-100">
         <h2 class="h4 mb-0 text-warning fw-bold">👑 {{ titulo_pagina }}</h2>
         <div>
+            <a href="{% url 'prueba_correo_saas' %}" class="btn btn-outline-info btn-sm me-2 shadow-sm" title="Envía un correo de prueba a tu cuenta">
+                📧 Diagnóstico SMTP
+            </a>
             <a href="{% url 'saas_facturacion' %}" class="btn btn-success btn-sm me-2 fw-bold shadow-sm">💸 Tesorería B2B (Cobros)</a>
             <a href="{% url 'saas_planes' %}" class="btn btn-primary btn-sm me-2 fw-bold shadow-sm">🏷️ Gestor de Precios</a>
             <a href="{% url 'admin:index' %}" class="btn btn-outline-warning btn-sm" target="_blank">
