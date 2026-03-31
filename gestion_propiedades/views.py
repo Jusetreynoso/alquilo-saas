@@ -1127,7 +1127,9 @@ def prueba_correo_saas(request):
         error_msg = str(e)
         if hasattr(e, 'smtp_error'):
             error_msg = str(getattr(e, 'smtp_error'))
-        messages.error(request, f"❌ FALLO DE CONEXIÓN SMTP: {error_msg}. Por favor revisa las credenciales en la pestaña Variables de Railway.")
+            
+        detalle_conexion = f"(Detectando configuración -> Host: {settings.EMAIL_HOST} | Puerto: {settings.EMAIL_PORT} | Usuario: {settings.EMAIL_HOST_USER})"
+        messages.error(request, f"❌ BLOQUEO DE CONEXIÓN SMTP: {error_msg}. {detalle_conexion}. Por favor revisa las Variables en Railway.")
         
     return redirect('saas_master_control')
 
