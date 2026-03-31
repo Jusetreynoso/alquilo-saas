@@ -1444,6 +1444,201 @@ def registrar_pago_anticipado(request, contrato_id):
         return redirect('detalle_inquilino', inquilino_id=contrato.inquilino.id)
         
     context = {
+        'titulo_pagina': 'Reporte de Recaudación B2B',
+        'facturas': facturas,
+        'total_cobrado': total_cobrado,
+        'total_pendiente': total_pendiente
+    }
+    return render(request, 'gestion_propiedades/saas_facturacion.html', context)
+
+@login_required(login_url='/login/')
+def marcar_factura_saas_pagada(request, factura_id):
+    """
+    Permite al Superadmin marcar una Factura SaaS como PAGADA (dinero recibido).
+    """
+    if not request.user.is_superuser:
+        return redirect('dashboard')
+        
+    from .models import FacturaSaaS
+    factura = get_object_or_404(FacturaSaaS, id=factura_id)
+    
+    if request.method == 'POST':
+        factura.estado = 'PAGADA'
+        factura.save()
+        messages.success(request, f'La factura de {factura.usuario.username} por ${factura.monto_total} ha sido registrada como PAGADA.')
+        
+    return redirect('saas_facturacion')
+
+
+# --- MÓDULO DE AUDITORÍA ---
+
+@login_required(login_url='/login/')
+def vista_auditoria(request):
+    """
+    Bitácora de Auditoría con control multi-tenant:
+    - SuperAdmin: ve TODOS los AuditLogs del sistema.
+    - Propietario de portafolio: ve solo los logs de sus portafolios.
+    """
+    if request.user.is_superuser:
+        logs = AuditLog.objects.select_related('usuario', 'portafolio').all()[:500]
+    else:
+        portafolios = Portafolio.objects.filter(propietario=request.user)
+        logs = AuditLog.objects.filter(
+            portafolio__in=portafolios
+        ).select_related('usuario', 'portafolio').all()[:500]
+
+    context = {
+        'titulo_pagina': 'Bitácora de Auditoría',
+        'logs': logs,
+    }
+    return render(request, 'gestion_propiedades/auditoria.html', context)
+
+
+# --- REPORTE DE TRANSPARENCIA ---
+
+@login_required(login_url='/login/')
+def reporte_transparencia(request):
+    """
+    Reporte de Transparencia Financiera:
+    - Eficiencia de Recaudación: % de lo facturado que fue cobrado en el mes filtrado.
+    - Distribución de Gastos: egresos de mantenimiento agrupados por categoría.
+    """
+    hoy = date.today()
+    mes = int(request.GET.get('mes', hoy.month))
+    anio = int(request.GET.get('anio', hoy.year))
+
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+
+    # --- 1. EFICIENCIA DE RECAUDACIÓN ---
+    debimos_cobrar = Factura.objects.filter(
+        contrato__propiedad__portafolio__in=portafolios,
+        fecha_emision__year=anio,
+        fecha_emision__month=mes,
+    ).exclude(estado='ANULADA').aggregate(total=Sum('monto_base'))['total'] or 0
+
+    hemos_cobrado = ReciboPago.objects.filter(
+        factura__contrato__propiedad__portafolio__in=portafolios,
+        fecha_pago__year=anio,
+        fecha_pago__month=mes,
+    ).aggregate(total=Sum('monto_pagado'))['total'] or 0
+
+    faltan_cobrar = max(float(debimos_cobrar) - float(hemos_cobrado), 0)
+    eficiencia = round((float(hemos_cobrado) / float(debimos_cobrar) * 100), 1) if debimos_cobrar else 0
+
+    # --- 2. DISTRIBUCIÓN DE GASTOS (Mantenimientos del mes) ---
+    COLORES = ['#e74c3c', '#3498db', '#f39c12', '#27ae60', '#9b59b6']
+    categoria_labels = dict(MantenimientoUnidad.CATEGORIA_CHOICES)
+    gastos_raw = MantenimientoUnidad.objects.filter(
+        propiedad__portafolio__in=portafolios,
+        fecha_reporte__year=anio,
+        fecha_reporte__month=mes,
+    ).values('categoria').annotate(total=Sum('costo')).order_by('-total')
+
+    total_gastos = sum(float(g['total']) for g in gastos_raw) or 1
+    gastos = [
+        {
+            'label': categoria_labels.get(g['categoria'], g['categoria']),
+            'total': float(g['total']),
+            'pct': round(float(g['total']) / total_gastos * 100, 1),
+            'color': COLORES[i % len(COLORES)],
+        }
+        for i, g in enumerate(gastos_raw)
+    ]
+
+    import json
+    chart_labels = json.dumps([g['label'] for g in gastos])
+    chart_data = json.dumps([g['total'] for g in gastos])
+    chart_colors = json.dumps([g['color'] for g in gastos])
+
+    context = {
+        'titulo_pagina': 'Reporte de Transparencia',
+        'mes': mes,
+        'anio': anio,
+        'debimos_cobrar': debimos_cobrar,
+        'hemos_cobrado': hemos_cobrado,
+        'faltan_cobrar': faltan_cobrar,
+        'eficiencia': eficiencia,
+        'gastos': gastos,
+        'total_gastos': total_gastos,
+        'chart_labels': chart_labels,
+        'chart_data': chart_data,
+        'chart_colors': chart_colors,
+        'meses': [(i, date(2000, i, 1).strftime('%B')) for i in range(1, 13)],
+        'anios': list(range(hoy.year - 3, hoy.year + 1)),
+    }
+    return render(request, 'gestion_propiedades/reporte_transparencia.html', context)
+
+@login_required(login_url='/login/')
+def registrar_pago_anticipado(request, contrato_id):
+    """
+    Permite registrar un pago por adelantado.
+    Localiza la fecha de la última factura y genera la siguiente de forma diferida o futura.
+    """
+    from django.utils import timezone
+    from datetime import date, timedelta
+    import calendar
+    
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+    
+    contrato = get_object_or_404(Contrato, id=contrato_id, propiedad__portafolio__in=portafolios)
+    
+    # 1. Determinar cuál sería el próximo mes a facturar.
+    ultima_factura = contrato.facturas.order_by('-fecha_emision').first()
+    if ultima_factura:
+        ultimo_mes = ultima_factura.fecha_emision.month
+        ultimo_anio = ultima_factura.fecha_emision.year
+        prox_mes = ultimo_mes + 1
+        prox_anio = ultimo_anio
+        if prox_mes > 12:
+            prox_mes = 1
+            prox_anio += 1
+    else:
+        hoy = timezone.now().date()
+        prox_mes = hoy.month
+        prox_anio = hoy.year
+        
+    # Calcular fecha de emisión de esa factura
+    try:
+        fecha_proxima_emision = date(prox_anio, prox_mes, contrato.dia_de_pago)
+    except ValueError:
+        ultimo_dia_mes = calendar.monthrange(prox_anio, prox_mes)[1]
+        fecha_proxima_emision = date(prox_anio, prox_mes, ultimo_dia_mes)
+        
+    fecha_vencimiento_proxima = fecha_proxima_emision + timedelta(days=contrato.dias_gracia)
+    
+    if request.method == 'POST':
+        # 1. Generar la Factura "del futuro"
+        nueva_factura = Factura.objects.create(
+            contrato=contrato,
+            fecha_emision=fecha_proxima_emision,
+            fecha_vencimiento=fecha_vencimiento_proxima,
+            monto_base=contrato.monto_renta,
+            concepto=f"Pago Anticipado Renta ({fecha_proxima_emision.strftime('%m/%Y')})",
+            estado='PAGADA'
+        )
+        
+        # 2. Registrar el ReciboPago
+        metodo = request.POST.get('metodo_pago', 'TRANSFERENCIA')
+        referencia = request.POST.get('referencia', '')
+        # Si el usuario quiere, asume la fecha real de hoy como pago
+        fecha_pago = request.POST.get('fecha_pago', timezone.now().date())
+        
+        ReciboPago.objects.create(
+            factura=nueva_factura,
+            fecha_pago=fecha_pago,
+            monto_pagado=contrato.monto_renta,
+            metodo_pago=metodo,
+            referencia_transaccion=referencia
+        )
+        
+        messages.success(request, f'Generado recibo de pago anticipado para el mes de {fecha_proxima_emision.strftime("%m/%Y")}.')
+        return redirect('detalle_inquilino', inquilino_id=contrato.inquilino.id)
+        
+    context = {
         'titulo_pagina': 'Recibir Pago Anticipado',
         'contrato': contrato,
         'fecha_proxima_emision': fecha_proxima_emision,
@@ -1467,7 +1662,7 @@ def reporte_morosos(request):
         estado='ATRASADA'
     ).select_related('contrato__inquilino', 'contrato__propiedad')\
     .annotate(
-        mora_acumulada=Sum('cargos_mora__monto')
+        mora_acumulada=Sum('moras__monto')
     ).order_by('fecha_vencimiento')
     
     # Procesar data para el template
