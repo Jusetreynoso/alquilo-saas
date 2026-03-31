@@ -228,7 +228,8 @@
                     <li class="nav-item"><a class="nav-link px-3" href="#beneficios">Funcionalidades</a></li>
                     
                     <li class="nav-item ms-lg-3 mt-3 mt-lg-0">
-                        <a href="{% url 'login' %}" class="btn btn-outline-light rounded-pill px-4 fw-bold" style="border-width: 2px;">Entrar al Panel</a>
+                        <a href="{% url 'login' %}" class="btn btn-outline-light rounded-pill px-4 fw-bold mb-2 mb-lg-0">Entrar</a>
+                        <a href="/registro/" class="btn btn-gradient rounded-pill px-4 fw-bold ms-lg-2">Prueba Gratis</a>
                     </li>
                 </ul>
             </div>
@@ -254,11 +255,11 @@
                     </p>
                     
                     <div class="d-flex flex-column flex-sm-row justify-content-center gap-3 animate-up delay-3">
-                        <a href="https://wa.me/18493532097?text=Hola,%20me%20interesa%20solicitar%20una%20demostración%20Premium%20de%20Alquilo." target="_blank" class="btn-gradient">
-                            <i class="bi bi-lightning-charge-fill me-2"></i> Solicitar Demo
+                        <a href="/registro/" class="btn-gradient">
+                            <i class="bi bi-rocket-takeoff-fill me-2"></i> Comenzar 45 Días Gratis
                         </a>
                         <a href="{% url 'login' %}" class="btn-glass">
-                            Ir al Dashboard Interactivo
+                            Ya tengo cuenta
                         </a>
                     </div>
                 </div>
@@ -279,10 +280,10 @@
                 <div class="col-md-6 col-lg-3 animate-up delay-1">
                     <div class="glass-card">
                         <div class="icon-box">
-                            <i class="bi bi-building"></i>
+                            <i class="bi bi-envelope-paper-heart"></i>
                         </div>
-                        <h4>Gestión Multi-Portafolio</h4>
-                        <p>Agrupa propiedades ilimitadas por edificios o regiones. Monitorea la ocupación y vacancia en tiempo real a escala global.</p>
+                        <h4>Notificaciones IA</h4>
+                        <p>El sistema envía recibos formales en PDF y recordatorios de vencimiento por correo electrónico automáticamente a tus inquilinos 24/7.</p>
                     </div>
                 </div>
                 <!-- Card 2 -->
@@ -291,8 +292,8 @@
                         <div class="icon-box">
                             <i class="bi bi-receipt-cutoff"></i>
                         </div>
-                        <h4>Disparadores de Cobro</h4>
-                        <p>Olvídate del trabajo manual. El motor en segundo plano calcula fianzas, prorrateos y genera recargos por mora en piloto automático.</p>
+                        <h4>Moras Matemáticas</h4>
+                        <p>Olvídate del trabajo manual. Nuestro robot calcula fianzas, prorrateos y aplica los recargos por mora nocturnos sin titubear.</p>
                     </div>
                 </div>
                 <!-- Card 3 -->
@@ -301,8 +302,8 @@
                         <div class="icon-box">
                             <i class="bi bi-shield-check"></i>
                         </div>
-                        <h4>Mesa de Ayuda Integral</h4>
-                        <p>Triage y categorización de tickets de mantenimiento. Controla los costos operativos por cada avería de todo tu portafolio.</p>
+                        <h4>Gestión Multi-Roles</h4>
+                        <p>Agrega contadores y asitentes a tu portafolio otorgándoles accesos restringidos para operaciones seguras e inviolables.</p>
                     </div>
                 </div>
                 <!-- Card 4 -->
@@ -311,8 +312,8 @@
                         <div class="icon-box">
                             <i class="bi bi-graph-up-arrow"></i>
                         </div>
-                        <h4>Finanzas P&L Exactas</h4>
-                        <p>Visualiza ingresos brutos, deduce costos operativos y conoce el flujo de caja neto exacto con métricas dignas de Wall Street.</p>
+                        <h4>P&L Institucional</h4>
+                        <p>Visualiza el flujo de caja neto exacto. Ingresos brutos menos gastos operativos en gráficas dignas de Wall Street.</p>
                     </div>
                 </div>
             </div>
@@ -325,11 +326,16 @@
             <div class="glass-card text-center py-5 border-0" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(236, 72, 153, 0.05) 100%);">
                 <h2 class="fw-bold fs-1 mb-4">¿Listo para elevar tu corporación?</h2>
                 <p class="text-muted mb-5 mx-auto" style="max-width: 600px;">
-                    Únete a la nueva era de la administración inmobiliaria. Convierte el caos contable en una máquina predecible de alto rendimiento.
+                    Únete a la nueva era de la administración de alquileres impulsada por automatización SaaS. Tu primera facturación con nosotros te tomará solo 10 segundos.
                 </p>
-                <a href="https://wa.me/18493532097?text=Hola,%20me%20interesa%20contratar%20el%20servicio%20Manejo%20B2B." target="_blank" class="btn-gradient">
-                    <i class="bi bi-whatsapp me-2"></i> Contactar a nuestro equipo Privado
-                </a>
+                <div class="d-flex flex-column flex-sm-row justify-content-center gap-3">
+                    <a href="/registro/" class="btn-gradient">
+                        <i class="bi bi-rocket-takeoff-fill me-2"></i> Crear Cuenta (45 Días Gratis)
+                    </a>
+                    <a href="https://wa.me/18493532097?text=Hola,%20tengo%20dudas%20comerciales." target="_blank" class="btn-glass">
+                        <i class="bi bi-whatsapp"></i> Hablar con Ventas
+                    </a>
+                </div>
             </div>
         </div>
     </section>

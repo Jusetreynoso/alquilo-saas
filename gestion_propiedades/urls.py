@@ -15,8 +15,9 @@ urlpatterns = [
     path('master-control/cliente/<int:cliente_id>/editar/', views.editar_suscripcion_saas, name='editar_suscripcion_saas'),
     path('master-control/planes/', views.saas_planes, name='saas_planes'),
 
-    # Sitio Comercial Público (Landing Page)
+    # Sitio Comercial Público (Landing Page y Registro)
     path('', views.inicio_comercial, name='inicio_comercial'),
+    path('registro/', views.registro_publico, name='registro_publico'),
     
     # Panel Principal Interno
     path('dashboard/', views.dashboard, name='dashboard'),

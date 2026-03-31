@@ -1,6 +1,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import HttpResponse
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth import login
 from django.db.models import Sum, Q, Prefetch, F
 from django.contrib import messages
 from datetime import date
@@ -21,8 +22,64 @@ def inicio_comercial(request):
     """
     if request.user.is_authenticated:
         pass # Podríamos redirigirlo, pero dejaremos que vea la página
-        
     return render(request, 'gestion_propiedades/sitio_comercial.html')
+
+def registro_publico(request):
+    """
+    Vista de Auto-Registro para que nuevos clientes creen su Portafolio con 45 días de prueba.
+    """
+    if request.user.is_authenticated:
+        return redirect('dashboard')
+        
+    if request.method == 'POST':
+        first_name = request.POST.get('first_name', '')
+        last_name = request.POST.get('last_name', '')
+        email = request.POST.get('email', '')
+        password = request.POST.get('password', '')
+        nombre_portafolio = request.POST.get('nombre_portafolio', '')
+        telefono = request.POST.get('telefono', '')
+        
+        from django.contrib.auth.models import User
+        if User.objects.filter(email=email).exists() or User.objects.filter(username=email).exists():
+            return render(request, 'gestion_propiedades/registro_publico.html', {
+                'message': 'Este correo ya está registrado en el sistema. Utilice otro si desea crear un nuevo portafolio.'
+            })
+            
+        # 1. Crear el Super Usuario B2B (Owner)
+        # Añadimos el teléfono al apellido para que el admin lo vea en la base de datos sin necesitar nuevas tablas.
+        apellido_completo = f"{last_name} (Wa: {telefono})" if telefono else last_name
+        
+        user = User.objects.create_user(
+            username=email,
+            email=email,
+            password=password,
+            first_name=first_name,
+            last_name=apellido_completo
+        )
+        
+        # 2. Crear Portafolio
+        Portafolio.objects.create(nombre=nombre_portafolio, propietario=user)
+        
+        # 3. Asignar Suscripción TRIAL por 45 días
+        plan_trial = PlanSaaS.objects.filter(activo=True).first()
+        from datetime import timedelta
+        from django.utils import timezone
+        SuscripcionCliente.objects.create(
+            usuario=user,
+            plan_saas=plan_trial,
+            estado='TRIAL',
+            fecha_proximo_pago=timezone.now().date() + timedelta(days=45)
+        )
+        
+        # 4. Enviar correo de notificación al Admin con los datos de contacto
+        from .utils_correo import enviar_alerta_nuevo_registro_admin
+        enviar_alerta_nuevo_registro_admin(user, nombre_portafolio, telefono)
+        
+        # 5. Iniciar Sesión y Mandarlo al Panel
+        login(request, user)
+        return redirect('dashboard')
+        
+    return render(request, 'gestion_propiedades/registro_publico.html')
 
 # --- PANEL PRINCIPAL INTERNO ---
 
@@ -940,7 +997,7 @@ def crear_cliente_saas(request):
                 usuario=user,
                 plan_saas=plan_trial,
                 estado='TRIAL',
-                fecha_proximo_pago=timezone.now().date() + timedelta(days=14)
+                fecha_proximo_pago=timezone.now().date() + timedelta(days=45)
             )
             messages.success(request, f"Cliente {user.first_name} creado con éxito.")
             return redirect('saas_master_control')

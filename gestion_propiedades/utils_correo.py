@@ -217,3 +217,28 @@ def enviar_aviso_trial_vencido(cliente):
         link_url="https://wa.me/18493532097"
     )
     return _enviar_correo_seguro(asunto, cliente.email, html)
+
+def enviar_alerta_nuevo_registro_admin(cliente, nombre_portafolio, telefono):
+    """Faro pasivo que notifica al administrador maestro que hay un nuevo cliente."""
+    admin_email = "jreynoso280988@gmail.com"
+    asunto = "🔥 ¡Nuevo Inversor Registrado en Alquilo Software!"
+    cuerpo = f"""
+        <div style="background-color: #e8f5e9; padding: 15px; border-radius: 5px; border-left: 5px solid #4caf50; margin: 20px 0;">
+            <p style="margin: 0; color: #2e7d32; font-weight: bold;">Un prospecto ha activado la Máquina de 45 Días.</p>
+        </div>
+        <p><strong>Detalles del Cliente Orgánico:</strong></p>
+        <ul>
+            <li><strong>Nombre:</strong> {cliente.first_name} {cliente.last_name}</li>
+            <li><strong>Correo:</strong> {cliente.email}</li>
+            <li><strong>Nombre del Negocio B2B:</strong> {nombre_portafolio}</li>
+            <li><strong>Teléfono / WhatsApp:</strong> {telefono if telefono else 'No provisto'}</li>
+        </ul>
+        <p>El sistema ya le asignó su fecha de expiración automática y lo conectó al ecosistema. ¡A vender!</p>
+    """
+    html = _generar_plantilla_html(
+        titulo="Alarma del Sistema SaaS", 
+        parrafos_html=cuerpo, 
+        link_texto="Escribirle a este Prospecto", 
+        link_url=f"https://wa.me/{telefono.replace('+', '').replace(' ', '')}" if telefono else "#"
+    )
+    return _enviar_correo_seguro(asunto, admin_email, html)

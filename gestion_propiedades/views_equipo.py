@@ -24,6 +24,13 @@ def mi_equipo(request):
 def crear_asistente(request):
     portafolio = Portafolio.objects.filter(propietario=request.user).first()
     
+    try:
+        if request.user.suscripcion.estado != 'ACTIVA':
+            messages.error(request, "Las cuentas en período de prueba o suspendidas no están habilitadas para agregar miembros al equipo corporativo.")
+            return redirect('mi_equipo')
+    except Exception:
+        pass
+    
     # Validar que no haya ya un asistente
     if AccesoPortafolio.objects.filter(portafolio=portafolio, rol='ASISTENTE').exists():
         messages.error(request, "Solo puedes tener un (1) asistente operativo asociado a tu portafolio.")
