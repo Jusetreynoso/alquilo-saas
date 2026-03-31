@@ -1450,3 +1450,57 @@ def registrar_pago_anticipado(request, contrato_id):
         'monto_renta': contrato.monto_renta,
     }
     return render(request, 'gestion_propiedades/pago_anticipado.html', context)
+
+@login_required(login_url='/login/')
+def reporte_morosos(request):
+    """
+    Escanea todo el portafolio del usuario y agrupa las facturas atrasadas 
+    calculando la mora total, los días de retraso y los datos de contacto.
+    """
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+    
+    facturas_vencidas = Factura.objects.filter(
+        contrato__propiedad__portafolio__in=portafolios, 
+        estado='ATRASADA'
+    ).select_related('contrato__inquilino', 'contrato__propiedad')\
+    .annotate(
+        mora_acumulada=Sum('cargos_mora__monto')
+    ).order_by('fecha_vencimiento')
+    
+    # Procesar data para el template
+    from django.utils import timezone
+    hoy = timezone.now().date()
+    
+    deudores = []
+    gran_total_deuda = decimal.Decimal('0.00')
+    gran_total_mora = decimal.Decimal('0.00')
+    
+    for f in facturas_vencidas:
+        dias_retraso = (hoy - f.fecha_vencimiento).days
+        mora = f.mora_acumulada or decimal.Decimal('0.00')
+        deuda_total = f.monto_base + mora
+        
+        gran_total_deuda += f.monto_base
+        gran_total_mora += mora
+        
+        deudores.append({
+            'factura': f,
+            'inquilino': f.contrato.inquilino,
+            'propiedad': f.contrato.propiedad,
+            'dias_retraso': dias_retraso,
+            'monto_base': f.monto_base,
+            'mora': mora,
+            'deuda_total': deuda_total
+        })
+        
+    context = {
+        'titulo_pagina': 'Reporte Integral de Morosidad',
+        'deudores': deudores,
+        'gran_total_riesgo': gran_total_deuda + gran_total_mora,
+        'gran_total_deuda': gran_total_deuda,
+        'gran_total_mora': gran_total_mora,
+        'total_casos': len(deudores)
+    }
+    return render(request, 'gestion_propiedades/reporte_morosos.html', context)

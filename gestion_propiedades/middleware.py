@@ -66,3 +66,25 @@ class SuscripcionMiddleware:
                     
         response = self.get_response(request)
         return response
+
+class NoCacheMiddleware:
+    """
+    Escudo de Seguridad Zero-Trust:
+    Si un usuario ha iniciado sesión, este guardián le inyecta cabeceras a la respuesta HTTP
+    ordenándole a Firefox, Chrome y Safari no guardar 'fantasmas' de estas páginas en su caché.
+    Esto previene que al darle 'Atrás' luego de cerrar sesión se expongan datos financieros privados.
+    """
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        
+        # Solo aplicar el candado a rutas protegidas (usualmente las que requieren login)
+        # Eximimos las rutas de archivos estáticos o media para no ralentizar el servidor
+        if request.user.is_authenticated and not request.path.startswith('/static/') and not request.path.startswith('/media/'):
+            response['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+            response['Pragma'] = 'no-cache'
+            response['Expires'] = '0'
+            
+        return response

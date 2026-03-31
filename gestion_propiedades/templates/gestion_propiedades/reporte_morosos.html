@@ -1,0 +1,111 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+
+{% block encabezado %}
+    {{ titulo_pagina }}
+{% endblock %}
+
+{% block contenido %}
+<div class="container-fluid">
+    <!-- Cifras Generales -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-danger text-white h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-title text-white-50 text-uppercase fw-bold"><i class="bi bi-exclamation-triangle"></i> Riesgo Total Acumulado</h6>
+                    <h2 class="display-6 fw-bold mb-0">RD${{ gran_total_riesgo|floatformat:2 }}</h2>
+                    <small>Capital + Penalidades en la calle</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-white h-100 border-0 shadow-sm" style="background-color: #f39c12;">
+                <div class="card-body">
+                    <h6 class="card-title text-white-50 text-uppercase fw-bold"><i class="bi bi-cash-stack"></i> Capital Vencido Neto</h6>
+                    <h2 class="display-6 fw-bold mb-0">RD${{ gran_total_deuda|floatformat:2 }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-dark text-white h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-title text-white-50 text-uppercase fw-bold"><i class="bi bi-graph-down-arrow"></i> Moras Generadas (A Favor)</h6>
+                    <h2 class="display-6 fw-bold text-warning mb-0">RD${{ gran_total_mora|floatformat:2 }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla Detalle de Deudores -->
+    <div class="card shadow-sm border-0 rounded-4 mt-3">
+        <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-people-fill text-danger me-2"></i> Inquilinos Atrasados ({{ total_casos }})</h5>
+            <button class="btn btn-sm btn-outline-secondary" onclick="window.print()"><i class="bi bi-printer"></i> Exportar</button>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light text-secondary">
+                        <tr>
+                            <th scope="col" class="ps-4">Inquilino (Deudor)</th>
+                            <th scope="col">Propiedad</th>
+                            <th scope="col" class="text-center">Antigüedad</th>
+                            <th scope="col" class="text-end">Renta Base</th>
+                            <th scope="col" class="text-end text-danger">Mora (Penalidad)</th>
+                            <th scope="col" class="text-end pe-4">Deuda Consolidada</th>
+                            <th scope="col" class="text-center">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for d in deudores %}
+                        <tr>
+                            <td class="ps-4 fw-bold">
+                                {{ d.inquilino.nombre }}
+                                <div class="small fw-normal text-muted"><i class="bi bi-telephone-fill"></i> {{ d.inquilino.telefono|default:'No Registrado' }}</div>
+                            </td>
+                            <td>
+                                {{ d.propiedad.nombre }}
+                                <div class="small text-muted">{{ d.propiedad.portafolio.nombre }}</div>
+                            </td>
+                            <td class="text-center">
+                                <span class="badge rounded-pill bg-danger bg-opacity-10 text-danger border border-danger-subtle px-3 py-2">
+                                    {{ d.dias_retraso }} Días Atrasado
+                                </span>
+                            </td>
+                            <td class="text-end text-secondary fw-semibold">
+                                RD${{ d.monto_base|floatformat:2 }}
+                            </td>
+                            <td class="text-end text-danger fw-bold">
+                                RD${{ d.mora|floatformat:2 }}
+                            </td>
+                            <td class="text-end pe-4 fw-bold fs-5 text-dark">
+                                RD${{ d.deuda_total|floatformat:2 }}
+                            </td>
+                            <td class="text-center">
+                                <a href="{% url 'detalle_inquilino' d.inquilino.id %}" class="btn btn-sm btn-outline-primary" title="Ver Perfil">
+                                    <i class="bi bi-eye"></i> Perfil
+                                </a>
+                                {% if d.inquilino.telefono %}
+                                <a href="https://wa.me/{{ d.inquilino.telefono|cut:' ' }}" target="_blank" class="btn btn-sm btn-success" title="Recordatorio WhatsApp">
+                                    <i class="bi bi-whatsapp"></i>
+                                </a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5">
+                                <img src="https://cdn-icons-png.flaticon.com/512/1904/1904425.png" alt="Success" style="width: 80px; opacity: 0.6;" class="mb-3">
+                                <h4 class="text-success fw-bold">¡Portafolio Saludable!</h4>
+                                <p class="text-muted mb-0">No tienes inquilinos con facturas atrasadas en este momento.</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

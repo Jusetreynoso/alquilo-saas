@@ -43,11 +43,12 @@ urlpatterns = [
     path('factura/<int:factura_id>/pagar/', views.registrar_pago, name='registrar_pago'),
     path('factura/<int:factura_id>/prorratear/', views.prorratear_factura_inicial, name='prorratear_factura_inicial'),
     path('recibo/<int:recibo_id>/imprimir/', views.imprimir_recibo, name='imprimir_recibo'),
-    path('finanzas/reporte/', views.reporte_financiero, name='reporte_financiero'),
+    path('reportes/financiero/', views.reporte_financiero, name='reporte_financiero'),
     path('reportes/rentabilidad/', views.reporte_rentabilidad, name='reporte_rentabilidad'),
     path('reportes/ocupacion/', views.reporte_ocupacion, name='reporte_ocupacion'),
-    path('auditoria/', views.vista_auditoria, name='auditoria'),
     path('reportes/transparencia/', views.reporte_transparencia, name='reporte_transparencia'),
+    path('reportes/morosidad/', views.reporte_morosos, name='reporte_morosos'),
+    path('auditoria/', views.vista_auditoria, name='auditoria'),
 
     # Rutas limpias
     path('propiedad/<int:propiedad_id>/solicitud/nueva/', views.generar_solicitud, name='generar_solicitud'),

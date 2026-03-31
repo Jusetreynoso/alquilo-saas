@@ -62,6 +62,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'gestion_propiedades.middleware.CurrentUserMiddleware',
     'gestion_propiedades.middleware.SuscripcionMiddleware',
+    'gestion_propiedades.middleware.NoCacheMiddleware',
 ]
 
 ROOT_URLCONF = 'alquilo_core.urls'
