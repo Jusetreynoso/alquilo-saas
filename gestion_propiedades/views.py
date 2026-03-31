@@ -1114,22 +1114,37 @@ def prueba_correo_saas(request):
     """
     
     try:
-        send_mail(
-            subject='[Alquilo] 🤖 Diagnóstico de Notificaciones',
-            message='Esta es una prueba de conexión exitosa al servidor de correos.',
-            from_email=None, 
-            recipient_list=[correo_destino],
-            html_message=html_msg,
-            fail_silently=False,
-        )
-        messages.success(request, f"🚀 ÉXITO ROTUNDO: El correo fue entregado a SendGrid correctamente. Por favor revisa la bandeja de entrada de {correo_destino}.")
+        import requests
+        import json
+        
+        # Modo antibloqueo: SendGrid API v3 (HTTPS Puerto 443)
+        url = "https://api.sendgrid.com/v3/mail/send"
+        headers = {
+            "Authorization": f"Bearer {settings.EMAIL_HOST_PASSWORD}",
+            "Content-Type": "application/json"
+        }
+        
+        em_from = settings.DEFAULT_FROM_EMAIL
+        origen = {"email": em_from.split('<')[1].replace('>','').strip(), "name": em_from.split('<')[0].strip()} if '<' in em_from else {"email": em_from}
+        
+        payload = {
+            "personalizations": [{"to": [{"email": correo_destino}]}],
+            "from": origen,
+            "subject": '[Alquilo] 🤖 Diagnóstico Antibloqueo',
+            "content": [{"type": "text/html", "value": html_msg}]
+        }
+        
+        resp = requests.post(url, headers=headers, data=json.dumps(payload), timeout=10)
+        resp.raise_for_status() 
+        
+        messages.success(request, f"🚀 ¡ÉXITO ROTUNDO! Traspasamos el bloqueo de Railway mediante HTTPS API. El correo fue entregado a {correo_destino}.")
     except Exception as e:
         error_msg = str(e)
-        if hasattr(e, 'smtp_error'):
-            error_msg = str(getattr(e, 'smtp_error'))
+        if hasattr(e, 'response') and e.response is not None:
+            error_msg = f"{e} - {e.response.text}"
             
-        detalle_conexion = f"(Detectando configuración -> Host: {settings.EMAIL_HOST} | Puerto: {settings.EMAIL_PORT} | Usuario: {settings.EMAIL_HOST_USER})"
-        messages.error(request, f"❌ BLOQUEO DE CONEXIÓN SMTP: {error_msg}. {detalle_conexion}. Por favor revisa las Variables en Railway.")
+        detalle_conexion = f"(Detectando configuración -> Llave API: {str(settings.EMAIL_HOST_PASSWORD)[:8]}...)"
+        messages.error(request, f"❌ BLOQUEO / ERROR API: {error_msg}. {detalle_conexion}. Asegúrate que pusiste bien la API KEY en Railway.")
         
     return redirect('saas_master_control')
 

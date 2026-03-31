@@ -42,19 +42,36 @@ def _enviar_correo_seguro(asunto, correo_destino, html_content):
     if not correo_destino:
         return False
         
-    plain_message = strip_tags(html_content)
     try:
-        send_mail(
-            subject=asunto,
-            message=plain_message,
-            from_email=None, # Usa DEFAULT_FROM_EMAIL de settings
-            recipient_list=[correo_destino],
-            html_message=html_content,
-            fail_silently=False,
-        )
+        from django.conf import settings
+        import requests
+        import json
+        
+        # Modo antibloqueo: SendGrid API v3 sobre puerto seguro 443 (HTTPS)
+        url = "https://api.sendgrid.com/v3/mail/send"
+        headers = {
+            "Authorization": f"Bearer {settings.EMAIL_HOST_PASSWORD}",
+            "Content-Type": "application/json"
+        }
+        
+        # Desglosar el DEFAULT_FROM_EMAIL (Ej: "Alquilo Software <noreply@asd.com>")
+        em_from = settings.DEFAULT_FROM_EMAIL
+        origen = {"email": em_from.split('<')[1].replace('>','').strip(), "name": em_from.split('<')[0].strip()} if '<' in em_from else {"email": em_from}
+            
+        payload = {
+            "personalizations": [{"to": [{"email": correo_destino}]}],
+            "from": origen,
+            "subject": asunto,
+            "content": [{"type": "text/html", "value": html_content}]
+        }
+        
+        # Timeout de 10s para peticiones web HTTP
+        resp = requests.post(url, headers=headers, data=json.dumps(payload), timeout=10)
+        resp.raise_for_status()
         return True
+        
     except Exception as e:
-        logger.error(f"Error enviando correo a {correo_destino}: {e}")
+        logger.error(f"Error enviando correo a {correo_destino} por Web API: {e}")
         return False
 
 # --- CASOS DE USO (B2C: RENTAS Y MORAS) ---
