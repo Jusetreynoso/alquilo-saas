@@ -71,6 +71,13 @@
                                     {% if factura.estado != 'PAGADA' and factura.estado != 'ANULADA' %}
                                         <div class="d-flex flex-column gap-1 align-items-center">
                                             <a href="{% url 'registrar_pago' factura.id %}" class="btn btn-sm btn-primary w-100">Registrar Pago</a>
+                                            
+                                            {% if factura.contrato.inquilino.telefono %}
+                                                <a href="https://wa.me/{{ factura.contrato.inquilino.telefono|cut:' ' }}?text=Hola%20{{ factura.contrato.inquilino.nombre }},%20te%20escribimos%20de%20la%20Administración.%20%0A%0ATienes%20una%20factura%20{{ factura.estado }}%20de%20tu%20local/vivienda%20{{ factura.contrato.propiedad.nombre_o_numero }}.%0AMonto%20Total%20con%20mora%20aplicable:%20RD${{ factura.total_a_pagar|floatformat:2 }}.%0AFecha%20límite:%20{{ factura.fecha_vencimiento|date:'d/M/Y' }}.%0A%0A¡Muchas%20gracias!" target="_blank" class="btn btn-sm btn-success w-100 text-start">
+                                                    <i class="bi bi-whatsapp"></i> Enviar Cobro
+                                                </a>
+                                            {% endif %}
+
                                             {% if factura.es_prorrateable %}
                                                 <button type="button" class="btn btn-sm btn-warning fw-bold text-dark w-100 shadow-sm border border-warning" data-bs-toggle="modal" data-bs-target="#modalProrrateo{{ factura.id }}">
                                                     🌟 Prorrateo
