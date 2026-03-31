@@ -9,6 +9,7 @@ from .models import Portafolio, Propiedad, Factura, CargoMora, ReciboPago, Contr
 from .forms import NuevoClienteSaaSForm, EditarSuscripcionForm, PropiedadForm, ContratoForm, InquilinoForm, MantenimientoForm, PlanSaaSForm
 from .utils import render_to_pdf
 import calendar
+import decimal
 from django.db.models.functions import TruncMonth
 from .utils_rbac import propietario_requerido
 from collections import defaultdict
