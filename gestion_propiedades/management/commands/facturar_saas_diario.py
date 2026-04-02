@@ -110,7 +110,9 @@ class Command(BaseCommand):
                     if monto_castigo > 0:
                         mora_obj = CargoMora.objects.create(
                             factura=factura,
-                            monto=monto_castigo
+                            monto=monto_castigo,
+                            mes_aplicado=hoy.month,
+                            anio_aplicado=hoy.year
                         )
                     
                     factura.estado = 'ATRASADA'
