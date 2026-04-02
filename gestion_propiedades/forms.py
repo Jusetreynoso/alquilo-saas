@@ -43,20 +43,35 @@ class ContratoForm(forms.ModelForm):
 
     def __init__(self, user, *args, **kwargs):
         super(ContratoForm, self).__init__(*args, **kwargs)
-        # Hacemos que el inquilino sea requerido en el form (ya no es opcional)
-        if 'inquilino' in self.fields:
-            inquilinos_propios = Inquilino.objects.filter(
-                Q(creado_por=user) | 
-                Q(contratos__propiedad__portafolio__propietario=user) |
-                Q(contratos__propiedad__portafolio__accesos__usuario=user)
-            ).distinct().order_by('nombre')
-            self.fields['inquilino'].queryset = inquilinos_propios
-            self.fields['inquilino'].empty_label = "--- SELECCIONAR INQUILINO EXISTENTE ---"
-
-        # Filtramos para que solo salgan las propiedades de este usuario que estén DISPONIBLES
         portafolios = Portafolio.objects.filter(Q(propietario=user) | Q(accesos__usuario=user))
-        self.fields['propiedad'].queryset = Propiedad.objects.filter(portafolio__in=portafolios, estado='DISPONIBLE')
-        self.fields['propiedad'].empty_label = "--- SELECCIONAR PROPIEDAD DISPONIBLE ---"
+        
+        if self.instance and self.instance.pk:
+            # Modo EDICIÓN: Evitamos que cambien la propiedad, el inquilino y la fecha inicial
+            self.fields['propiedad'].queryset = Propiedad.objects.filter(id=self.instance.propiedad.id)
+            self.fields['propiedad'].widget.attrs['readonly'] = True
+            self.fields['propiedad'].widget.attrs['style'] = 'pointer-events: none; background-color: #e9ecef;'
+            
+            if 'inquilino' in self.fields:
+                self.fields['inquilino'].queryset = Inquilino.objects.filter(id=self.instance.inquilino.id)
+                self.fields['inquilino'].widget.attrs['readonly'] = True
+                self.fields['inquilino'].widget.attrs['style'] = 'pointer-events: none; background-color: #e9ecef;'
+                
+            if 'fecha_inicio' in self.fields:
+                self.fields['fecha_inicio'].widget.attrs['readonly'] = True
+                self.fields['fecha_inicio'].widget.attrs['style'] = 'pointer-events: none; background-color: #e9ecef;'
+        else:
+            # Modo CREACIÓN NUEVA
+            if 'inquilino' in self.fields:
+                inquilinos_propios = Inquilino.objects.filter(
+                    Q(creado_por=user) | 
+                    Q(contratos__propiedad__portafolio__propietario=user) |
+                    Q(contratos__propiedad__portafolio__accesos__usuario=user)
+                ).distinct().order_by('nombre')
+                self.fields['inquilino'].queryset = inquilinos_propios
+                self.fields['inquilino'].empty_label = "--- SELECCIONAR INQUILINO EXISTENTE ---"
+
+            self.fields['propiedad'].queryset = Propiedad.objects.filter(portafolio__in=portafolios, estado='DISPONIBLE')
+            self.fields['propiedad'].empty_label = "--- SELECCIONAR PROPIEDAD DISPONIBLE ---"
 
 class InquilinoForm(forms.ModelForm):
     class Meta:
