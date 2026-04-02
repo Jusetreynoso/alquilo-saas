@@ -23,6 +23,27 @@ class PlanSaaS(models.Model):
     def __str__(self):
         return f"{self.nombre} - ${self.precio_mensual}"
 
+class ConfiguracionGlobal(models.Model):
+    """
+    Modelo tipo Singleton para configuraciones que aplican a todo el sistema.
+    """
+    tasa_dolar_manual = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Si se deja vacío, el sistema usará la tasa automática de internet. Si se coloca un valor, se forzará este valor."
+    )
+    
+    def save(self, *args, **kwargs):
+        self.pk = 1 # Garantiza que solo haya un registro
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_solo(cls):
+        obj, created = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def __str__(self):
+        return "Configuración Global del Sistema"
+
 class AvisoSistema(models.Model):
     TIPO_CHOICES = [
         ('info', 'Informativo (Azul)'),

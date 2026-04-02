@@ -1725,3 +1725,26 @@ def reporte_morosos(request):
         'total_casos': len(deudores)
     }
     return render(request, 'gestion_propiedades/reporte_morosos.html', context)
+
+
+@login_required(login_url='/login/')
+def editar_configuracion_global(request):
+    if not request.user.is_superuser:
+        return redirect('dashboard')
+        
+    from .models import ConfiguracionGlobal
+    from .forms import ConfiguracionGlobalForm
+    
+    config = ConfiguracionGlobal.get_solo()
+    
+    if request.method == 'POST':
+        form = ConfiguracionGlobalForm(request.POST, instance=config)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'La configuración global fue actualizada.')
+            return redirect('saas_master_control')
+    else:
+        form = ConfiguracionGlobalForm(instance=config)
+        
+    context = {'titulo_pagina': 'Ajustes del Sistema (Tasa del Dólar)', 'form': form}
+    return render(request, 'gestion_propiedades/form_generico.html', context)

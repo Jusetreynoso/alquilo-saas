@@ -3,6 +3,17 @@ import json
 from django.core.cache import cache
 
 def obtener_tasa_dolar():
+    from .models import ConfiguracionGlobal
+    
+    # 1. Evaluar si hay una sobre-escritura manual del administrador.
+    try:
+        config = ConfiguracionGlobal.get_solo()
+        if config.tasa_dolar_manual is not None and config.tasa_dolar_manual > 0:
+            return float(config.tasa_dolar_manual)
+    except Exception:
+        pass # Ignorar si la BD aún no está migrada
+        
+    # 2. Tasa en caché (automática)
     tasa = cache.get('tasa_dolar_bhd')
     if tasa:
         return tasa

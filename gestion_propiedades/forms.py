@@ -164,3 +164,12 @@ class PlanSaaSForm(forms.ModelForm):
             'limite_propiedades': forms.NumberInput(attrs={'class': 'form-control'}),
             'activo': forms.CheckboxInput(attrs={'class': 'form-check-input'})
         }
+
+from .models import ConfiguracionGlobal
+class ConfiguracionGlobalForm(forms.ModelForm):
+    class Meta:
+        model = ConfiguracionGlobal
+        fields = ['tasa_dolar_manual']
+        widgets = {
+            'tasa_dolar_manual': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Ej. 60.50 (Opcional)'}),
+        }
