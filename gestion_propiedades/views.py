@@ -1063,6 +1063,7 @@ def mi_suscripcion(request):
     Vista B2B para que el cliente vea su facturación SaaS ($1 por propiedad).
     """
     from .models import Propiedad, FacturaSaaS
+    from .utils_tasa import obtener_tasa_dolar
     
     propiedades_activas = Propiedad.objects.filter(
         portafolio__propietario=request.user,
@@ -1077,14 +1078,38 @@ def mi_suscripcion(request):
     except Exception:
         suscripcion = None
         
+    tasa_dolar = obtener_tasa_dolar()
+    costo_proyectado_pesos = (propiedades_activas * 1.00) * tasa_dolar
+        
     context = {
         'titulo_pagina': 'Mi Facturación B2B',
         'propiedades_activas': propiedades_activas,
         'costo_proyectado': costo_proyectado,
+        'costo_proyectado_pesos': costo_proyectado_pesos,
         'facturas_saas': facturas_saas,
         'suscripcion': suscripcion,
+        'tasa_dolar': tasa_dolar,
     }
     return render(request, 'gestion_propiedades/mi_suscripcion.html', context)
+
+@login_required(login_url='/login/')
+@propietario_requerido
+def subir_comprobante_saas(request, factura_id):
+    """
+    Permite al usuario subir un comprobante de pago para su factura SaaS.
+    """
+    from .models import FacturaSaaS
+    
+    factura = get_object_or_404(FacturaSaaS, id=factura_id, usuario=request.user)
+    
+    if request.method == 'POST' and 'comprobante' in request.FILES:
+        factura.comprobante_pago = request.FILES['comprobante']
+        factura.save()
+        messages.success(request, f'¡Comprobante para la factura por ${factura.monto_total} enviado para validación!')
+    else:
+        messages.error(request, 'No se pudo subir el archivo. Intenta de nuevo.')
+        
+    return redirect('mi_suscripcion')
 
 @login_required(login_url='/login/')
 def generar_corte_saas(request):

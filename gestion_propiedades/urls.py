@@ -76,6 +76,7 @@ urlpatterns = [
     path('master-control/test-email/', views.prueba_correo_saas, name='prueba_correo_saas'),
     path('master-control/factura/<int:factura_id>/pagar/', views.marcar_factura_saas_pagada, name='marcar_factura_saas_pagada'),
     path('mi-suscripcion/', views.mi_suscripcion, name='mi_suscripcion'),
+    path('mi-suscripcion/comprobante/<int:factura_id>/', views.subir_comprobante_saas, name='subir_comprobante_saas'),
     
     # --- PORTAL DEL INQUILINO (B2C) ---
     path('portal/login/', views_portal.portal_login, name='portal_login'),

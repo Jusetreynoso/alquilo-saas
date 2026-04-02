@@ -45,6 +45,44 @@
     </div>
 </div>
 
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm rounded-4 h-100 bg-white">
+            <div class="card-body py-4">
+                <h5 class="fw-bold mb-3"><i class="fas fa-university text-primary"></i> Cuentas Bancarias Disponibles</h5>
+                <p class="text-muted small mb-3">Las transferencias deben realizarse para el pago de la suscripción. Recuerda subir el comprobante en la tabla inferior.</p>
+                
+                <div class="row">
+                    <div class="col-12 col-xl-6 mb-3 mb-xl-0">
+                        <h6 class="text-dark fw-bold border-bottom pb-1">Cuentas en Pesos (RD$)</h6>
+                        <ul class="list-unstyled gap-2 mt-2">
+                            <li class="mb-2"><span class="badge bg-primary me-1">BHD León</span> <span class="user-select-all font-monospace fw-bold">08931700040</span></li>
+                            <li class="mb-2"><span class="badge me-1" style="background-color: #006ebc;">Banreservas</span> <span class="user-select-all font-monospace fw-bold">0302102948</span></li>
+                            <li class="mb-2"><span class="badge me-1" style="background-color: #0b2447;">Popular</span> <span class="user-select-all font-monospace fw-bold">750927543</span></li>
+                        </ul>
+                    </div>
+                    <div class="col-12 col-xl-6">
+                        <h6 class="text-dark fw-bold border-bottom pb-1">Cuentas en Dólares (US$)</h6>
+                        <ul class="list-unstyled gap-2 mt-2">
+                            <li class="mb-2"><span class="badge bg-success me-1">BHD</span> <span class="user-select-all font-monospace fw-bold">08931700066</span></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm rounded-4 h-100 bg-white text-center d-flex align-items-center justify-content-center">
+            <div class="card-body py-4 w-100">
+                <div class="fs-1 mb-2">💱</div>
+                <h6 class="text-uppercase fw-bold text-muted">Tasa del Dólar Actual</h6>
+                <h2 class="display-5 fw-bold text-success mb-0">RD$ {{ tasa_dolar }}</h2>
+                <small class="opacity-75">Equivalente proy. Mes: RD$ {{ costo_proyectado_pesos|floatformat:2 }}</small>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-header bg-white py-3 border-0">
         <h5 class="mb-0 fw-bold">Historial de Facturas (Uso de Sistema)</h5>
@@ -76,13 +114,40 @@
                         <td class="text-end fw-bold text-success">
                             ${{ factura.monto_total }}
                         </td>
-                        <td class="text-center">
+                        <td class="text-center" style="min-width: 200px;">
                             {% if factura.estado == 'PENDIENTE' %}
-                                <span class="badge bg-warning text-dark px-3 py-2 rounded-pill">🔴 Pendiente</span>
+                                <span class="badge bg-warning text-dark px-3 py-2 rounded-pill mb-2">🔴 Pendiente</span>
+                                {% if factura.comprobante_pago %}
+                                    <div class="small text-success mt-1 fw-bold"><i class="fas fa-check-circle"></i> Comprobante en Revisión</div>
+                                    <a href="{{ factura.comprobante_pago.url }}" target="_blank" class="small text-muted d-block" style="font-size: 0.75rem;">Ver el que subiste</a>
+                                {% else %}
+                                    <form action="{% url 'subir_comprobante_saas' factura.id %}" method="POST" enctype="multipart/form-data" class="mt-2 text-start">
+                                        {% csrf_token %}
+                                        <div class="input-group input-group-sm">
+                                            <input type="file" class="form-control" name="comprobante" required accept=".jpg,.jpeg,.png,.pdf" aria-label="Subir" title="Subir Comprobante">
+                                            <button class="btn btn-outline-primary" type="submit" title="Enviar"><i class="bi bi-upload"></i> Subir</button>
+                                        </div>
+                                    </form>
+                                {% endif %}
                             {% elif factura.estado == 'PAGADA' %}
                                 <span class="badge bg-success px-3 py-2 rounded-pill">🟢 Pagada</span>
+                                {% if factura.comprobante_pago %}
+                                    <br><a href="{{ factura.comprobante_pago.url }}" target="_blank" class="small text-primary mt-1 d-block"><i class="fas fa-file-invoice"></i> Ver Comprobante</a>
+                                {% endif %}
                             {% else %}
-                                <span class="badge bg-danger px-3 py-2 rounded-pill">⚫ Vencida</span>
+                                <span class="badge bg-danger px-3 py-2 rounded-pill mb-2">⚫ Vencida</span>
+                                {% if factura.comprobante_pago %}
+                                    <div class="small text-success mt-1 fw-bold"><i class="fas fa-check-circle"></i> Comprobante en Revisión</div>
+                                    <a href="{{ factura.comprobante_pago.url }}" target="_blank" class="small text-muted d-block" style="font-size: 0.75rem;">Ver el que subiste</a>
+                                {% else %}
+                                    <form action="{% url 'subir_comprobante_saas' factura.id %}" method="POST" enctype="multipart/form-data" class="mt-2 text-start">
+                                        {% csrf_token %}
+                                        <div class="input-group input-group-sm">
+                                            <input type="file" class="form-control" name="comprobante" required accept=".jpg,.jpeg,.png,.pdf" aria-label="Subir" title="Subir Comprobante">
+                                            <button class="btn btn-outline-primary" type="submit" title="Enviar"><i class="bi bi-upload"></i> Subir</button>
+                                        </div>
+                                    </form>
+                                {% endif %}
                             {% endif %}
                         </td>
                     </tr>
