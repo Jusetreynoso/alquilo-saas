@@ -1748,3 +1748,32 @@ def editar_configuracion_global(request):
         
     context = {'titulo_pagina': 'Ajustes del Sistema (Tasa del Dólar)', 'form': form}
     return render(request, 'gestion_propiedades/form_generico.html', context)
+
+@login_required(login_url='/login/')
+def editar_portafolio(request):
+    """
+    Vista protegida para que el administrador principal configure la Marca Blanca 
+    y otros parámetros del negocio vinculados a su portafolio.
+    """
+    from .models import Portafolio
+    from .forms import PortafolioForm
+
+    portafolio = Portafolio.objects.filter(propietario=request.user).first()
+    if not portafolio:
+        messages.error(request, "No tienes permisos de Administrador para editar los datos de Marca Blanca de este portafolio.")
+        return redirect('dashboard')
+    
+    if request.method == 'POST':
+        form = PortafolioForm(request.POST, instance=portafolio)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Ajustes de Marca Blanca y del portafolio actualizados correctamente.")
+            return redirect('editar_portafolio')
+    else:
+        form = PortafolioForm(instance=portafolio)
+    
+    context = {
+        'form': form,
+        'titulo_pagina': "Ajustes de Marca Blanca y Portafolio"
+    }
+    return render(request, 'gestion_propiedades/editar_portafolio.html', context)

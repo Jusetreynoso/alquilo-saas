@@ -85,7 +85,8 @@ urlpatterns = [
     path('portal/mantenimiento/', views_portal.portal_mantenimiento, name='portal_mantenimiento'),
     path('portal/logout/', views_portal.portal_logout, name='portal_logout'),
 
-    # --- EQUIPO OPERATIVO (RBAC B2B) ---
+    # --- EQUIPO OPERATIVO Y CONFIG B2B ---
+    path('portafolio/ajustes/', views.editar_portafolio, name='editar_portafolio'),
     path('mi-equipo/', views_equipo.mi_equipo, name='mi_equipo'),
     path('mi-equipo/invitar/', views_equipo.crear_asistente, name='crear_asistente'),
     path('mi-equipo/password/<int:usuario_id>/', views_equipo.cambiar_password, name='cambiar_password'),

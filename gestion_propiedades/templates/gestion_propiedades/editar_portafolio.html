@@ -1,0 +1,67 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}Ajustes de Portafolio{% endblock %}
+
+{% block encabezado %}
+    Ajustes de Marca Blanca y Portafolio
+{% endblock %}
+
+{% block contenido %}
+<div class="row">
+    <div class="col-md-9 mx-auto">
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white fw-bold text-secondary py-3 d-flex align-items-center">
+                <i class="fa-solid fa-store text-primary me-2"></i> Configuración de Marca Blanca
+            </div>
+            <div class="card-body p-4">
+                <p class="text-muted small mb-4">Personaliza los datos de tu empresa. Estos detalles se mostrarán en los recibos de pago y notificaciones a tus inquilinos para darle un aspecto profesional y transparente a tu operativa.</p>
+                <form method="POST">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label class="form-label text-primary fw-bold mb-1">Nombre del Portafolio o Negocio <span class="text-danger">*</span></label>
+                        {{ form.nombre }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label text-secondary fw-bold mb-1">Eslogan (Opcional)</label>
+                        {{ form.eslogan }}
+                        <div class="form-text">Aparecerá en letras pequeñas debajo del nombre en los recibos.</div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label text-secondary fw-bold mb-1">Dirección Física (Opcional)</label>
+                            {{ form.direccion_fisica }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label text-secondary fw-bold mb-1">Teléfono de Contacto (Opcional)</label>
+                            {{ form.telefono_contacto }}
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    
+                    <h6 class="fw-bold mb-3 text-secondary"><i class="fa-solid fa-gears"></i> Configuraciones por Defecto (Nuevos Contratos)</h6>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small">Meses de Depósito</label>
+                            {{ form.config_meses_deposito }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small">Meses de Adelanto</label>
+                            {{ form.config_meses_adelanto }}
+                        </div>
+                    </div>
+
+                    <div class="d-grid mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg fw-bold shadow-sm">
+                            <i class="fa-solid fa-floppy-disk"></i> Guardar Ajustes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

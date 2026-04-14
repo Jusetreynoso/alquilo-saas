@@ -7,6 +7,11 @@ class Portafolio(models.Model):
     propietario = models.ForeignKey(User, on_delete=models.CASCADE, related_name='portafolios')
     creado_en = models.DateTimeField(auto_now_add=True)
     
+    # Marca Blanca (White-label) opcionales
+    eslogan = models.CharField(max_length=200, blank=True, null=True, help_text="Eslogan del negocio")
+    direccion_fisica = models.TextField(blank=True, null=True, help_text="Dirección física del negocio")
+    telefono_contacto = models.CharField(max_length=50, blank=True, null=True, help_text="Teléfono de contacto")
+    
     # Configuración de Fianzas y Adelantos por defecto para este portafolio
     config_meses_deposito = models.IntegerField(default=2, help_text="Cantidad de meses exigidos como depósito por defecto")
     config_meses_adelanto = models.IntegerField(default=0, help_text="Cantidad de meses exigidos por adelantado por defecto")
