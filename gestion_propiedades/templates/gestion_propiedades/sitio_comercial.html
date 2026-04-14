@@ -3,233 +3,265 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Alquilo | Software Premium B2B para Real Estate</title>
+    <title>Alquilo | Profesionalice la Gestión de sus Propiedades</title>
     <!-- Bootstrap 5 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Iconos -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-color: #03040b;
-            --text-main: #f8f9fa;
+            /* Navy Blue Deep */
+            --bg-primary: #0A1128; 
+            --bg-secondary: #f8f9fa; /* Pearl White */
+            --navy-light: #162244;
+            /* Pale Gold / Platinum */
+            --gold: #D4AF37;
+            --gold-light: #F3E5AB;
+            --platinum: #E5E4E2;
+            --text-main: #FFFFFF;
+            --text-dark: #1F2937;
             --text-muted: #9ca3af;
-            --accent: #8b5cf6;
-            --accent-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
-            --glass-bg: rgba(255, 255, 255, 0.03);
-            --glass-border: rgba(255, 255, 255, 0.08);
         }
         
         body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            background-color: var(--bg-color);
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-primary);
             color: var(--text-main);
             overflow-x: hidden;
             -webkit-font-smoothing: antialiased;
         }
 
-        /* Navbar Glassmorphism */
+        /* Navbar */
         .navbar {
-            background: rgba(3, 4, 11, 0.7) !important;
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border-bottom: 1px solid var(--glass-border);
+            background: rgba(10, 17, 40, 0.9) !important;
+            backdrop-filter: blur(15px);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
         }
         .navbar-brand {
             font-weight: 800;
             font-size: 1.6rem;
+            color: #fff !important;
             letter-spacing: -0.5px;
-            background: var(--accent-gradient);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+        }
+        .navbar-brand i {
+            color: var(--gold);
+            margin-right: 8px;
+            font-size: 1.4rem;
         }
         .nav-link {
-            color: var(--text-muted) !important;
+            color: var(--platinum) !important;
             font-weight: 500;
             transition: color 0.3s;
         }
         .nav-link:hover {
-            color: #fff !important;
+            color: var(--gold-light) !important;
         }
 
-        /* Hero Styling */
+        /* Hero */
         .hero {
             position: relative;
-            padding: 160px 0 120px;
+            padding: 180px 0 140px;
             overflow: hidden;
+            background-color: var(--bg-primary);
         }
-        
         .hero-glow {
             position: absolute;
-            top: 30%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 70vw;
-            height: 70vw;
-            max-width: 800px;
-            max-height: 800px;
-            background: radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, rgba(0,0,0,0) 60%);
-            z-index: -1;
-            filter: blur(60px);
+            top: 20%;
+            right: 10%;
+            width: 60vw;
+            height: 60vw;
+            max-width: 600px;
+            max-height: 600px;
+            background: radial-gradient(circle, rgba(212, 175, 55, 0.1) 0%, rgba(10, 17, 40, 0) 60%);
+            z-index: 0;
+            filter: blur(80px);
         }
 
-        .hero h1 {
-            font-size: clamp(3rem, 6vw, 4.5rem);
+        .hero-title {
+            font-size: clamp(2.5rem, 5vw, 4rem);
             font-weight: 800;
             line-height: 1.1;
-            letter-spacing: -0.04em;
+            letter-spacing: -0.02em;
             margin-bottom: 1.5rem;
+            color: #fff;
         }
         
-        .text-gradient {
-            background: var(--accent-gradient);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+        .hero-subtitle {
+            font-size: 1.25rem;
+            font-weight: 400;
+            color: var(--platinum);
+            line-height: 1.6;
+            margin-bottom: 2.5rem;
         }
 
-        .btn-gradient {
-            background: var(--accent-gradient);
-            color: white;
+        .btn-gold {
+            background-color: var(--gold);
+            color: var(--bg-primary);
             border: none;
-            padding: 16px 36px;
-            font-size: 1.1rem;
-            font-weight: 600;
-            border-radius: 50px;
+            padding: 14px 32px;
+            font-size: 1.05rem;
+            font-weight: 700;
+            border-radius: 4px;
             transition: all 0.3s;
             text-decoration: none;
             display: inline-block;
         }
-        .btn-gradient:hover {
+        .btn-gold:hover {
+            background-color: #e5c158;
+            color: var(--bg-primary);
             transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(139, 92, 246, 0.4);
-            color: white;
+            box-shadow: 0 10px 20px rgba(212, 175, 55, 0.2);
         }
 
-        .btn-glass {
-            background: rgba(255, 255, 255, 0.05);
-            color: white;
-            border: 1px solid var(--glass-border);
-            padding: 16px 36px;
-            font-size: 1.1rem;
+        .btn-outline-platinum {
+            background: transparent;
+            color: var(--platinum);
+            border: 1px solid var(--platinum);
+            padding: 14px 32px;
+            font-size: 1.05rem;
             font-weight: 600;
-            border-radius: 50px;
-            backdrop-filter: blur(10px);
+            border-radius: 4px;
             transition: all 0.3s;
             text-decoration: none;
             display: inline-block;
         }
-        .btn-glass:hover {
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            transform: translateY(-2px);
+        .btn-outline-platinum:hover {
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+            border-color: #fff;
+        }
+
+        /* Abstract Graphic Right */
+        .hero-graphic {
+            position: relative;
+            z-index: 1;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .boveda-grid {
+            width: 100%;
+            height: 300px;
+            background-image: 
+                linear-gradient(rgba(212, 175, 55, 0.2) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(212, 175, 55, 0.2) 1px, transparent 1px);
+            background-size: 30px 30px;
+            transform: perspective(500px) rotateX(60deg) rotateZ(-45deg);
+            position: relative;
+        }
+        .boveda-node {
+            width: 8px;
+            height: 8px;
+            background: var(--gold);
+            border-radius: 50%;
+            position: absolute;
+            box-shadow: 0 0 10px var(--gold);
         }
 
         /* Features Section */
         .features-section {
-            padding: 80px 0 120px;
-            position: relative;
+            background-color: var(--bg-secondary);
+            color: var(--text-dark);
+            padding: 100px 0;
+            border-top: 2px solid var(--gold);
         }
 
-        .glass-card {
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 24px;
+        .section-title {
+            font-weight: 800;
+            font-size: 2.5rem;
+            color: var(--bg-primary);
+            margin-bottom: 3rem;
+            text-align: center;
+        }
+
+        .feature-card {
+            background: #fff;
+            border: 1px solid rgba(0,0,0,0.05);
+            border-radius: 8px;
             padding: 40px 30px;
             height: 100%;
-            backdrop-filter: blur(12px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.03);
             transition: all 0.4s ease;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .glass-card::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0; height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
         }
 
-        .glass-card:hover {
-            transform: translateY(-10px);
-            border-color: rgba(139, 92, 246, 0.4);
-            box-shadow: 0 20px 40px rgba(0,0,0,0.5), 0 0 20px rgba(139, 92, 246, 0.1);
-            background: rgba(255, 255, 255, 0.05);
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(10, 17, 40, 0.08);
+            border-color: rgba(212, 175, 55, 0.3);
         }
 
         .icon-box {
-            width: 64px;
-            height: 64px;
-            border-radius: 18px;
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            background: var(--navy-light);
+            color: var(--gold);
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 1.8rem;
-            margin-bottom: 2rem;
-            background: rgba(139, 92, 246, 0.1);
-            color: #c084fc;
-            border: 1px solid rgba(139, 92, 246, 0.2);
-            transition: all 0.3s;
+            margin-bottom: 1.5rem;
         }
 
-        .glass-card:hover .icon-box {
-            transform: scale(1.1) rotate(5deg);
-            background: var(--accent-gradient);
-            color: white;
-            border-color: transparent;
-        }
-
-        .glass-card h4 {
+        .feature-card h4 {
             font-weight: 700;
             font-size: 1.25rem;
             margin-bottom: 1rem;
+            color: var(--bg-primary);
         }
         
-        .glass-card p {
-            color: var(--text-muted);
+        .feature-card p {
+            color: #4b5563;
             line-height: 1.6;
-            margin-bottom: 0;
             font-size: 0.95rem;
+            margin-bottom: 0;
         }
 
-        /* Animations */
-        @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(30px); }
-            to { opacity: 1; transform: translateY(0); }
+        /* Security / CTA Section */
+        .security-section {
+            background-color: var(--bg-primary);
+            padding: 120px 0;
+            text-align: center;
+            position: relative;
         }
-        .animate-up {
-            opacity: 0;
-            animation: fadeUp 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-        .delay-1 { animation-delay: 0.1s; }
-        .delay-2 { animation-delay: 0.2s; }
-        .delay-3 { animation-delay: 0.3s; }
-        .delay-4 { animation-delay: 0.4s; }
         
+        .security-icon {
+            font-size: 4rem;
+            color: var(--gold);
+            margin-bottom: 20px;
+        }
+
         /* Footer */
         footer {
-            border-top: 1px solid var(--glass-border);
+            background-color: #050814;
             padding: 40px 0;
-            background: #000;
+            border-top: 1px solid rgba(255,255,255,0.05);
         }
     </style>
 </head>
 <body>
 
-    <!-- NAVEGACIÓN -->
+    <!-- NAV -->
     <nav class="navbar navbar-expand-lg navbar-dark fixed-top py-3">
         <div class="container">
-            <a class="navbar-brand" href="#">🏢 Alquilo</a>
+            <a class="navbar-brand" href="#">
+                <i class="bi bi-buildings-fill"></i> Alquilo
+            </a>
             <button class="navbar-toggler border-0 shadow-none" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <i class="bi bi-list fs-1 text-white"></i>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto align-items-center gap-2">
-                    <li class="nav-item"><a class="nav-link px-3" href="#beneficios">Funcionalidades</a></li>
-                    
-                    <li class="nav-item ms-lg-3 mt-3 mt-lg-0">
-                        <a href="{% url 'login' %}" class="btn btn-outline-light rounded-pill px-4 fw-bold mb-2 mb-lg-0">Entrar</a>
-                        <a href="/registro/" class="btn btn-gradient rounded-pill px-4 fw-bold ms-lg-2">Prueba Gratis</a>
+                    <li class="nav-item"><a class="nav-link px-3" href="#ecosistema">El Ecosistema</a></li>
+                    <li class="nav-item"><a class="nav-link px-3" href="#seguridad">Seguridad</a></li>
+                    <li class="nav-item ms-lg-3 mt-3 mt-lg-0 d-flex gap-2">
+                        <a href="{% url 'login' %}" class="btn-outline-platinum px-4 text-center">Iniciar Sesión</a>
+                        <a href="/registro/" class="btn-gold px-4 text-center">Prueba Gratis</a>
                     </li>
                 </ul>
             </div>
@@ -237,106 +269,131 @@
     </nav>
 
     <!-- HERO SECTION -->
-    <section class="hero text-center">
+    <section class="hero">
         <div class="hero-glow"></div>
         <div class="container position-relative z-1">
-            <div class="row justify-content-center">
-                <div class="col-lg-10 col-xl-8">
-                    <div class="animate-up">
-                        <span class="badge border border-secondary text-light px-3 py-2 rounded-pill mb-4 fw-semibold" style="background: var(--glass-bg);">
-                            ✨ El futuro del Software B2B de Bienes Raíces
-                        </span>
-                    </div>
-                    
-                    <h1 class="animate-up delay-1">Domina tus propiedades,<br><span class="text-gradient">maximiza tus ganancias.</span></h1>
-                    
-                    <p class="lead text-muted mb-5 px-md-5 animate-up delay-2" style="font-size: 1.25rem;">
-                        El centro de control financiero definitivo. Lleva la contabilidad de tus contratos, cobros, moras y mantenimiento industrial en piloto automático.
+            <div class="row align-items-center py-5">
+                <div class="col-lg-6 mb-5 mb-lg-0">
+                    <span class="badge tracking-wider fw-bold mb-3" style="background-color: rgba(212, 175, 55, 0.15); color: var(--gold); padding: 8px 16px; border: 1px solid rgba(212, 175, 55, 0.3);">
+                        SOFTWARE INMOBILIARIO
+                    </span>
+                    <h1 class="hero-title">Profesionalice la Gestión de sus Propiedades.</h1>
+                    <p class="hero-subtitle">
+                        Centralice, controle y escale su portafolio con tecnología financiera de precisión. Automatización de cobros, reportes P&L y máxima seguridad a su medida.
                     </p>
-                    
-                    <div class="d-flex flex-column flex-sm-row justify-content-center gap-3 animate-up delay-3">
-                        <a href="/registro/" class="btn-gradient">
-                            <i class="bi bi-rocket-takeoff-fill me-2"></i> Comenzar 45 Días Gratis
+                    <div class="d-flex flex-column flex-sm-row gap-3">
+                        <a href="/registro/" class="btn-gold text-center">
+                            Comenzar (45 Días Gratis)
                         </a>
-                        <a href="{% url 'login' %}" class="btn-glass">
-                            Ya tengo cuenta
+                        <a href="https://wa.me/18493532097" target="_blank" class="btn-outline-platinum text-center">
+                            Hablar con un Asesor
                         </a>
+                    </div>
+                </div>
+                
+                <div class="col-lg-5 offset-lg-1 d-none d-lg-block">
+                    <div class="hero-graphic">
+                        <div class="boveda-grid">
+                            <div class="boveda-node" style="top: 20%; left: 30%;"></div>
+                            <div class="boveda-node" style="top: 50%; left: 70%;"></div>
+                            <div class="boveda-node" style="top: 80%; left: 40%;"></div>
+                            <!-- Líneas abstractas conectando Data Nodes simulados -->
+                            <div style="position: absolute; top: 22%; left: 31%; width: 40%; height: 1px; background: var(--gold); transform: rotate(35deg); transform-origin: left center; opacity: 0.5;"></div>
+                            <div style="position: absolute; top: 52%; left: 70%; width: 35%; height: 1px; background: var(--gold); transform: rotate(145deg); transform-origin: left center; opacity: 0.5;"></div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- FUNCIONALIDADES / BENEFICIOS -->
-    <section id="beneficios" class="features-section">
+    <!-- FUNCIONALIDADES / ECOSISTEMA -->
+    <section id="ecosistema" class="features-section">
         <div class="container">
-            <div class="text-center mb-5 pb-3 animate-up delay-2">
-                <h2 class="fw-bold fs-1 mb-3">Auditoría y control absoluto.</h2>
-                <p class="text-muted fs-5">Tecnología de punta diseñada para inversores corporativos.</p>
-            </div>
-            
-            <div class="row g-4">
-                <!-- Card 1 -->
-                <div class="col-md-6 col-lg-3 animate-up delay-1">
-                    <div class="glass-card">
-                        <div class="icon-box">
-                            <i class="bi bi-envelope-paper-heart"></i>
+            <h2 class="section-title">Una Suite Integral</h2>
+            <div class="row g-4 align-items-center">
+                <!-- Beneficios Grid -->
+                <div class="col-lg-7">
+                    <div class="row g-4">
+                        <!-- Card 1 -->
+                        <div class="col-md-6">
+                            <div class="feature-card">
+                                <div class="icon-box"><i class="bi bi-shield-lock"></i></div>
+                                <h4>Cobranza Automatizada</h4>
+                                <p>Facturación recurrente y cálculo riguroso de moras con precisión matemática. El sistema notifica por usted.</p>
+                            </div>
                         </div>
-                        <h4>Notificaciones IA</h4>
-                        <p>El sistema envía recibos formales en PDF y recordatorios de vencimiento por correo electrónico automáticamente a tus inquilinos 24/7.</p>
+                        <!-- Card 2 -->
+                        <div class="col-md-6">
+                            <div class="feature-card">
+                                <div class="icon-box"><i class="bi bi-bar-chart-line-fill"></i></div>
+                                <h4>Inteligencia Financiera</h4>
+                                <p>Reportes de rentabilidad real en tiempo real. Ingresos netos, deducciones y análisis de ocupación fiables.</p>
+                            </div>
+                        </div>
+                        <!-- Card 3 -->
+                        <div class="col-md-6">
+                            <div class="feature-card">
+                                <div class="icon-box"><i class="bi bi-bookmark-star-fill"></i></div>
+                                <h4>Marca Blanca (White-Label)</h4>
+                                <p>Proyección de su propia marca en recibos y portales. Sus inquilinos verán su nombre, otorgando profesionalismo.</p>
+                            </div>
+                        </div>
+                        <!-- Card 4 -->
+                        <div class="col-md-6">
+                            <div class="feature-card">
+                                <div class="icon-box"><i class="bi bi-building-gear"></i></div>
+                                <h4>Gestión de Activos</h4>
+                                <p>Control unificado de expedientes, solicitudes, mantenimientos y vencimiento de contratos.</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <!-- Card 2 -->
-                <div class="col-md-6 col-lg-3 animate-up delay-2">
-                    <div class="glass-card">
-                        <div class="icon-box">
-                            <i class="bi bi-receipt-cutoff"></i>
+                
+                <!-- Mockup de Soporte (Estilo Dashboard UI) -->
+                <div class="col-lg-5 ps-lg-5 mt-5 mt-lg-0 text-center text-lg-start">
+                    <div class="shadow-lg rounded" style="background:#0a101f; padding:20px; border:1px solid rgba(255,255,255,0.05);">
+                        <div class="d-flex align-items-center mb-3 pb-3 border-bottom" style="border-color: rgba(255,255,255,0.05) !important;">
+                            <div style="width:12px;height:12px;border-radius:50%;background:#ef4444;margin-right:6px;"></div>
+                            <div style="width:12px;height:12px;border-radius:50%;background:#f59e0b;margin-right:6px;"></div>
+                            <div style="width:12px;height:12px;border-radius:50%;background:#10b981;"></div>
+                            <span class="ms-3 text-muted small" style="font-family: monospace;">Alquilo Dashboard</span>
                         </div>
-                        <h4>Moras Matemáticas</h4>
-                        <p>Olvídate del trabajo manual. Nuestro robot calcula fianzas, prorrateos y aplica los recargos por mora nocturnos sin titubear.</p>
-                    </div>
-                </div>
-                <!-- Card 3 -->
-                <div class="col-md-6 col-lg-3 animate-up delay-3">
-                    <div class="glass-card">
-                        <div class="icon-box">
-                            <i class="bi bi-shield-check"></i>
+                        <div style="height:320px; background:linear-gradient(to bottom, #111827, #0a101f); border-radius:4px; position:relative; overflow:hidden;">
+                            <!-- Panel de Ganancias -->
+                            <div style="padding: 20px;">
+                                <div class="text-white-50 small mb-1">Ingresos del Mes</div>
+                                <div class="text-white fs-3 fw-bold mb-4">$14,250.00</div>
+                                
+                                <div class="d-flex align-items-end justify-content-between" style="height: 150px; padding-top: 20px;">
+                                    <div style="width: 15%; height: 40%; background: var(--gold); border-radius: 2px 2px 0 0; opacity: 0.6;"></div>
+                                    <div style="width: 15%; height: 60%; background: var(--gold); border-radius: 2px 2px 0 0; opacity: 0.7;"></div>
+                                    <div style="width: 15%; height: 50%; background: var(--gold); border-radius: 2px 2px 0 0; opacity: 0.8;"></div>
+                                    <div style="width: 15%; height: 80%; background: var(--gold); border-radius: 2px 2px 0 0; opacity: 0.9;"></div>
+                                    <div style="width: 15%; height: 100%; background: var(--gold); border-radius: 2px 2px 0 0; box-shadow: 0 0 15px rgba(212,175,55,0.3);"></div>
+                                </div>
+                            </div>
                         </div>
-                        <h4>Gestión Multi-Roles</h4>
-                        <p>Agrega contadores y asitentes a tu portafolio otorgándoles accesos restringidos para operaciones seguras e inviolables.</p>
-                    </div>
-                </div>
-                <!-- Card 4 -->
-                <div class="col-md-6 col-lg-3 animate-up delay-4">
-                    <div class="glass-card">
-                        <div class="icon-box">
-                            <i class="bi bi-graph-up-arrow"></i>
-                        </div>
-                        <h4>P&L Institucional</h4>
-                        <p>Visualiza el flujo de caja neto exacto. Ingresos brutos menos gastos operativos en gráficas dignas de Wall Street.</p>
                     </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- CALL TO ACTION FINAL -->
-    <section class="py-5 my-5">
-        <div class="container">
-            <div class="glass-card text-center py-5 border-0" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(236, 72, 153, 0.05) 100%);">
-                <h2 class="fw-bold fs-1 mb-4">¿Listo para elevar tu corporación?</h2>
-                <p class="text-muted mb-5 mx-auto" style="max-width: 600px;">
-                    Únete a la nueva era de la administración de alquileres impulsada por automatización SaaS. Tu primera facturación con nosotros te tomará solo 10 segundos.
-                </p>
-                <div class="d-flex flex-column flex-sm-row justify-content-center gap-3">
-                    <a href="/registro/" class="btn-gradient">
-                        <i class="bi bi-rocket-takeoff-fill me-2"></i> Crear Cuenta (45 Días Gratis)
-                    </a>
-                    <a href="https://wa.me/18493532097?text=Hola,%20tengo%20dudas%20comerciales." target="_blank" class="btn-glass">
-                        <i class="bi bi-whatsapp"></i> Hablar con Ventas
-                    </a>
-                </div>
+    <!-- SECURITY CTA -->
+    <section id="seguridad" class="security-section">
+        <div class="hero-glow" style="right: auto; left: 10%; top: 50%;"></div>
+        <div class="container position-relative z-1">
+            <div class="security-icon">
+                <i class="bi bi-bank"></i>
             </div>
+            <h2 class="fw-bold fs-1 mb-4">Seguridad de Nivel Financiero</h2>
+            <p class="text-muted mb-5 mx-auto fs-5" style="max-width: 700px;">
+                Protegemos la información vital de su negocio y sus inquilinos. Arquitectura blindada, cifrado de vanguardia e infraestructura hiperconectada.
+            </p>
+            <a href="/registro/" class="btn-gold btn-lg shadow-lg">
+                Comience a Escalar Hoy
+            </a>
         </div>
     </section>
 
@@ -344,12 +401,12 @@
     <footer>
         <div class="container text-center">
             <div class="d-flex justify-content-center align-items-center mb-4 gap-4">
-                <a href="#" class="text-muted text-decoration-none hover-white">Condiciones de Servicio</a>
+                <a href="#" class="text-muted text-decoration-none" style="transition:color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#9ca3af'">Asistencia Técnica</a>
                 <span class="text-muted">•</span>
-                <a href="#" class="text-muted text-decoration-none hover-white">Políticas de Privacidad</a>
+                <a href="#" class="text-muted text-decoration-none" style="transition:color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#9ca3af'">Políticas de Privacidad</a>
             </div>
-            <p class="text-muted small mb-0">
-                &copy; {% now "Y" %} Alquilo Suite. Una solución de élite para inversores y constructoras.
+            <p class="text-muted small mb-0" style="opacity: 0.6;">
+                &copy; {% now "Y" %} Alquilo. Tecnología para Gestión de Propiedades y Patrimonio.
             </p>
         </div>
     </footer>
