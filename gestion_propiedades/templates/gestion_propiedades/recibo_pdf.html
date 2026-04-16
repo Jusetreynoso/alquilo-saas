@@ -1,4 +1,5 @@
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+{% load filtros_dinero %}
 <html>
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
@@ -20,7 +21,7 @@
             margin: 0 auto; 
             padding: 10px;
         }
-        .header { text-align: center; }
+        .header { text-align: center; margin-bottom: 20px;}
         .business-title { font-size: 15px; text-transform: uppercase; margin-bottom: 6px; font-weight: bold; letter-spacing: 0.5px; }
         .business-info { font-size: 12px; color: #333; line-height: 1.4; margin-bottom: 4px; }
         
@@ -48,9 +49,6 @@
 
     <div class="receipt-wrapper">
         <div class="header">
-            <div style="margin-bottom: 15px;">
-                <img src="{{ logo_path }}" width="80" alt="Logo">
-            </div>
             <div class="business-title">
                 {{ propiedad.grupo_o_residencial|default:contrato.propiedad.portafolio.nombre|upper }}
             </div>
@@ -96,7 +94,7 @@
             </tr>
             <tr>
                 <td class="label">FACTURADO:</td>
-                <td class="value">${{ factura.monto_base|floatformat:2 }}</td>
+                <td class="value">${{ factura.monto_base|dinero }}</td>
             </tr>
             {% if factura.concepto %}
             <tr>
@@ -110,10 +108,6 @@
                 <td class="value">{{ recibo.referencia_transaccion }}</td>
             </tr>
             {% endif %}
-            <tr>
-                <td class="label" style="padding-top:15px;">TOTAL RECIBIDO:</td>
-                <td style="padding-top:15px;"></td>
-            </tr>
         </table>
         
         <div class="divider"></div>
@@ -121,7 +115,7 @@
         <table class="payment-grid">
             <tr>
                 <td style="text-align: left; color:#555; width:45%; font-size:12px;">MÉTODO: <span style="color:#111;">{{ recibo.get_metodo_pago_display|upper }}</span></td>
-                <td style="text-align: right; font-size:18px;">${{ recibo.monto_pagado|floatformat:2 }}</td>
+                <td style="text-align: right; font-size:18px;">${{ recibo.monto_pagado|dinero }}</td>
             </tr>
         </table>
 
