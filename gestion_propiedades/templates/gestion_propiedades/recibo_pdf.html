@@ -3,99 +3,234 @@
 <head>
     <title>Recibo de Pago #{{ recibo.id }}</title>
     <style type="text/css">
-        body { font-family: Helvetica, sans-serif; font-size: 12px; color: #333; }
-        .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #ddd; padding-bottom: 10px; }
-        .company-name { font-size: 20px; font-weight: bold; color: #2c3e50; }
-        .receipt-title { font-size: 16px; margin-top: 10px; text-transform: uppercase; }
+        @page {
+            size: A4 portrait;
+            margin: 2cm;
+        }
+        body { 
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; 
+            font-size: 13px; 
+            color: #111; 
+            background: #fff;
+        }
+        /* Contenedor central simulando el corte de papel de una tickera */
+        .receipt-wrapper { 
+            width: 100%; 
+            max-width: 400px; /* Ancho para mantener el aspecto largo */
+            margin: 0 auto; 
+            padding: 10px;
+        }
         
-        .box { border: 1px solid #eee; padding: 10px; margin-bottom: 15px; background-color: #f9f9f9; }
-        .label { font-weight: bold; color: #555; font-size: 10px; text-transform: uppercase; }
-        .value { font-size: 13px; margin-bottom: 5px; }
+        .header { text-align: center; }
+        .logo-placeholder { font-size: 32px; font-weight: bold; margin-bottom: 8px; color: #2c3e50; }
+        .business-title { font-size: 14px; text-transform: uppercase; margin-bottom: 6px; font-weight: bold; letter-spacing: 0.5px; }
+        .business-info { font-size: 11px; color: #333; line-height: 1.4; margin-bottom: 2px; }
         
-        table { width: 100%; margin-top: 20px; border-collapse: collapse; }
-        th { text-align: left; background-color: #eee; padding: 8px; font-size: 11px; border-bottom: 1px solid #ccc; }
-        td { padding: 8px; border-bottom: 1px solid #eee; }
+        .divider { 
+            border-top: 1px dashed #777; 
+            margin: 20px 0; 
+            width: 100%;
+        }
+
+        .section-title {
+            font-weight: bold;
+            font-size: 12px;
+            margin-bottom: 8px;
+            color: #333;
+            letter-spacing: 1px;
+        }
         
-        .total-section { text-align: right; margin-top: 20px; }
-        .total-label { font-size: 14px; font-weight: bold; }
-        .total-amount { font-size: 18px; color: #27ae60; font-weight: bold; }
-        
-        .footer { margin-top: 50px; text-align: center; font-size: 10px; color: #999; border-top: 1px dashed #ccc; padding-top: 10px; }
+        .client-name {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 15px;
+        }
+
+        .data-grid { 
+            width: 100%; 
+            border-collapse: collapse; 
+        }
+        .data-grid td { 
+            padding: 6px 0; 
+            vertical-align: top;
+            font-size: 12px;
+        }
+        .data-grid td.label { 
+            font-weight: bold; 
+            width: 45%; 
+            color: #444;
+        }
+        .data-grid td.value { 
+            text-align: right; 
+            width: 55%; 
+        }
+
+        .payment-block {
+            margin-top: 10px;
+        }
+        .payment-grid {
+            width: 100%;
+            margin-top: 5px;
+        }
+        .payment-grid td {
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        /* Simulación de marca de agua estilo sello */
+        .watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 250px;
+            height: 250px;
+            margin-top: -125px;
+            margin-left: -125px;
+            border-radius: 50%;
+            border: 4px double #e0e0e0;
+            z-index: -1;
+            opacity: 0.15;
+            text-align: center;
+            transform: rotate(-30deg);
+        }
+        .watermark-inner {
+            margin-top: 100px;
+            font-size: 30px;
+            font-weight: bold;
+            color: #333;
+            text-transform: uppercase;
+        }
+
+        .datetime-stamp {
+            margin-top: 30px;
+            font-size: 11px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .signatures {
+            width: 100%;
+            margin-top: 60px;
+            text-align: center;
+        }
+        .signatures td {
+            width: 50%;
+            font-size: 10px;
+            color: #333;
+        }
+        .sign-line {
+            display: inline-block;
+            width: 80%;
+            border-bottom: 1px solid #777;
+            margin-bottom: 5px;
+        }
     </style>
 </head>
 <body>
 
-    <div class="header">
-        <div class="company-name">{{ contrato.propiedad.portafolio.nombre|default:"ALQUILO - GESTIÓN INMOBILIARIA" }}</div>
-        {% if contrato.propiedad.portafolio.eslogan %}
-        <div style="font-size: 14px; color: #555; margin-top: 5px; font-style: italic;">{{ contrato.propiedad.portafolio.eslogan }}</div>
-        {% endif %}
-        {% if contrato.propiedad.portafolio.direccion_fisica or contrato.propiedad.portafolio.telefono_contacto %}
-        <div style="font-size: 11px; color: #777; margin-top: 5px;">
-            {% if contrato.propiedad.portafolio.direccion_fisica %}{{ contrato.propiedad.portafolio.direccion_fisica }}<br>{% endif %}
-            {% if contrato.propiedad.portafolio.telefono_contacto %}Tel: {{ contrato.propiedad.portafolio.telefono_contacto }}{% endif %}
+    <div class="receipt-wrapper">
+        <!-- MARCA DE AGUA (SELLO BACKGROUND) -->
+        <div class="watermark">
+            <div class="watermark-inner">PAGADO</div>
         </div>
-        {% endif %}
-        <div class="receipt-title" style="margin-top: 15px;">Comprobante de Pago</div>
-        <div>Fecha de Emisión: {% now "d/m/Y" %}</div>
-    </div>
 
-    <table style="width: 100%; border: none;">
-        <tr>
-            <td style="border: none; width: 50%;">
-                <div class="box">
-                    <div class="label">Pagado Por (Inquilino):</div>
-                    <div class="value">{{ contrato.inquilino.nombre }}</div>
-                    <div class="label">Propiedad:</div>
-                    <div class="value">{{ propiedad.nombre_o_numero }}</div>
-                    <div class="value" style="font-size: 10px; color: #777;">{{ propiedad.grupo_o_residencial|default:"" }}</div>
-                </div>
-            </td>
-            <td style="border: none; width: 50%;">
-                <div class="box">
-                    <div class="label">Recibo No.</div>
-                    <div class="value">#000{{ recibo.id }}</div>
-                    <div class="label">Fecha de Pago:</div>
-                    <div class="value">{{ recibo.fecha_pago|date:"d M Y" }}</div>
-                    <div class="label">Método:</div>
-                    <div class="value">{{ recibo.get_metodo_pago_display }}</div>
-                </div>
-            </td>
-        </tr>
-    </table>
+        <!-- ENCABEZADO INSTITUCIONAL -->
+        <div class="header">
+            <div class="logo-placeholder">🏢</div>
+            <div class="business-title">
+                {{ propiedad.grupo_o_residencial|default:contrato.propiedad.portafolio.nombre|upper }}
+            </div>
+            
+            {% if contrato.propiedad.portafolio.eslogan %}
+            <div class="business-info" style="font-style: italic; color: #555;">{{ contrato.propiedad.portafolio.eslogan }}</div>
+            {% endif %}
+            
+            {% if contrato.propiedad.portafolio.direccion_fisica %}
+            <div class="business-info">{{ contrato.propiedad.portafolio.direccion_fisica }}</div>
+            {% endif %}
 
-    <table>
-        <thead>
+            <div class="business-info">
+                {% if contrato.propiedad.portafolio.telefono_contacto %}
+                📞 {{ contrato.propiedad.portafolio.telefono_contacto }}
+                {% else %}
+                Gestión Inmobiliaria
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- SECCIÓN CLIENTE -->
+        <div class="section-title">CLIENTE</div>
+        <div class="client-name">{{ contrato.inquilino.nombre }}</div>
+
+        <!-- REJILLA DE DATOS FINANCIEROS -->
+        <table class="data-grid">
             <tr>
-                <th>Concepto / Descripción</th>
-                <th style="text-align: right;">Monto</th>
+                <td class="label">PROPIEDAD / REF:</td>
+                <td class="value">{{ propiedad.nombre_o_numero }}</td>
             </tr>
-        </thead>
-        <tbody>
+            <tr>
+                <td class="label">MES VENCIMIENTO:</td>
+                <td class="value">{{ factura.fecha_vencimiento|date:"F Y"|title }}</td>
+            </tr>
+            <tr>
+                <td class="label">FACTURA BOLETA:</td>
+                <td class="value">{{ factura.id }}</td>
+            </tr>
+            <tr>
+                <td class="label">RECIBO NO.:</td>
+                <td class="value">#000{{ recibo.id }}</td>
+            </tr>
+            <tr>
+                <td class="label">FACTURADO:</td>
+                <td class="value">${{ factura.monto_base|floatformat:2 }}</td>
+            </tr>
+            {% if factura.concepto %}
+            <tr>
+                <td class="label">CONCEPTO:</td>
+                <td class="value">{{ factura.concepto }}</td>
+            </tr>
+            {% endif %}
+            {% if recibo.referencia_transaccion %}
+            <tr>
+                <td class="label">REF. PAGO:</td>
+                <td class="value">{{ recibo.referencia_transaccion }}</td>
+            </tr>
+            {% endif %}
+            <tr>
+                <td class="label" style="padding-top:15px;">TOTAL RECIBIDO:</td>
+                <td style="padding-top:15px;"></td>
+            </tr>
+        </table>
+        
+        <div class="divider" style="margin: 10px 0;"></div>
+
+        <table class="payment-grid">
+            <tr>
+                <td style="text-align: left; color:#555; width:45%; font-size:11px;">MÉTODO: <span style="color:#111;">{{ recibo.get_metodo_pago_display|upper }}</span></td>
+                <td style="text-align: right; font-size:18px;">${{ recibo.monto_pagado|floatformat:2 }}</td>
+            </tr>
+        </table>
+
+        <div class="datetime-stamp">
+            {{ recibo.fecha_pago|date:"d/m/Y" }} &nbsp;//&nbsp; {% now "h:i:s A" %}
+        </div>
+
+        <table class="signatures">
             <tr>
                 <td>
-                    <strong>{{ factura.concepto }}</strong><br>
-                    <span style="font-size: 10px; color: #666;">Factura Ref: #{{ factura.id }} (Vencimiento: {{ factura.fecha_vencimiento }})</span>
+                    <span class="sign-line"></span><br>
+                    RECIBE<br>
+                    {{ usuario.username|upper }}
                 </td>
-                <td style="text-align: right;">${{ recibo.monto_pagado|dinero }}</td>
+                <td>
+                    <span class="sign-line"></span><br>
+                    ENTREGA<br>
+                    CLIENTE
+                </td>
             </tr>
-        </tbody>
-    </table>
-
-    <div class="total-section">
-        <span class="total-label">TOTAL PAGADO:</span>
-        <span class="total-amount">${{ recibo.monto_pagado|dinero }}</span>
-    </div>
-
-    {% if recibo.referencia_transaccion %}
-    <div style="margin-top: 20px; font-size: 11px; color: #555;">
-        <strong>Referencia Bancaria / Notas:</strong> {{ recibo.referencia_transaccion }}
-    </div>
-    {% endif %}
-
-    <div class="footer">
-        Este documento es un comprobante de pago válido emitido por el sistema Alquilo.<br>
-        Generado por: {{ usuario.username }}
+        </table>
     </div>
 
 </body>
