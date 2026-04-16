@@ -136,7 +136,7 @@
 
         <!-- ENCABEZADO INSTITUCIONAL -->
         <div class="header">
-            <div class="logo-placeholder">🏢</div>
+            <div class="logo-placeholder">|||||</div>
             <div class="business-title">
                 {{ propiedad.grupo_o_residencial|default:contrato.propiedad.portafolio.nombre|upper }}
             </div>
@@ -151,7 +151,7 @@
 
             <div class="business-info">
                 {% if contrato.propiedad.portafolio.telefono_contacto %}
-                📞 {{ contrato.propiedad.portafolio.telefono_contacto }}
+                Tel: {{ contrato.propiedad.portafolio.telefono_contacto }}
                 {% else %}
                 Gestión Inmobiliaria
                 {% endif %}
