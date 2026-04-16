@@ -253,8 +253,12 @@ def imprimir_recibo(request, recibo_id):
     if portafolio.logo_empresa and hasattr(portafolio.logo_empresa, 'path') and os.path.exists(portafolio.logo_empresa.path):
         logo_path = portafolio.logo_empresa.path
     else:
-        logo_path = None
+        # Usa el building icon pre-descargado si no suben nada
+        logo_path = os.path.join(settings.BASE_DIR, 'gestion_propiedades', 'static', 'gestion_propiedades', 'img', 'building.png')
         
+    icon_phone = os.path.join(settings.BASE_DIR, 'gestion_propiedades', 'static', 'gestion_propiedades', 'img', 'phone.png')
+    icon_whatsapp = os.path.join(settings.BASE_DIR, 'gestion_propiedades', 'static', 'gestion_propiedades', 'img', 'whatsapp.png')
+
     data = {
         'recibo': recibo,
         'factura': recibo.factura,
@@ -262,6 +266,8 @@ def imprimir_recibo(request, recibo_id):
         'propiedad': recibo.factura.contrato.propiedad,
         'usuario': request.user,
         'logo_path': logo_path,
+        'icon_phone': icon_phone,
+        'icon_whatsapp': icon_whatsapp,
     }
 
     # 3. Generamos el PDF
