@@ -49,6 +49,11 @@
 
     <div class="receipt-wrapper">
         <div class="header">
+            {% if logo_path %}
+            <div style="margin-bottom: 12px;">
+                <img src="{{ logo_path }}" width="80" alt="Logo">
+            </div>
+            {% endif %}
             <div class="business-title">
                 {{ propiedad.grupo_o_residencial|default:contrato.propiedad.portafolio.nombre|upper }}
             </div>
@@ -61,9 +66,12 @@
             <div class="business-info">{{ contrato.propiedad.portafolio.direccion_fisica }}</div>
             {% endif %}
 
-            <div class="business-info">
+            <div class="business-info" style="margin-top: 8px;">
                 {% if contrato.propiedad.portafolio.telefono_contacto %}
-                Tel: {{ contrato.propiedad.portafolio.telefono_contacto }}
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6c/Phone_icon.png/120px-Phone_icon.png" width="12" style="margin-bottom: -2px;"> 
+                &nbsp;/&nbsp; 
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/WhatsApp.svg/120px-WhatsApp.svg.png" width="12" style="margin-bottom: -2px;"> 
+                {{ contrato.propiedad.portafolio.telefono_contacto }}
                 {% else %}
                 Gestión Inmobiliaria
                 {% endif %}

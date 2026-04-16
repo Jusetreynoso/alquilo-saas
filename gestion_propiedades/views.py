@@ -253,8 +253,7 @@ def imprimir_recibo(request, recibo_id):
     if portafolio.logo_empresa and hasattr(portafolio.logo_empresa, 'path') and os.path.exists(portafolio.logo_empresa.path):
         logo_path = portafolio.logo_empresa.path
     else:
-        # Falla al default
-        logo_path = os.path.join(settings.BASE_DIR, 'gestion_propiedades', 'static', 'gestion_propiedades', 'img', 'default_logo.png')
+        logo_path = None
         
     data = {
         'recibo': recibo,
