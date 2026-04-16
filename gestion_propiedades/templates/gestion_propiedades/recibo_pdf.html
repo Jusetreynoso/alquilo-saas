@@ -136,7 +136,9 @@
 
         <!-- ENCABEZADO INSTITUCIONAL -->
         <div class="header">
-            <div class="logo-placeholder">|||||</div>
+            <div class="logo-placeholder" style="margin-bottom: 5px;">
+                <img src="{{ logo_path }}" style="max-width: 60px; max-height: 60px;" alt="Logo">
+            </div>
             <div class="business-title">
                 {{ propiedad.grupo_o_residencial|default:contrato.propiedad.portafolio.nombre|upper }}
             </div>

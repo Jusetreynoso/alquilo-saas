@@ -11,6 +11,7 @@ class Portafolio(models.Model):
     eslogan = models.CharField(max_length=200, blank=True, null=True, help_text="Eslogan del negocio")
     direccion_fisica = models.TextField(blank=True, null=True, help_text="Dirección física del negocio")
     telefono_contacto = models.CharField(max_length=50, blank=True, null=True, help_text="Teléfono de contacto")
+    logo_empresa = models.ImageField(upload_to='portafolio_logos/', blank=True, null=True, help_text="Logo oficial para imprimir en los recibos PDF")
     
     # Configuración de Fianzas y Adelantos por defecto para este portafolio
     config_meses_deposito = models.IntegerField(default=2, help_text="Cantidad de meses exigidos como depósito por defecto")

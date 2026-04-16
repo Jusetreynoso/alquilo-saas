@@ -246,12 +246,23 @@ def imprimir_recibo(request, recibo_id):
         pass 
 
     # 2. Preparamos los datos
+    import os
+    from django.conf import settings
+    portafolio = recibo.factura.contrato.propiedad.portafolio
+    
+    if portafolio.logo_empresa and hasattr(portafolio.logo_empresa, 'path') and os.path.exists(portafolio.logo_empresa.path):
+        logo_path = portafolio.logo_empresa.path
+    else:
+        # Falla al default
+        logo_path = os.path.join(settings.BASE_DIR, 'gestion_propiedades', 'static', 'gestion_propiedades', 'img', 'default_logo.png')
+        
     data = {
         'recibo': recibo,
         'factura': recibo.factura,
         'contrato': recibo.factura.contrato,
         'propiedad': recibo.factura.contrato.propiedad,
         'usuario': request.user,
+        'logo_path': logo_path,
     }
 
     # 3. Generamos el PDF
@@ -1764,7 +1775,7 @@ def editar_portafolio(request):
         return redirect('dashboard')
     
     if request.method == 'POST':
-        form = PortafolioForm(request.POST, instance=portafolio)
+        form = PortafolioForm(request.POST, request.FILES, instance=portafolio)
         if form.is_valid():
             form.save()
             messages.success(request, "Ajustes de Marca Blanca y del portafolio actualizados correctamente.")

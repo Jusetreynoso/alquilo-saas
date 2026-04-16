@@ -15,7 +15,7 @@
             </div>
             <div class="card-body p-4">
                 <p class="text-muted small mb-4">Personaliza los datos de tu empresa. Estos detalles se mostrarán en los recibos de pago y notificaciones a tus inquilinos para darle un aspecto profesional y transparente a tu operativa.</p>
-                <form method="POST">
+                <form method="POST" enctype="multipart/form-data">
                     {% csrf_token %}
                     
                     <div class="mb-3">
@@ -38,6 +38,12 @@
                             <label class="form-label text-secondary fw-bold mb-1">Teléfono de Contacto (Opcional)</label>
                             {{ form.telefono_contacto }}
                         </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label text-secondary fw-bold mb-1">Logotipo de la Empresa (Opcional)</label>
+                        {{ form.logo_empresa }}
+                        <div class="form-text">Sube una imagen cuadrada JPG o PNG. Esta se imprimirá en todos los recibos y PDFs.</div>
                     </div>
 
                     <hr class="my-4">
