@@ -1,151 +1,329 @@
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<!DOCTYPE html>
 {% load filtros_dinero %}
-<html>
+<html lang="es">
 <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta charset="utf-8">
     <title>Recibo de Pago #{{ recibo.id }}</title>
-    <style type="text/css">
-        @page {
-            size: A4 portrait;
-            margin: 2cm;
+    <style>
+        :root {
+            --primary-color: #1a252f;
+            --text-main: #333;
+            --text-light: #666;
+            --border-color: #e0e0e0;
         }
+
         body { 
-            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; 
-            font-size: 13px; 
-            color: #111; 
+            font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif; 
+            font-size: 14px; 
+            color: var(--text-main); 
+            background: #f4f6f9;
+            margin: 0;
+            padding: 40px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .receipt-container { 
             background: #fff;
-        }
-        .receipt-wrapper { 
             width: 100%; 
-            max-width: 350px;
-            margin: 0 auto; 
-            padding: 10px;
+            max-width: 480px; /* Estética de impresora térmica más ancha */
+            padding: 40px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            position: relative;
         }
-        .header { text-align: center; margin-bottom: 20px;}
-        .business-title { font-size: 15px; text-transform: uppercase; margin-bottom: 6px; font-weight: bold; letter-spacing: 0.5px; }
-        .business-info { font-size: 12px; color: #333; line-height: 1.4; margin-bottom: 4px; }
+
+        .header { 
+            text-align: center; 
+            margin-bottom: 30px;
+        }
+
+        .logo-img {
+            max-width: 120px;
+            max-height: 120px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+        }
+
+        .business-title { 
+            font-size: 20px; 
+            text-transform: uppercase; 
+            margin-bottom: 8px; 
+            font-weight: 800; 
+            letter-spacing: 0.5px;
+            color: var(--primary-color);
+        }
+
+        .business-info { 
+            font-size: 13px; 
+            color: var(--text-light); 
+            line-height: 1.5; 
+        }
         
-        .divider { border-top: 1px dashed #555; margin: 15px 0; width: 100%; }
+        .divider { 
+            border-top: 2px dashed var(--border-color); 
+            margin: 25px 0; 
+        }
 
-        .section-title { font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #333; letter-spacing: 1px; }
-        .client-name { font-size: 14px; font-weight: 500; margin-bottom: 15px; }
+        .section-title { 
+            font-weight: 700; 
+            font-size: 12px; 
+            margin-bottom: 10px; 
+            color: var(--text-light); 
+            text-transform: uppercase;
+            letter-spacing: 1px; 
+        }
 
-        .data-grid { width: 100%; border-collapse: collapse; }
-        .data-grid td { padding: 4px 0; vertical-align: top; font-size: 13px; }
-        .data-grid td.label { font-weight: bold; width: 45%; color: #444; }
-        .data-grid td.value { text-align: right; width: 55%; }
+        .client-name { 
+            font-size: 16px; 
+            font-weight: 600; 
+            margin-bottom: 20px; 
+            color: var(--primary-color);
+        }
 
-        .payment-grid { width: 100%; margin-top: 5px; }
-        .payment-grid td { font-size: 14px; font-weight: bold; }
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
 
-        .datetime-stamp { text-align: center; margin-top: 25px; font-size: 11px; font-weight: bold; color: #333; }
+        .data-row:last-child { border-bottom: none; }
 
-        .signatures { width: 100%; margin-top: 50px; text-align: center; }
-        .signatures td { width: 50%; font-size: 10px; color: #333; vertical-align: bottom; }
-        .sign-line { display: inline-block; width: 80%; border-bottom: 1px solid #333; margin-bottom: 5px; }
+        .data-label { 
+            font-weight: 600; 
+            color: var(--text-light);
+            font-size: 13px;
+        }
+
+        .data-value { 
+            text-align: right; 
+            font-weight: 500;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 6px;
+        }
+
+        .total-label {
+            font-size: 13px;
+            color: var(--text-light);
+            font-weight: 600;
+        }
+
+        .total-method {
+            color: var(--primary-color);
+            font-weight: 800;
+            font-size: 14px;
+        }
+
+        .total-amount {
+            font-size: 24px;
+            font-weight: 800;
+            color: #27ae60;
+        }
+
+        .watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-30deg);
+            font-size: 80px;
+            font-weight: 900;
+            color: rgba(39, 174, 96, 0.08); /* Verde tenue */
+            text-transform: uppercase;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .datetime-stamp { 
+            text-align: center; 
+            margin-top: 35px; 
+            font-size: 12px; 
+            color: var(--text-light); 
+        }
+
+        .signatures { 
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px; 
+            text-align: center; 
+        }
+
+        .signature-block {
+            width: 45%;
+        }
+
+        .sign-line { 
+            border-bottom: 1px solid var(--text-main); 
+            margin-bottom: 8px; 
+        }
+
+        .sign-title {
+            font-size: 11px;
+            color: var(--text-light);
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        /* Botón de impresión para la vista en pantalla (se oculta al imprimir) */
+        .print-controls {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            z-index: 100;
+        }
+
+        .btn-print {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .btn-print:hover {
+            transform: scale(1.05);
+        }
+
+        /* Optimizaciones Exactas para cuando presione Control+P (Imprimir) */
+        @media print {
+            body { 
+                background: white; 
+                padding: 0; 
+                display: block;
+            }
+            .receipt-container { 
+                box-shadow: none; 
+                max-width: 100%;
+                width: 100%;
+                padding: 20px;
+            }
+            .print-controls { 
+                display: none; 
+            }
+        }
     </style>
 </head>
 <body>
 
-    <div class="receipt-wrapper">
+    <div class="receipt-container">
+        <!-- MARCA DE AGUA NATIVA (AHORA SÍ FUNCIONA) -->
+        <div class="watermark">PAGADO</div>
+
         <div class="header">
-            {% if logo_path %}
-            <div style="margin-bottom: 12px;">
-                <img src="{{ logo_path }}" width="80" alt="Logo">
-            </div>
+            <!-- Si subió su propio logo, lo usamos -->
+            {% if contrato.propiedad.portafolio.logo_empresa %}
+                <img src="{{ contrato.propiedad.portafolio.logo_empresa.url }}" class="logo-img" alt="Logo">
             {% endif %}
+            
             <div class="business-title">
-                {{ propiedad.grupo_o_residencial|default:contrato.propiedad.portafolio.nombre|upper }}
+                {{ contrato.propiedad.portafolio.nombre|upper }}
             </div>
             
             {% if contrato.propiedad.portafolio.eslogan %}
-            <div class="business-info" style="font-style: italic; color: #555;">{{ contrato.propiedad.portafolio.eslogan }}</div>
+            <div class="business-info" style="font-style: italic;">{{ contrato.propiedad.portafolio.eslogan }}</div>
             {% endif %}
             
             {% if contrato.propiedad.portafolio.direccion_fisica %}
-            <div class="business-info">{{ contrato.propiedad.portafolio.direccion_fisica }}</div>
+            <div class="business-info" style="margin-top: 5px;">📍 {{ contrato.propiedad.portafolio.direccion_fisica }}</div>
             {% endif %}
 
             <div class="business-info" style="margin-top: 8px;">
-                <img src="{{ icon_phone }}" width="12" style="margin-bottom: -2px;"> 
-                &nbsp;/&nbsp; 
-                <img src="{{ icon_whatsapp }}" width="12" style="margin-bottom: -2px;"> 
                 {% if contrato.propiedad.portafolio.telefono_contacto %}
-                {{ contrato.propiedad.portafolio.telefono_contacto }}
+                📞  &nbsp; //  &nbsp;💬 {{ contrato.propiedad.portafolio.telefono_contacto }}
                 {% else %}
-                Gestión Inmobiliaria
+                🏢 Gestión Inmobiliaria
                 {% endif %}
             </div>
         </div>
 
         <div class="divider"></div>
 
-        <div class="section-title">CLIENTE</div>
-        <div class="client-name">{{ contrato.inquilino.nombre }}</div>
+        <div class="section-title">Facturado a</div>
+        <div class="client-name">👤 {{ contrato.inquilino.nombre }}</div>
 
-        <table class="data-grid">
-            <tr>
-                <td class="label">PROPIEDAD / REF:</td>
-                <td class="value">{{ propiedad.nombre_o_numero }}</td>
-            </tr>
-            <tr>
-                <td class="label">MES VENCIMIENTO:</td>
-                <td class="value">{{ factura.fecha_vencimiento|date:"F Y"|title }}</td>
-            </tr>
-            <tr>
-                <td class="label">FACTURA BOLETA:</td>
-                <td class="value">{{ factura.id }}</td>
-            </tr>
-            <tr>
-                <td class="label">RECIBO NO.:</td>
-                <td class="value">#000{{ recibo.id }}</td>
-            </tr>
-            <tr>
-                <td class="label">FACTURADO:</td>
-                <td class="value">${{ factura.monto_base|dinero }}</td>
-            </tr>
-            {% if factura.concepto %}
-            <tr>
-                <td class="label">CONCEPTO:</td>
-                <td class="value">{{ factura.concepto }}</td>
-            </tr>
-            {% endif %}
-            {% if recibo.referencia_transaccion %}
-            <tr>
-                <td class="label">REF. PAGO:</td>
-                <td class="value">{{ recibo.referencia_transaccion }}</td>
-            </tr>
-            {% endif %}
-        </table>
+        <div class="data-row">
+            <div class="data-label">Propiedad / Ref:</div>
+            <div class="data-value">{{ propiedad.nombre_o_numero }}</div>
+        </div>
+        <div class="data-row">
+            <div class="data-label">Mes de Cobertura:</div>
+            <div class="data-value">{{ factura.fecha_vencimiento|date:"F Y"|title }}</div>
+        </div>
+        <div class="data-row">
+            <div class="data-label">Recibo N°:</div>
+            <div class="data-value">#{{ recibo.id|stringformat:"04d" }}</div>
+        </div>
+        <div class="data-row">
+            <div class="data-label">Monto Facturado:</div>
+            <div class="data-value">${{ factura.monto_base|dinero }}</div>
+        </div>
+        
+        {% if factura.concepto %}
+        <div class="data-row">
+            <div class="data-label">Concepto:</div>
+            <div class="data-value">{{ factura.concepto }}</div>
+        </div>
+        {% endif %}
+        
+        {% if recibo.referencia_transaccion %}
+        <div class="data-row">
+            <div class="data-label">Ref. de Pago:</div>
+            <div class="data-value" style="font-family: monospace; background:#f0f0f0; padding:2px 6px; border-radius:4px;">{{ recibo.referencia_transaccion }}</div>
+        </div>
+        {% endif %}
         
         <div class="divider"></div>
 
-        <table class="payment-grid">
-            <tr>
-                <td style="text-align: left; color:#555; width:45%; font-size:12px;">MÉTODO: <span style="color:#111;">{{ recibo.get_metodo_pago_display|upper }}</span></td>
-                <td style="text-align: right; font-size:18px;">${{ recibo.monto_pagado|dinero }}</td>
-            </tr>
-        </table>
-
-        <div class="datetime-stamp">
-            {{ recibo.fecha_pago|date:"d/m/Y" }} &nbsp;//&nbsp; {% now "h:i:s A" %}
+        <div class="total-row">
+            <div class="total-label">
+                MÉTODO DE PAGO<br>
+                <div class="total-method">{{ recibo.get_metodo_pago_display|upper }}</div>
+            </div>
+            <div class="total-amount">${{ recibo.monto_pagado|dinero }}</div>
         </div>
 
-        <table class="signatures">
-            <tr>
-                <td>
-                    <span class="sign-line"></span><br>
-                    RECIBE<br>
-                    {{ usuario.username|upper }}
-                </td>
-                <td>
-                    <span class="sign-line"></span><br>
-                    ENTREGA<br>
-                    CLIENTE
-                </td>
-            </tr>
-        </table>
+        <div class="datetime-stamp">
+            Liquidado el {{ recibo.fecha_pago|date:"d/m/Y" }} a las {% now "h:i:s A" %}
+        </div>
+
+        <div class="signatures">
+            <div class="signature-block">
+                <div class="sign-line"></div>
+                <div class="sign-title">RECIBE<br>{{ usuario.username|upper }}</div>
+            </div>
+            <div class="signature-block">
+                <div class="sign-line"></div>
+                <div class="sign-title">FIRMA CLIENTE</div>
+            </div>
+        </div>
     </div>
 
+    <!-- Botón flotante para imprimir manualmente o guardar PDF -->
+    <div class="print-controls">
+        <button class="btn-print" onclick="window.print()">🖨️ Guardar PDF / Imprimir</button>
+    </div>
+
+    <!-- Gatillo de impresión automática al cargar la vista -->
+    <script>
+        window.onload = function() {
+            // Un pequeño delay para que carguen fuentes/imágenes y se vea estético antes del popup
+            setTimeout(function() {
+                window.print();
+            }, 500);
+        };
+    </script>
 </body>
 </html>

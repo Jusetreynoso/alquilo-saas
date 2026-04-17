@@ -245,42 +245,16 @@ def imprimir_recibo(request, recibo_id):
         # Aquí podríamos refinar la validación para asistentes, pero por ahora esto protege
         pass 
 
-    # 2. Preparamos los datos
-    import os
-    from django.conf import settings
-    portafolio = recibo.factura.contrato.propiedad.portafolio
-    
-    if portafolio.logo_empresa and hasattr(portafolio.logo_empresa, 'path') and os.path.exists(portafolio.logo_empresa.path):
-        logo_path = portafolio.logo_empresa.path
-    else:
-        # Usa el building icon pre-descargado si no suben nada
-        logo_path = os.path.join(settings.BASE_DIR, 'gestion_propiedades', 'static', 'gestion_propiedades', 'img', 'building.png')
-        
-    icon_phone = os.path.join(settings.BASE_DIR, 'gestion_propiedades', 'static', 'gestion_propiedades', 'img', 'phone.png')
-    icon_whatsapp = os.path.join(settings.BASE_DIR, 'gestion_propiedades', 'static', 'gestion_propiedades', 'img', 'whatsapp.png')
-
     data = {
         'recibo': recibo,
         'factura': recibo.factura,
         'contrato': recibo.factura.contrato,
         'propiedad': recibo.factura.contrato.propiedad,
         'usuario': request.user,
-        'logo_path': logo_path,
-        'icon_phone': icon_phone,
-        'icon_whatsapp': icon_whatsapp,
     }
 
-    # 3. Generamos el PDF
-    pdf = render_to_pdf('gestion_propiedades/recibo_pdf.html', data)
-
-    # 4. Devolvemos el archivo para descarga o visualización
-    if pdf:
-        response = HttpResponse(pdf, content_type='application/pdf')
-        filename = f"Recibo_{recibo.id}_{recibo.fecha_pago}.pdf"
-        content = f"inline; filename={filename}"
-        response['Content-Disposition'] = content
-        return response
-    return HttpResponse("Error al generar el PDF", status=404)
+    # 3. Vista Smart Print
+    return render(request, 'gestion_propiedades/recibo_pdf.html', data)
 
 # --- Agrega esto AL FINAL del archivo, después de imprimir_recibo ---
 
