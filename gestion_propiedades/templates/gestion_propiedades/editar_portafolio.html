@@ -40,10 +40,17 @@
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label class="form-label text-secondary fw-bold mb-1">Logotipo de la Empresa (Opcional)</label>
-                        {{ form.logo_empresa }}
-                        <div class="form-text">Sube una imagen cuadrada JPG o PNG. Esta se imprimirá en todos los recibos y PDFs.</div>
+                    <div class="row">
+                        <div class="col-md-8 mb-3">
+                            <label class="form-label text-secondary fw-bold mb-1">Logotipo de la Empresa (Opcional)</label>
+                            {{ form.logo_empresa }}
+                            <div class="form-text">Sube una imagen cuadrada JPG o PNG. Esta se imprimirá en todos los recibos y PDFs.</div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label text-secondary fw-bold mb-1"><i class="fa-solid fa-print"></i> Formato de Recibos</label>
+                            {{ form.formato_impresion }}
+                            <div class="form-text">Elige el perfil físico de impresión para tus clientes B2C.</div>
+                        </div>
                     </div>
 
                     <hr class="my-4">

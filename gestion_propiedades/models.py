@@ -16,6 +16,13 @@ class Portafolio(models.Model):
     # Configuración de Fianzas y Adelantos por defecto para este portafolio
     config_meses_deposito = models.IntegerField(default=2, help_text="Cantidad de meses exigidos como depósito por defecto")
     config_meses_adelanto = models.IntegerField(default=0, help_text="Cantidad de meses exigidos por adelantado por defecto")
+    # Configuración de Impresión para Hardware Específico
+    OPCIONES_IMPRESORA = [
+        ('A4', 'Hoja Estándar A4/Carta'),
+        ('POS80', 'Ticketera Térmica 80mm'),
+        ('POS58', 'Ticketera Térmica 58mm'),
+    ]
+    formato_impresion = models.CharField(max_length=10, choices=OPCIONES_IMPRESORA, default='A4', help_text="Formato de recibos B2C")
 
     def __str__(self):
         return self.nombre

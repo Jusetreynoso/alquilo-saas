@@ -204,15 +204,55 @@
                 padding: 0; 
                 display: block;
             }
+            .print-controls { 
+                display: none; 
+            }
+            
+            {% if contrato.propiedad.portafolio.formato_impresion == 'POS58' %}
+            @page {
+                size: 58mm auto;
+                margin: 0;
+            }
+            .receipt-container { 
+                width: 58mm !important;
+                max-width: 58mm !important;
+                padding: 2mm !important;
+                box-shadow: none;
+            }
+            body { font-size: 11px !important; }
+            .business-title { font-size: 14px !important; }
+            .data-row { flex-direction: column; align-items: flex-start; padding: 4px 0; }
+            .data-value { text-align: left; }
+            .total-row { flex-direction: column; align-items: flex-start; padding: 8px; }
+            .total-amount { font-size: 18px !important; }
+            .watermark { font-size: 40px !important; }
+            .signatures { flex-direction: column; align-items: center; gap: 20px; margin-top: 30px; }
+            .signature-block { width: 90%; }
+            {% elif contrato.propiedad.portafolio.formato_impresion == 'POS80' %}
+            @page {
+                size: 80mm auto;
+                margin: 0;
+            }
+            .receipt-container { 
+                width: 80mm !important;
+                max-width: 80mm !important;
+                padding: 4mm !important;
+                box-shadow: none;
+            }
+            body { font-size: 13px !important; }
+            {% else %}
+            /* Modo A4 Estándar (Default) */
+            @page {
+                size: A4 portrait;
+                margin: 1.5cm;
+            }
             .receipt-container { 
                 box-shadow: none; 
                 max-width: 100%;
                 width: 100%;
-                padding: 20px;
+                padding: 0;
             }
-            .print-controls { 
-                display: none; 
-            }
+            {% endif %}
         }
     </style>
 </head>
@@ -223,9 +263,25 @@
         <div class="watermark">PAGADO</div>
 
         <div class="header">
-            <!-- Si subió su propio logo, lo usamos -->
+            <!-- Si subió su propio logo, lo usamos. Si no, usamos un ícono vectorial de edificio limpio. -->
             {% if contrato.propiedad.portafolio.logo_empresa %}
                 <img src="{{ contrato.propiedad.portafolio.logo_empresa.url }}" class="logo-img" alt="Logo">
+            {% else %}
+                <div style="margin-bottom: 12px; color: var(--primary-color);">
+                    <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
+                        <path d="M9 22v-4h6v4"></path>
+                        <path d="M8 6h.01"></path>
+                        <path d="M16 6h.01"></path>
+                        <path d="M12 6h.01"></path>
+                        <path d="M12 10h.01"></path>
+                        <path d="M12 14h.01"></path>
+                        <path d="M16 10h.01"></path>
+                        <path d="M16 14h.01"></path>
+                        <path d="M8 10h.01"></path>
+                        <path d="M8 14h.01"></path>
+                    </svg>
+                </div>
             {% endif %}
             
             <div class="business-title">
@@ -315,15 +371,5 @@
     <div class="print-controls">
         <button class="btn-print" onclick="window.print()">🖨️ Guardar PDF / Imprimir</button>
     </div>
-
-    <!-- Gatillo de impresión automática al cargar la vista -->
-    <script>
-        window.onload = function() {
-            // Un pequeño delay para que carguen fuentes/imágenes y se vea estético antes del popup
-            setTimeout(function() {
-                window.print();
-            }, 500);
-        };
-    </script>
 </body>
 </html>

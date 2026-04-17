@@ -5,13 +5,14 @@ from django.db.models import Q
 class PortafolioForm(forms.ModelForm):
     class Meta:
         model = Portafolio
-        fields = ['nombre', 'eslogan', 'direccion_fisica', 'telefono_contacto', 'logo_empresa', 'config_meses_deposito', 'config_meses_adelanto']
+        fields = ['nombre', 'eslogan', 'direccion_fisica', 'telefono_contacto', 'logo_empresa', 'formato_impresion', 'config_meses_deposito', 'config_meses_adelanto']
         widgets = {
             'nombre': forms.TextInput(attrs={'class': 'form-control', 'required': True}),
             'eslogan': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Tu hogar ideal (Opcional)'}),
             'direccion_fisica': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Ej: Av. Principal #123 (Opcional)'}),
             'telefono_contacto': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Opcional'}),
             'logo_empresa': forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/*'}),
+            'formato_impresion': forms.Select(attrs={'class': 'form-select'}),
             'config_meses_deposito': forms.NumberInput(attrs={'class': 'form-control'}),
             'config_meses_adelanto': forms.NumberInput(attrs={'class': 'form-control'}),
         }
