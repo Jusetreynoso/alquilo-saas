@@ -187,6 +187,8 @@ class Contrato(models.Model):
     fotos_entrega = models.FileField(upload_to='entregas_galeria/', blank=True, null=True)
     foto_entrega_2 = models.FileField(upload_to='entregas_galeria/', blank=True, null=True)
     foto_entrega_3 = models.FileField(upload_to='entregas_galeria/', blank=True, null=True)
+    foto_entrega_4 = models.FileField(upload_to='entregas_galeria/', blank=True, null=True)
+    foto_entrega_5 = models.FileField(upload_to='entregas_galeria/', blank=True, null=True)
     activo = models.BooleanField(default=True)
 
     def __str__(self):

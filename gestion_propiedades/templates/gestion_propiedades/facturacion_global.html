@@ -14,8 +14,8 @@
 
 {% block contenido %}
 <div class="card shadow-sm border-0">
-    <div class="card-header bg-white pt-3 pb-0 border-bottom-0">
-        <ul class="nav nav-tabs" id="billingTabs" role="tablist">
+    <div class="card-header bg-white pt-3 pb-0 border-bottom-0 d-flex justify-content-between align-items-end flex-wrap gap-2">
+        <ul class="nav nav-tabs border-bottom-0" id="billingTabs" role="tablist">
             <li class="nav-item" role="presentation">
                 <button class="nav-link active fw-bold text-secondary" id="facturas-tab" data-bs-toggle="tab" data-bs-target="#facturas" type="button" role="tab" aria-controls="facturas" aria-selected="true">
                     📋 Facturas
@@ -27,9 +27,17 @@
                 </button>
             </li>
         </ul>
+        
+        <form method="GET" class="d-flex mb-2">
+            <input type="text" name="q" value="{{ q_search }}" class="form-control form-control-sm me-2 shadow-sm" placeholder="🔍 Buscar inquilino, local..." style="min-width: 250px;">
+            <button class="btn btn-sm btn-primary shadow-sm" type="submit">Buscar</button>
+            {% if q_search %}
+                <a href="{% url 'lista_facturas_global' %}" class="btn btn-sm btn-outline-secondary ms-1 shadow-sm" title="Limpiar búsqueda">✖</a>
+            {% endif %}
+        </form>
     </div>
     
-    <div class="card-body p-0">
+    <div class="card-body p-0 border-top">
         <div class="tab-content" id="myTabContent">
             
             <!-- TAB FACTURAS -->

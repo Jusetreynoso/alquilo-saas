@@ -35,8 +35,8 @@ class ContratoForm(forms.ModelForm):
         fields = [
             'propiedad', 'inquilino',
             'fecha_inicio', 'fecha_fin', 'monto_renta', 'monto_deposito', 'monto_adelanto', 'dia_de_pago',
-            'dias_gracia', 'porcentaje_mora',
-            'documento_contrato', 'fotos_entrega', 'foto_entrega_2', 'foto_entrega_3'
+            'documento_contrato', 'fotos_entrega', 'foto_entrega_2', 'foto_entrega_3',
+            'foto_entrega_4', 'foto_entrega_5'
         ]
         widgets = {
             'propiedad': forms.Select(attrs={'class': 'form-select'}),
@@ -54,6 +54,8 @@ class ContratoForm(forms.ModelForm):
             'fotos_entrega': forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/*'}),
             'foto_entrega_2': forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/*'}),
             'foto_entrega_3': forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/*'}),
+            'foto_entrega_4': forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/*'}),
+            'foto_entrega_5': forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/*'}),
         }
 
     def __init__(self, user, *args, **kwargs):

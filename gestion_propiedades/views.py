@@ -821,10 +821,24 @@ def lista_facturas_global(request):
     from django.db.models import Case, When, Value, IntegerField
     portafolios = Portafolio.objects.filter(Q(propietario=request.user) | Q(accesos__usuario=request.user)).distinct()
     
+    q_search = request.GET.get('q', '').strip()
+    
+    base_facturas_query = Factura.objects.filter(contrato__propiedad__portafolio__in=portafolios)
+    base_recibos_query = ReciboPago.objects.filter(factura__contrato__propiedad__portafolio__in=portafolios)
+
+    if q_search:
+        base_facturas_query = base_facturas_query.filter(
+            Q(contrato__propiedad__nombre_o_numero__icontains=q_search) | 
+            Q(contrato__inquilino__nombre__icontains=q_search) |
+            Q(concepto__icontains=q_search)
+        )
+        base_recibos_query = base_recibos_query.filter(
+            Q(factura__contrato__propiedad__nombre_o_numero__icontains=q_search) | 
+            Q(factura__contrato__inquilino__nombre__icontains=q_search)
+        )
+
     # Facturas ordenadas priorizando las deudas (ATRASADA, PENDIENTE) y luego orden cronológico
-    facturas = Factura.objects.filter(
-        contrato__propiedad__portafolio__in=portafolios
-    ).select_related(
+    facturas = base_facturas_query.select_related(
         'contrato', 'contrato__propiedad', 'contrato__inquilino'
     ).annotate(
         orden_estado=Case(
@@ -838,14 +852,18 @@ def lista_facturas_global(request):
     ).order_by('orden_estado', '-fecha_vencimiento')
     
     # Últimos recibos (historial de pagos recientes)
-    recibos = ReciboPago.objects.filter(
-        factura__contrato__propiedad__portafolio__in=portafolios
-    ).select_related(
-        'factura', 'factura__contrato__propiedad', 'factura__contrato__inquilino'
-    ).order_by('-fecha_pago')[:50]
+    if q_search:
+        recibos = base_recibos_query.select_related(
+            'factura', 'factura__contrato__propiedad', 'factura__contrato__inquilino'
+        ).order_by('-fecha_pago')
+    else:
+        recibos = base_recibos_query.select_related(
+            'factura', 'factura__contrato__propiedad', 'factura__contrato__inquilino'
+        ).order_by('-fecha_pago')[:50]
     
     context = {
         'titulo_pagina': 'Facturación y Pagos',
+        'q_search': q_search,
         'facturas': facturas,
         'recibos': recibos,
     }
