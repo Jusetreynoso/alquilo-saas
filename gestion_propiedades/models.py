@@ -215,6 +215,15 @@ class Factura(models.Model):
         return self.monto_base + total_moras
 
     @property
+    def monto_pagado_total(self):
+        from django.db.models import Sum
+        return self.recibos.aggregate(total=Sum('monto_pagado'))['total'] or 0
+
+    @property
+    def saldo_pendiente(self):
+        return self.monto_total_con_mora - self.monto_pagado_total
+
+    @property
     def es_prorrateable(self):
         """
         Determina si una factura es elegible para Ajuste manual de Primera Renta.
@@ -253,6 +262,7 @@ class ReciboPago(models.Model):
     metodo_pago = models.CharField(max_length=20, choices=METODO_CHOICES, default='TRANSFERENCIA')
     referencia_transaccion = models.CharField(max_length=100, blank=True, null=True)
     comprobante_imagen = models.FileField(upload_to='comprobantes_pago/', blank=True, null=True)
+    registrado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='recibos_cobrados', help_text="Usuario que estaba logueado y registró este cobro")
     registrado_en = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

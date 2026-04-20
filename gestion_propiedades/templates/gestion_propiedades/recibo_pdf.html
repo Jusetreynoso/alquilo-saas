@@ -3,7 +3,9 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>Recibo de Pago #{{ recibo.id }}</title>
+    <title>
+        {% if factura.saldo_pendiente > 0 %}Comprobante de Abono{% else %}Recibo de Pago{% endif %} #{{ recibo.id }}
+    </title>
     <style>
         :root {
             --primary-color: #1a252f;
@@ -259,8 +261,12 @@
 <body>
 
     <div class="receipt-container">
-        <!-- MARCA DE AGUA NATIVA (AHORA SÍ FUNCIONA) -->
+        <!-- MARCA DE AGUA NATIVA -->
+        {% if factura.saldo_pendiente > 0 %}
+        <div class="watermark" style="font-size: 50px;">ABONO PARCIAL</div>
+        {% else %}
         <div class="watermark">PAGADO</div>
+        {% endif %}
 
         <div class="header">
             <!-- Si subió su propio logo, lo usamos. Si no, usamos un ícono vectorial de edificio limpio. -->
@@ -305,6 +311,12 @@
             </div>
         </div>
 
+        {% if factura.saldo_pendiente > 0 %}
+            <div style="text-align:center; font-size:16px; font-weight:800; color:var(--primary-color); margin:10px 0;">COMPROBANTE DE ABONO</div>
+        {% else %}
+            <div style="text-align:center; font-size:16px; font-weight:800; color:var(--primary-color); margin:10px 0;">RECIBO DE PAGO</div>
+        {% endif %}
+
         <div class="divider"></div>
 
         <div class="section-title">Facturado a</div>
@@ -318,14 +330,25 @@
             <div class="data-label">Mes de Cobertura:</div>
             <div class="data-value">{{ factura.fecha_vencimiento|date:"F Y"|title }}</div>
         </div>
+        <div class="divider"></div>
+        <div class="section-title">Desglose del Pago</div>
+
         <div class="data-row">
-            <div class="data-label">Recibo N°:</div>
-            <div class="data-value">#{{ recibo.id|stringformat:"04d" }}</div>
+            <div class="data-label">Total Cuota del Mes (con moras):</div>
+            <div class="data-value">${{ factura.monto_total_con_mora|dinero }}</div>
         </div>
-        <div class="data-row">
-            <div class="data-label">Monto Facturado:</div>
-            <div class="data-value">${{ factura.monto_base|dinero }}</div>
+        
+        <div class="data-row" style="color:#27ae60;">
+            <div class="data-label">Monto Abonado (Este Recibo):</div>
+            <div class="data-value">${{ recibo.monto_pagado|dinero }}</div>
         </div>
+        
+        {% if factura.saldo_pendiente > 0 %}
+        <div class="data-row" style="color:#e74c3c;">
+            <div class="data-label">Balance Pendiente:</div>
+            <div class="data-value">${{ factura.saldo_pendiente|dinero }}</div>
+        </div>
+        {% endif %}
         
         {% if factura.concepto %}
         <div class="data-row">
@@ -358,7 +381,17 @@
         <div class="signatures">
             <div class="signature-block">
                 <div class="sign-line"></div>
-                <div class="sign-title">RECIBE<br>{{ usuario.username|upper }}</div>
+                <div class="sign-title">RECIBE:<br>
+                    {% if recibo.registrado_por %}
+                        {% if recibo.registrado_por.first_name %}
+                            {{ recibo.registrado_por.get_full_name|upper }}
+                        {% else %}
+                            {{ recibo.registrado_por.username|upper }}
+                        {% endif %}
+                    {% else %}
+                        CAJERÍA GENERAL
+                    {% endif %}
+                </div>
             </div>
             <div class="signature-block">
                 <div class="sign-line"></div>

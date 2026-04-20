@@ -198,11 +198,13 @@ def registrar_pago(request, factura_id):
             fecha_pago=fecha,
             monto_pagado=monto,
             metodo_pago=metodo,
-            referencia_transaccion=referencia
+            referencia_transaccion=referencia,
+            registrado_por=request.user
         )
 
-        # 2. Actualizamos la Factura para que ya no salga como deuda
-        factura.estado = 'PAGADA'
+        # 2. Actualizamos la Factura evaluando si quedó completamente saldada
+        if factura.saldo_pendiente <= 0:
+            factura.estado = 'PAGADA'
         factura.save()
 
         # 3. Lo devolvemos al expediente de la propiedad
