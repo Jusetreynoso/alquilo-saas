@@ -236,16 +236,14 @@
                                 </td>
                                 <td class="py-3 text-end px-4">
                                     {% if factura.estado == 'PENDIENTE' or factura.estado == 'ATRASADA' %}
-                                        <a href="{% url 'registrar_pago' factura.id %}" class="btn btn-sm btn-success shadow-sm">Cobrar</a>
-                                    {% elif factura.estado == 'PAGADA' %}
-                                        {% with recibo=factura.recibos.first %}
-                                            {% if recibo %}
-                                                <a href="{% url 'imprimir_recibo' recibo.id %}" class="btn btn-sm btn-outline-primary" target="_blank">
-                                                    🖨️ Recibo
-                                                </a>
-                                            {% endif %}
-                                        {% endwith %}
+                                        <a href="{% url 'registrar_pago' factura.id %}" class="btn btn-sm btn-success shadow-sm me-1">Cobrar</a>
                                     {% endif %}
+                                    
+                                    {% for recibo in factura.recibos.all %}
+                                        <a href="{% url 'imprimir_recibo' recibo.id %}" class="btn btn-sm btn-outline-primary mb-1 mt-1" target="_blank" title="Imprimir Abono/Pago #${{ recibo.monto_pagado|dinero }}">
+                                            🖨️
+                                        </a>
+                                    {% endfor %}
                                 </td>
                             </tr>
                             {% empty %}
