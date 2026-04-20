@@ -5,7 +5,7 @@ import calendar
 import decimal
 from django.db import transaction
 from django.contrib.auth.models import User
-from gestion_propiedades.models import Propiedad, FacturaSaaS, Contrato, Factura, CargoMora
+from gestion_propiedades.models import Propiedad, FacturaSaaS, Contrato, Factura, CargoMora, AccesoPortafolio
 from gestion_propiedades.utils_correo import (
     enviar_aviso_factura_saas, 
     enviar_aviso_factura_generada, 
@@ -35,13 +35,20 @@ class Command(BaseCommand):
                 
             cant_propiedades = Propiedad.objects.filter(portafolio__propietario=cliente, is_deleted=False).count()
             
-            if cant_propiedades > 0:
-                monto = cant_propiedades * 1.00
+            # Matemáticas Usuarios VIP
+            cant_asistentes = AccesoPortafolio.objects.filter(portafolio__propietario=cliente).count()
+            usuarios_activos = 1 + cant_asistentes
+            max_gratis = 2 + suscripcion.asistentes_gratuitos_extra
+            usuarios_extra = max(0, usuarios_activos - max_gratis)
+            
+            if cant_propiedades > 0 or usuarios_extra > 0:
+                monto = (cant_propiedades * 1.00) + (usuarios_extra * 1.00)
                 nueva_fs = FacturaSaaS.objects.create(
                     usuario=cliente,
                     fecha_vencimiento=hoy + timedelta(days=5),
                     monto_total=monto,
                     propiedades_cobradas=cant_propiedades,
+                    usuarios_cobrados=usuarios_extra,
                     estado='PENDIENTE'
                 )
                 facturas_saas += 1

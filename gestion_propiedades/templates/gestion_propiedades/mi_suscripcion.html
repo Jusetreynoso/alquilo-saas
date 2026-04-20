@@ -94,7 +94,7 @@
                     <tr>
                         <th class="px-4 py-3">Fecha Emisión</th>
                         <th>Fecha Límite</th>
-                        <th class="text-center">Propiedades Medidas</th>
+                        <th class="text-center">Desglose del Costo</th>
                         <th class="text-end">Total a Pagar</th>
                         <th class="text-center">Estado</th>
                     </tr>
@@ -109,7 +109,10 @@
                             <strong>{{ factura.fecha_vencimiento|date:"d M Y" }}</strong>
                         </td>
                         <td class="text-center">
-                            {{ factura.propiedades_cobradas }} unidades
+                            {{ factura.propiedades_cobradas }} unid.
+                            {% if factura.usuarios_cobrados > 0 %}
+                                <br><small class="text-muted">+ {{ factura.usuarios_cobrados }} usu. extra</small>
+                            {% endif %}
                         </td>
                         <td class="text-end fw-bold text-success">
                             ${{ factura.monto_total }}

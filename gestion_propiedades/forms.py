@@ -164,11 +164,12 @@ class NuevoClienteSaaSForm(forms.Form):
 class EditarSuscripcionForm(forms.ModelForm):
     class Meta:
         model = SuscripcionCliente
-        fields = ['plan_saas', 'estado', 'fecha_proximo_pago']
+        fields = ['plan_saas', 'estado', 'fecha_proximo_pago', 'asistentes_gratuitos_extra']
         widgets = {
             'plan_saas': forms.Select(attrs={'class': 'form-select'}),
             'estado': forms.Select(attrs={'class': 'form-select'}),
             'fecha_proximo_pago': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
+            'asistentes_gratuitos_extra': forms.NumberInput(attrs={'class': 'form-control'}),
         }
 
 class PlanSaaSForm(forms.ModelForm):

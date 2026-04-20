@@ -1156,14 +1156,22 @@ def generar_corte_saas(request):
             is_deleted=False
         ).count()
         
-        if cant_propiedades > 0:
-            monto = cant_propiedades * 1.00
+        # Matemáticas Usuarios VIP
+        from .models import AccesoPortafolio
+        cant_asistentes = AccesoPortafolio.objects.filter(portafolio__propietario=cliente).count()
+        usuarios_activos = 1 + cant_asistentes
+        max_gratis = 2 + suscripcion.asistentes_gratuitos_extra
+        usuarios_extra = max(0, usuarios_activos - max_gratis)
+        
+        if cant_propiedades > 0 or usuarios_extra > 0:
+            monto = (cant_propiedades * 1.00) + (usuarios_extra * 1.00)
             fecha_venc = hoy + timedelta(days=5)
             FacturaSaaS.objects.create(
                 usuario=cliente,
                 fecha_vencimiento=fecha_venc,
                 monto_total=monto,
                 propiedades_cobradas=cant_propiedades,
+                usuarios_cobrados=usuarios_extra,
                 estado='PENDIENTE'
             )
             facturas_creadas += 1

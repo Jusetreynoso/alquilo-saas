@@ -31,10 +31,15 @@ def crear_asistente(request):
     except Exception:
         pass
     
-    # Validar que no haya ya un asistente
-    if AccesoPortafolio.objects.filter(portafolio=portafolio, rol='ASISTENTE').exists():
-        messages.error(request, "Solo puedes tener un (1) asistente operativo asociado a tu portafolio.")
-        return redirect('mi_equipo')
+    try:
+        # Lógica VIP
+        limite_gratis = 2 + request.user.suscripcion.asistentes_gratuitos_extra
+        # Contar usuarios (Dueño + asistentes)
+        usuarios_activos = 1 + AccesoPortafolio.objects.filter(portafolio=portafolio).count()
+        excede_limite = usuarios_activos >= limite_gratis
+    except Exception:
+        limite_gratis = 2
+        excede_limite = False
 
     if request.method == 'POST':
         nombre = request.POST.get('nombre')
@@ -66,7 +71,9 @@ def crear_asistente(request):
 
     context = {
         'titulo_pagina': 'Invitar Nuevo Asistente',
-        'portafolio': portafolio
+        'portafolio': portafolio,
+        'excede_limite': excede_limite,
+        'limite_gratis': limite_gratis
     }
     return render(request, 'gestion_propiedades/equipo/crear.html', context)
 

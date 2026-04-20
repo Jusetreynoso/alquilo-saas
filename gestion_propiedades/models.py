@@ -84,6 +84,7 @@ class FacturaSaaS(models.Model):
     fecha_vencimiento = models.DateField()
     monto_total = models.DecimalField(max_digits=10, decimal_places=2)
     propiedades_cobradas = models.IntegerField(default=0, help_text="Cantidad de propiedades facturadas a $1 c/u")
+    usuarios_cobrados = models.IntegerField(default=0, help_text="Cantidad de usuarios extra facturados a $1 c/u")
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='PENDIENTE')
     
     # Podríamos guardar el comprobante de pago del cliente al dueño de Alquilo
@@ -109,6 +110,7 @@ class SuscripcionCliente(models.Model):
     
     estado = models.CharField(max_length=20, choices=ESTADOS, default='TRIAL')
     fecha_proximo_pago = models.DateField(blank=True, null=True)
+    asistentes_gratuitos_extra = models.IntegerField(default=0, help_text="Otorga asientos VIP adicionales al plan base de 2.")
     
     def __str__(self):
         nombre_plan = self.plan_saas.nombre if self.plan_saas else self.plan
