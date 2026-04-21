@@ -185,6 +185,10 @@ class Contrato(models.Model):
     dias_gracia = models.IntegerField(default=5, help_text="Días de gracia tras la fecha de pago antes de aplicar mora")
     porcentaje_mora = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="Ej: 5.00 para cobrar un 5% de mora")
     
+    # --- MIGRACIÓN (OPCIONAL) ---
+    deuda_renta_migrada = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Renta acumulada no pagada antes de Alquilo")
+    deuda_mora_migrada = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Moras no pagadas antes de Alquilo")
+    
     documento_contrato = models.FileField(upload_to='contratos/', blank=True, null=True)
     fotos_entrega = models.FileField(upload_to='entregas_galeria/', blank=True, null=True)
     foto_entrega_2 = models.FileField(upload_to='entregas_galeria/', blank=True, null=True)

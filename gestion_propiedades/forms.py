@@ -35,6 +35,7 @@ class ContratoForm(forms.ModelForm):
         fields = [
             'propiedad', 'inquilino',
             'fecha_inicio', 'fecha_fin', 'monto_renta', 'monto_deposito', 'monto_adelanto', 'dia_de_pago',
+            'dias_gracia', 'porcentaje_mora', 'deuda_renta_migrada', 'deuda_mora_migrada',
             'documento_contrato', 'fotos_entrega', 'foto_entrega_2', 'foto_entrega_3',
             'foto_entrega_4', 'foto_entrega_5'
         ]
@@ -49,6 +50,8 @@ class ContratoForm(forms.ModelForm):
             'dia_de_pago': forms.NumberInput(attrs={'class': 'form-control'}),
             'dias_gracia': forms.NumberInput(attrs={'class': 'form-control'}),
             'porcentaje_mora': forms.NumberInput(attrs={'class': 'form-control'}),
+            'deuda_renta_migrada': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': '0.00'}),
+            'deuda_mora_migrada': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': '0.00'}),
 
             'documento_contrato': forms.FileInput(attrs={'class': 'form-control'}),
             'fotos_entrega': forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/*'}),

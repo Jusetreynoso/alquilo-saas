@@ -28,6 +28,19 @@
                                     <div class="text-danger small">{{ field.errors }}</div>
                                 {% endif %}
                             </div>
+                        {% elif 'migrada' in field.name %}
+                            <div class="col-md-6 mb-4">
+                                <div class="bg-light border border-warning rounded p-3 h-100">
+                                    <label class="form-label text-warning fw-bold d-block border-bottom border-warning pb-1"><i class="fas fa-exclamation-triangle"></i> {{ field.label }}</label>
+                                    {{ field }}
+                                    {% if field.help_text %}
+                                        <div class="form-text small text-muted mt-2">{{ field.help_text }}</div>
+                                    {% endif %}
+                                    {% if field.errors %}
+                                        <div class="text-danger small">{{ field.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
                         {% else %}
                             <div class="col-12 mb-3">
                                 <label class="form-label fw-bold">{{ field.label }}</label>

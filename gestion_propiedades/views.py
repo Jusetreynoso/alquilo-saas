@@ -299,6 +299,30 @@ def crear_contrato(request):
         form = ContratoForm(request.user, request.POST, request.FILES)
         if form.is_valid():
             nuevo_contrato = form.save()
+            
+            # --- INYECCIÓN DE DEUDA MIGRADA ---
+            if nuevo_contrato.deuda_renta_migrada > 0 or nuevo_contrato.deuda_mora_migrada > 0:
+                # Calculamos el estado: si solo trae renta puede estar pendiente, si trae mora obvio está atrasada
+                estado_migracion = 'ATRASADA' if nuevo_contrato.deuda_mora_migrada > 0 else 'PENDIENTE'
+                
+                factura_fantasma = Factura.objects.create(
+                    contrato=nuevo_contrato,
+                    fecha_emision=nuevo_contrato.fecha_inicio,
+                    fecha_vencimiento=nuevo_contrato.fecha_inicio,
+                    monto_base=nuevo_contrato.deuda_renta_migrada,
+                    estado=estado_migracion,
+                    concepto=f'Balance migrado previo a Alquilo'
+                )
+                
+                if nuevo_contrato.deuda_mora_migrada > 0:
+                    CargoMora.objects.create(
+                        factura=factura_fantasma,
+                        monto=nuevo_contrato.deuda_mora_migrada,
+                        mes_aplicado=nuevo_contrato.fecha_inicio.month,
+                        anio_aplicado=nuevo_contrato.fecha_inicio.year
+                    )
+            # --- FIN INYECCIÓN DE DEUDA ---
+
             propiedad = nuevo_contrato.propiedad
             propiedad.estado = 'OCUPADO'
             propiedad.save()
