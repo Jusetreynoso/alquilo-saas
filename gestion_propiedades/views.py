@@ -1819,3 +1819,63 @@ def editar_portafolio(request):
         'titulo_pagina': "Ajustes de Marca Blanca y Portafolio"
     }
     return render(request, 'gestion_propiedades/editar_portafolio.html', context)
+
+
+@login_required(login_url='/login/')
+def saas_detector_fugas(request):
+    """
+    Panel para que el SuperAdmin detecte dinero estancado, trials por vencer y anomalías en la facturación SaaS.
+    """
+    if not request.user.is_superuser:
+        messages.error(request, "Acceso Privado. Solo el Administrador de la Plataforma tiene esta visibilidad.")
+        return redirect('dashboard')
+        
+    from django.db.models import Count, Q
+    from django.utils import timezone
+    from django.contrib.auth.models import User
+    
+    hoy = timezone.now().date()
+    
+    # Todos los usuarios excluyendo superadmins
+    clientes_base = User.objects.filter(is_superuser=False).select_related('suscripcion').annotate(
+        num_props=Count('portafolio__propiedad', filter=Q(portafolio__propiedad__is_deleted=False))
+    )
+    
+    # 1. Anomalías (Fuga de Capital)
+    # Tienen propiedades, pero no tienen fecha de próximo pago / o la tienen vencida misteriosamente en estado ACTIVO.
+    anomalias = []
+    for c in clientes_base:
+        if c.num_props > 0:
+            if not hasattr(c, 'suscripcion') or not c.suscripcion:
+                anomalias.append({'cliente': c, 'motivo': 'Suscripción No Inicializada', 'gravedad': 'ALTA'})
+            elif c.suscripcion.estado == 'ACTIVA':
+                if not c.suscripcion.fecha_proximo_pago:
+                    anomalias.append({'cliente': c, 'motivo': 'Fecha Próximo Pago Vacía (JAMÁS SE LE COBRARÁ)', 'gravedad': 'CRITICA'})
+            elif c.suscripcion.estado == 'SUSPENDIDA':
+                if c.num_props > 0 and c.last_login and c.last_login.date() == hoy:
+                    anomalias.append({'cliente': c, 'motivo': 'Usuario SUSPENDIDO pero inició sesión hoy', 'gravedad': 'MEDIA'})
+                    
+    # 2. Embudo de Trials (Trials Activos ordenados por proximidad a vencer)
+    trials_raw = clientes_base.filter(suscripcion__estado='TRIAL')
+    trials = []
+    for t in trials_raw:
+        if hasattr(t, 'suscripcion') and t.suscripcion.fecha_proximo_pago:
+            dias_restantes = (t.suscripcion.fecha_proximo_pago - hoy).days
+            trials.append({
+                'cliente': t,
+                'dias_restantes': dias_restantes,
+                'fecha_corte': t.suscripcion.fecha_proximo_pago
+            })
+    
+    # Ordenar trials del menor día (más cerca de vencer) al mayor
+    trials = sorted(trials, key=lambda x: x['dias_restantes'])
+    
+    context = {
+        'titulo_pagina': 'Detector de Fugas de Ingresos',
+        'anomalias': anomalias,
+        'trials': trials,
+        'hoy': hoy
+    }
+    
+    return render(request, 'gestion_propiedades/saas_detector_fugas.html', context)
+

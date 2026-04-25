@@ -12,7 +12,8 @@ from gestion_propiedades.utils_correo import (
     enviar_aviso_vencimiento_cercano, 
     enviar_aviso_mora_aplicada,
     enviar_aviso_trial_por_vencer,
-    enviar_aviso_trial_vencido
+    enviar_aviso_trial_vencido,
+    enviar_reporte_diario_admin
 )
 
 class Command(BaseCommand):
@@ -164,4 +165,21 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(f"[OK] Alertas B2C: {recordatorios} recordatorios de vencimiento enviados."))
         self.stdout.write(self.style.SUCCESS(f"[OK] Morosidad B2C: {moras} penalizaciones aplicadas exitosamente."))
+        
+        # Enviar REPORTE EJECUTIVO AL ADMIN
+        try:
+            estadisticas = {
+                'fecha': hoy.strftime("%d/%m/%Y"),
+                'facturas_saas': facturas_saas,
+                'facturas_b2c': facturas_b2c,
+                'recordatorios': recordatorios,
+                'moras': moras,
+                'trials_avisados': trials_avisados,
+                'trials_suspendidos': trials_suspendidos
+            }
+            enviar_reporte_diario_admin(estadisticas)
+            self.stdout.write(self.style.SUCCESS("[OK] Reporte B2B enviado exitosamente al SuperAdmin."))
+        except Exception as e:
+            self.stdout.write(self.style.ERROR(f"[FAIL] Error despachando reporte administrador: {e}"))
+            
         self.stdout.write(self.style.SUCCESS("=== Robot Finalizado de Manera Segura ==="))

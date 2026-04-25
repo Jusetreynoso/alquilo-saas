@@ -1,0 +1,152 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+
+{% block contenido %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <a href="{% url 'saas_master_control' %}" class="btn btn-outline-secondary btn-sm mb-2">← Volver al Master Control</a>
+        <h2 class="h3 fw-bold text-dark mb-0">🕵️ {{ titulo_pagina }}</h2>
+        <p class="text-muted mt-1">Inspección de Capital Estancado y Embudo de Ventas Orgánicas.</p>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <!-- PANEL DE ALARMAS Y ANOMALÍAS -->
+    <div class="col-md-12">
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-header bg-danger text-white py-3 border-0">
+                <h5 class="mb-0 fw-bold">🚨 Alertas Rojas: Consumo No Facturado</h5>
+            </div>
+            <div class="card-body p-0">
+                {% if anomalias %}
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="px-4 py-3">Inversor Sospechoso</th>
+                                <th>Propiedades en Uso</th>
+                                <th>Estado API</th>
+                                <th>Motivo de Bloqueo</th>
+                                <th class="text-center px-4">Intervención</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for anomalia in anomalias %}
+                            <tr>
+                                <td class="px-4 py-3">
+                                    <h6 class="mb-0 fw-bold">{{ anomalia.cliente.get_full_name|default:anomalia.cliente.username }}</h6>
+                                    <small class="text-muted">{{ anomalia.cliente.email }}</small>
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary rounded-pill px-3 fs-6">{{ anomalia.cliente.num_props }} Activas</span>
+                                </td>
+                                <td>
+                                    {% if anomalia.cliente.suscripcion %}
+                                        <span class="badge bg-dark">{{ anomalia.cliente.suscripcion.estado }}</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">Inexistente</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <strong class="text-danger">⚠️ {{ anomalia.motivo }}</strong>
+                                </td>
+                                <td class="text-center px-4">
+                                    <a href="{% url 'editar_suscripcion_saas' anomalia.cliente.id %}" class="btn btn-sm btn-outline-danger fw-bold shadow-sm">
+                                        Forzar Configuración
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="p-5 text-center">
+                    <div class="fs-1 mb-3">✅</div>
+                    <h5 class="fw-bold text-success">Sistema Financiero Saneado</h5>
+                    <p class="text-muted mb-0">No se encontraron clientes parasitando la plataforma, ni fechas corrompidas. El motor funciona perfectamente.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- EMBUDO DE VENTAS (TRIALS) -->
+    <div class="col-md-12">
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-header bg-dark text-white py-3 border-0 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 fw-bold">⏳ Embudo de Ventas (Trial Pipeline)</h5>
+                <span class="badge bg-light text-dark shadow-sm">{{ trials|length }} Prospectos en juego</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="px-4 py-3">Prospecto Activo</th>
+                                <th class="text-center">Propiedades Ingresadas</th>
+                                <th>Fecha de Alta / Expiración</th>
+                                <th>Temporizador Restante</th>
+                                <th class="text-center px-4">Acción de Cierre</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for trial in trials %}
+                            <tr>
+                                <td class="px-4 py-3">
+                                    <h6 class="mb-0 fw-bold">{{ trial.cliente.get_full_name|default:trial.cliente.username }}</h6>
+                                    <small class="text-muted">{{ trial.cliente.email }}</small>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-secondary rounded-pill px-3">{{ trial.cliente.num_props }} Propiedades</span>
+                                </td>
+                                <td class="text-muted">
+                                    Vence el: <strong class="text-dark">{{ trial.fecha_corte|date:"d M Y" }}</strong>
+                                </td>
+                                <td>
+                                    {% if trial.dias_restantes < 0 %}
+                                        <div class="text-danger fw-bold">
+                                            <span class="fs-5">⚠️ Expirado hace {{ trial.dias_restantes|stringformat:"d"|slice:"1:" }} días</span>
+                                            <div class="small">Pendiente de Suspensión por el Robot</div>
+                                        </div>
+                                    {% elif trial.dias_restantes <= 3 %}
+                                        <div class="text-warning fw-bold text-dark">
+                                            <span class="fs-5">🔥 {{ trial.dias_restantes }} Días</span>
+                                            <div class="small">Cierre Crítico (Alerta Enviada)</div>
+                                        </div>
+                                    {% elif trial.dias_restantes <= 10 %}
+                                        <div class="text-info fw-bold">
+                                            <span class="fs-5">⏳ {{ trial.dias_restantes }} Días</span>
+                                            <div class="small">En Nutrición</div>
+                                        </div>
+                                    {% else %}
+                                        <div class="text-success fw-bold">
+                                            <span class="fs-5">🟢 {{ trial.dias_restantes }} Días</span>
+                                            <div class="small">Período de Gracia Temprano</div>
+                                        </div>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center px-4">
+                                    <a href="mailto:{{ trial.cliente.email }}" class="btn btn-sm btn-outline-dark fw-bold mb-1 w-100">Contactar</a>
+                                    <a href="{% url 'editar_suscripcion_saas' trial.cliente.id %}" class="btn btn-sm btn-success fw-bold w-100 shadow-sm">Convertir a ACTIVA</a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-5 text-muted">
+                                    <span class="fs-1 d-block mb-3">👻</span>
+                                    No hay ningún cliente en etapa de "Free Trial" en este momento.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -239,6 +239,35 @@ def enviar_alerta_nuevo_registro_admin(cliente, nombre_portafolio, telefono):
         titulo="Alarma del Sistema SaaS", 
         parrafos_html=cuerpo, 
         link_texto="Escribirle a este Prospecto", 
-        link_url=f"https://wa.me/{telefono.replace('+', '').replace(' ', '')}" if telefono else "#"
+    )
+    return _enviar_correo_seguro(asunto, admin_email, html)
+
+def enviar_reporte_diario_admin(estadisticas):
+    """
+    Reporte B2B enviado al SuperAdministrador resumiendo la ejecución de facturar_saas_diario.py.
+    """
+    admin_email = "jreynoso280988@gmail.com"
+    asunto = f"🤖 Resumen del Motor Financiero - {estadisticas.get('fecha', '')}"
+    
+    cuerpo = f"""
+        <div style="background-color: #2c3e50; padding: 15px; border-radius: 5px; margin: 20px 0; color: white; text-align: center;">
+            <h3 style="margin: 0; color: #f1c40f;">Reporte del Cron Job Completado</h3>
+        </div>
+        <p><strong>Resultados del Barrido Automático de Hoy:</strong></p>
+        <ul style="line-height: 1.8;">
+            <li>💼 <strong>SaaS B2B Emitidas:</strong> {estadisticas.get('facturas_saas', 0)} recibos de dueños.</li>
+            <li>🏠 <strong>Rentas B2C Emitidas:</strong> {estadisticas.get('facturas_b2c', 0)} facturas de inquilinos.</li>
+            <li>⚖️ <strong>Moras Aplicadas:</strong> {estadisticas.get('moras', 0)} recargos morosos inyectados.</li>
+            <li>🔔 <strong>Avisos Envío:</strong> {estadisticas.get('recordatorios', 0)} preventivos a inquilinos.</li>
+            <li>⏳ <strong>Trials Avisados:</strong> {estadisticas.get('trials_avisados', 0)} dueños notificados.</li>
+            <li>🚫 <strong>Trials Suspendidos:</strong> {estadisticas.get('trials_suspendidos', 0)} cuentas bloqueadas por vencimiento.</li>
+        </ul>
+        <p>El sistema automático ha operado con normalidad y los correos han sido distribuidos exitosamente a los destinatarios.</p>
+    """
+    html = _generar_plantilla_html(
+        titulo="Reporte Ejecutivo B2B", 
+        parrafos_html=cuerpo, 
+        link_texto="Ir al Centro de Mando", 
+        link_url=f"{BASE_URL}/master-control/"
     )
     return _enviar_correo_seguro(asunto, admin_email, html)
