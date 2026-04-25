@@ -8,6 +8,24 @@
     <a href="{% url 'saas_master_control' %}" class="btn btn-outline-secondary btn-sm">← Volver al Master Control</a>
 </div>
 
+<div class="alert alert-info border-0 shadow-sm d-flex mb-4">
+    <div class="me-3 fs-3">💡</div>
+    <div>
+        <h6 class="fw-bold mb-1">¿Cómo se calcula la Facturación SaaS?</h6>
+        <p class="mb-2 small">
+            Todos los planes en la plataforma operan bajo un modelo híbrido <strong>(Base + Pay-As-You-Grow)</strong>. Al momento del corte, el robot de cobros aplicará automáticamente esta fórmula:
+        </p>
+        <code class="bg-white px-3 py-2 rounded text-dark border d-inline-block fw-bold mb-2">
+            Factura = Tarifa Base del Plan + ($1.00 × Propiedad Activa) + ($1.00 × Asistente Extra)
+        </code>
+        <p class="mb-0 small">
+            <strong>Ejemplo de Modelos:</strong>
+            <br>• Si quieres un modelo <em>100% Por Uso</em>: Crea un plan con Tarifa Base <strong>$0.00</strong>.
+            <br>• Si quieres cobrar una membresía de plataforma, asigale la tarifa base deseada y el sistema seguirá sumando los volúmenes de uso.
+        </p>
+    </div>
+</div>
+
 <div class="row g-4">
     <!-- Lista de Planes Actuales -->
     <div class="col-md-8">

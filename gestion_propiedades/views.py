@@ -1187,22 +1187,23 @@ def generar_corte_saas(request):
         max_gratis = 2 + suscripcion.asistentes_gratuitos_extra
         usuarios_extra = max(0, usuarios_activos - max_gratis)
         
-        if cant_propiedades > 0 or usuarios_extra > 0:
-            monto = (cant_propiedades * 1.00) + (usuarios_extra * 1.00)
-            fecha_venc = hoy + timedelta(days=5)
-            FacturaSaaS.objects.create(
-                usuario=cliente,
-                fecha_vencimiento=fecha_venc,
-                monto_total=monto,
-                propiedades_cobradas=cant_propiedades,
-                usuarios_cobrados=usuarios_extra,
-                estado='PENDIENTE'
-            )
-            facturas_creadas += 1
-            
-            # Reprogramar próximo cobro (1 mes)
-            suscripcion.fecha_proximo_pago = hoy + timedelta(days=30)
-            suscripcion.save()
+        monto_base = suscripcion.plan_saas.precio_mensual if suscripcion.plan_saas else decimal.Decimal('0.00')
+        monto = float(monto_base) + (cant_propiedades * 1.00) + (usuarios_extra * 1.00)
+        
+        fecha_venc = hoy + timedelta(days=5)
+        FacturaSaaS.objects.create(
+            usuario=cliente,
+            fecha_vencimiento=fecha_venc,
+            monto_total=monto,
+            propiedades_cobradas=cant_propiedades,
+            usuarios_cobrados=usuarios_extra,
+            estado='PENDIENTE'
+        )
+        facturas_creadas += 1
+        
+        # Reprogramar próximo cobro (1 mes)
+        suscripcion.fecha_proximo_pago = hoy + timedelta(days=30)
+        suscripcion.save()
             
     if facturas_creadas > 0:
         messages.success(request, f"Éxito: Se generaron {facturas_creadas} facturas para clientes en fecha de corte.")
@@ -1299,7 +1300,6 @@ def eliminar_propiedad(request, propiedad_id):
     return redirect('detalle_propiedad', propiedad_id=propiedad.id)
 
 @login_required(login_url='/login/')
-@propietario_requerido
 def saas_facturacion(request):
     """
     Panel para que el Superadmin vea TODAS las Facturas SaaS emitidas a los clientes y el dinero recaudado.

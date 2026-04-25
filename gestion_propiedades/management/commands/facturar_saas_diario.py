@@ -41,22 +41,26 @@ class Command(BaseCommand):
             max_gratis = 2 + suscripcion.asistentes_gratuitos_extra
             usuarios_extra = max(0, usuarios_activos - max_gratis)
             
-            if cant_propiedades > 0 or usuarios_extra > 0:
-                monto = (cant_propiedades * 1.00) + (usuarios_extra * 1.00)
-                nueva_fs = FacturaSaaS.objects.create(
-                    usuario=cliente,
-                    fecha_vencimiento=hoy + timedelta(days=5),
-                    monto_total=monto,
-                    propiedades_cobradas=cant_propiedades,
-                    usuarios_cobrados=usuarios_extra,
-                    estado='PENDIENTE'
-                )
-                facturas_saas += 1
-                suscripcion.fecha_proximo_pago = hoy + timedelta(days=30)
-                suscripcion.save()
-                
-                # Enviar recibo B2B
-                enviar_aviso_factura_saas(nueva_fs)
+            # El monto base vendrá del plan, o 0 si no tiene uno asignado
+            monto_base = suscripcion.plan_saas.precio_mensual if suscripcion.plan_saas else decimal.Decimal('0.00')
+            
+            # Se cobra el monto base + las propiedades ($1/cu) y los usuarios extra ($1/cu)
+            monto = float(monto_base) + (cant_propiedades * 1.00) + (usuarios_extra * 1.00)
+            
+            nueva_fs = FacturaSaaS.objects.create(
+                usuario=cliente,
+                fecha_vencimiento=hoy + timedelta(days=5),
+                monto_total=monto,
+                propiedades_cobradas=cant_propiedades,
+                usuarios_cobrados=usuarios_extra,
+                estado='PENDIENTE'
+            )
+            facturas_saas += 1
+            suscripcion.fecha_proximo_pago = hoy + timedelta(days=30)
+            suscripcion.save()
+            
+            # Enviar recibo B2B
+            enviar_aviso_factura_saas(nueva_fs)
                 
         self.stdout.write(self.style.SUCCESS(f"[OK] SaaS (B2B): {facturas_saas} facturas a dueños emitidas."))
 
