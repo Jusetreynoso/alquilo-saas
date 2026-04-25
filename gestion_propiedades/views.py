@@ -1837,9 +1837,9 @@ def saas_detector_fugas(request):
     hoy = timezone.now().date()
     
     # Todos los usuarios excluyendo superadmins
-    clientes_base = User.objects.filter(is_superuser=False).select_related('suscripcion').annotate(
-        num_props=Count('portafolio__propiedad', filter=Q(portafolio__propiedad__is_deleted=False))
-    )
+    clientes_base = User.objects.filter(is_superuser=False).select_related('suscripcion')
+    for c in clientes_base:
+        c.num_props = Propiedad.objects.filter(portafolio__propietario=c, is_deleted=False).count()
     
     # 1. Anomalías (Fuga de Capital)
     # Tienen propiedades, pero no tienen fecha de próximo pago / o la tienen vencida misteriosamente en estado ACTIVO.
