@@ -215,6 +215,7 @@
                     <li class="nav-item mt-4 pt-4 border-top border-secondary">
                     {% if user.is_superuser %}
                         <a class="nav-link text-warning fw-bold" href="{% url 'saas_master_control' %}">👑 Master Control SaaS</a>
+                        <a class="nav-link {% if 'plantillas' in request.resolver_match.url_name %}text-white fw-bold{% else %}text-white-50{% endif %}" href="{% url 'lista_plantillas' %}">📄 Plantillas del Sistema</a>
                     {% else %}
                         {% if request.user.portafolios.all %}
                         <a class="nav-link {% if request.resolver_match.url_name == 'editar_portafolio' %}text-white fw-bold{% else %}text-white-50{% endif %}" href="{% url 'editar_portafolio' %}">⚙️ Ajustes (Marca Blanca)</a>

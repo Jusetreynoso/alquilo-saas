@@ -25,26 +25,27 @@ def lista_plantillas(request):
 
 @login_required
 def editar_plantilla(request, plantilla_id=None):
-    if not request.user.portafolios.exists():
+    is_superuser = request.user.is_superuser
+    if not request.user.portafolios.exists() and not is_superuser:
         messages.error(request, "Solo los dueños de portafolio pueden editar plantillas.")
         return redirect('dashboard')
         
-    portafolio = request.user.portafolios.first()
+    portafolio = request.user.portafolios.first() if request.user.portafolios.exists() else None
     
     if plantilla_id:
         plantilla = get_object_or_404(PlantillaContrato, id=plantilla_id)
-        # Si la plantilla es predeterminada, no la pueden editar directamente.
-        # Debemos clonarla.
         if plantilla.es_predeterminada:
-            plantilla.pk = None
-            plantilla.es_predeterminada = False
-            plantilla.portafolio = portafolio
-            plantilla.titulo = plantilla.titulo + " (Copia)"
-            plantilla.save()
-            messages.success(request, "Se ha creado una copia de la plantilla del sistema para que puedas editarla.")
-            return redirect('editar_plantilla', plantilla_id=plantilla.id)
-            
-        if plantilla.portafolio != portafolio:
+            if not is_superuser:
+                # Usuario normal: clonar
+                plantilla.pk = None
+                plantilla.es_predeterminada = False
+                plantilla.portafolio = portafolio
+                plantilla.titulo = plantilla.titulo + " (Copia)"
+                plantilla.save()
+                messages.success(request, "Se ha creado una copia de la plantilla del sistema para que puedas editarla.")
+                return redirect('editar_plantilla', plantilla_id=plantilla.id)
+            # Superuser la edita directamente
+        elif plantilla.portafolio != portafolio and not is_superuser:
             messages.error(request, "No tienes permiso para editar esta plantilla.")
             return redirect('lista_plantillas')
     else:
@@ -55,7 +56,11 @@ def editar_plantilla(request, plantilla_id=None):
         contenido = request.POST.get('contenido')
         
         if not plantilla:
-            plantilla = PlantillaContrato(portafolio=portafolio)
+            plantilla = PlantillaContrato()
+            if is_superuser and request.GET.get('sistema') == '1':
+                plantilla.es_predeterminada = True
+            else:
+                plantilla.portafolio = portafolio
             
         plantilla.titulo = titulo
         plantilla.contenido = contenido
@@ -69,7 +74,7 @@ def editar_plantilla(request, plantilla_id=None):
 @login_required
 def eliminar_plantilla(request, plantilla_id):
     plantilla = get_object_or_404(PlantillaContrato, id=plantilla_id)
-    if plantilla.portafolio == request.user.portafolios.first() and not plantilla.es_predeterminada:
+    if (plantilla.portafolio == request.user.portafolios.first() and not plantilla.es_predeterminada) or request.user.is_superuser:
         plantilla.delete()
         messages.success(request, "Plantilla eliminada.")
     else:

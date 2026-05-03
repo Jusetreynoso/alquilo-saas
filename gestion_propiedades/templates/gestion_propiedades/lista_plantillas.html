@@ -8,6 +8,9 @@
         <p class="text-muted">Aquí puedes gestionar tus modelos de contratos estandarizados para que crear un contrato para un inquilino sea rápido y sin errores.</p>
     </div>
     <div class="col-md-4 text-md-end">
+        {% if request.user.is_superuser %}
+        <a href="{% url 'crear_plantilla' %}?sistema=1" class="btn btn-warning"><i class="fa-solid fa-plus me-1"></i> Nueva Plantilla (Sistema)</a>
+        {% endif %}
         <a href="{% url 'crear_plantilla' %}" class="btn btn-primary"><i class="fa-solid fa-plus me-1"></i> Nueva Plantilla</a>
     </div>
 </div>
@@ -27,12 +30,43 @@
                         </div>
                         <p class="text-muted small">Plantilla predeterminada de Alquilo. Ideal para alquileres residenciales estándar. Contiene cláusulas de protección para el propietario y el fiador solidario.</p>
                         
+                        {% if request.user.is_superuser %}
+                        <a href="{% url 'editar_plantilla' p_sistema.id %}" class="btn btn-sm btn-outline-warning mt-2">
+                            <i class="fa-solid fa-pen me-1"></i> Editar Plantilla Maestra
+                        </a>
+                        <button type="button" class="btn btn-sm btn-outline-danger mt-2 ms-1" data-bs-toggle="modal" data-bs-target="#modalEliminar{{ p_sistema.id }}">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                        {% else %}
                         <a href="{% url 'editar_plantilla' p_sistema.id %}" class="btn btn-sm btn-outline-primary mt-2">
                             <i class="fa-solid fa-copy me-1"></i> Usar esta plantilla
                         </a>
+                        {% endif %}
                     </div>
                 </div>
             </div>
+            
+            {% if request.user.is_superuser %}
+            <!-- Modal Eliminar Sistema -->
+            <div class="modal fade" id="modalEliminar{{ p_sistema.id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header bg-danger text-white">
+                            <h5 class="modal-title">Eliminar Plantilla Maestra</h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            ¿Estás seguro de que deseas eliminar la plantilla maestra <strong>{{ p_sistema.titulo }}</strong>?
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <a href="{% url 'eliminar_plantilla' p_sistema.id %}" class="btn btn-danger">Sí, eliminar</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
             {% empty %}
             <div class="col-12 text-muted">No hay plantillas de sistema disponibles.</div>
             {% endfor %}
