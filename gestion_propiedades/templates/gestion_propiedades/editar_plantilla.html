@@ -31,6 +31,9 @@
                     </div>
                 </div>
                 <div class="card-footer bg-white text-end py-3">
+                    <button type="button" class="btn btn-outline-dark me-2" id="btn-preview">
+                        <i class="fa-solid fa-eye me-1"></i> Vista Previa
+                    </button>
                     <a href="{% url 'lista_plantillas' %}" class="btn btn-outline-secondary me-2">Cancelar</a>
                     <button type="submit" class="btn btn-success px-4" id="btn-guardar">
                         <i class="fa-solid fa-save me-1"></i> Guardar Plantilla
@@ -127,7 +130,79 @@
                     }, 1000);
                 });
             });
-        });
+        // Lógica para Vista Previa
+        const btnPreview = document.getElementById('btn-preview');
+        if(btnPreview) {
+            btnPreview.addEventListener('click', function() {
+                let htmlContent = quill.root.innerHTML;
+                
+                // Mapeo falso para la vista previa
+                const fakeData = {
+                    '{{PROPIETARIO_NOMBRE}}': 'JUAN PÉREZ (PROPIETARIO)',
+                    '{{PROPIETARIO_CEDULA}}': '001-0000000-1',
+                    '{{PROPIETARIO_DIRECCION}}': 'AV. WINSTON CHURCHILL #10, DISTRITO NACIONAL',
+                    '{{INQUILINO_NOMBRE}}': 'MARÍA RODRÍGUEZ (INQUILINO)',
+                    '{{INQUILINO_CEDULA}}': '001-9999999-9',
+                    '{{INQUILINO_DIRECCION}}': 'CALLE EL SOL #5, SANTIAGO',
+                    '{{INQUILINO_TELEFONO}}': '809-555-5555',
+                    '{{PROPIEDAD_DIRECCION}}': 'RESIDENCIAL LAS PALMAS, APTO 3B',
+                    '{{MONTO_RENTA}}': 'RD$ 25,000.00',
+                    '{{MONTO_DEPOSITO}}': 'RD$ 50,000.00',
+                    '{{FECHA_INICIO}}': '01/10/2026',
+                    '{{FECHA_FIN}}': '01/10/2027',
+                    '{{DIA_PAGO}}': '5',
+                    '{{DIA_ACTUAL}}': '1',
+                    '{{MES_ACTUAL}}': 'Octubre',
+                    '{{ANIO_ACTUAL}}': '2026',
+                    '{{FIADOR_NOMBRE}}': 'CARLOS GÓMEZ (FIADOR)',
+                    '{{FIADOR_CEDULA}}': '001-1111111-1',
+                    '{{FIADOR_DIRECCION}}': 'AV. 27 DE FEBRERO #100'
+                };
+
+                for(const [tag, val] of Object.entries(fakeData)) {
+                    htmlContent = htmlContent.split(tag).join(val);
+                }
+
+                const win = window.open('', '_blank');
+                win.document.write(`
+                    <!DOCTYPE html>
+                    <html lang="es">
+                    <head>
+                        <title>Vista Previa de Contrato</title>
+                        <link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+                        <style>
+                            body { background-color: #f3f4f6; padding: 20px; font-family: 'Merriweather', serif; color: #111827; }
+                            .hoja { background: white; max-width: 850px; margin: 0 auto; padding: 60px 70px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); font-size: 11pt; text-align: justify; line-height: 1.6; }
+                            h1, h2, h3 { font-family: 'Roboto', sans-serif; font-weight: 700; text-align: center; margin-top: 30px; margin-bottom: 20px; }
+                            h1 { font-size: 16pt; text-transform: uppercase; }
+                            strong, b { font-family: 'Roboto', sans-serif; font-weight: 700; }
+                            .alert-preview { background-color: #f1c40f; color: #000; padding: 15px; text-align: center; font-family: 'Roboto', sans-serif; font-weight: bold; margin-bottom: 20px; border-radius: 5px; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="hoja">
+                            <div class="alert-preview">👀 MODO VISTA PREVIA (Con datos falsos)</div>
+                            ${htmlContent}
+                            
+                            <div style="margin-top: 80px; font-family: 'Roboto', sans-serif; text-align: center;">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <div style="width: 45%;">
+                                        <div style="border-top: 1px solid #000; padding-top: 5px;"></div>
+                                        <p style="font-weight: bold; margin-bottom: 0;">PROPIETARIO</p>
+                                    </div>
+                                    <div style="width: 45%;">
+                                        <div style="border-top: 1px solid #000; padding-top: 5px;"></div>
+                                        <p style="font-weight: bold; margin-bottom: 0;">INQUILINO</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </body>
+                    </html>
+                `);
+                win.document.close();
+            });
+        }
     });
 </script>
 {% endblock %}
