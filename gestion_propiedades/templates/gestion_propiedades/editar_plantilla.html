@@ -1,0 +1,133 @@
+{% extends 'gestion_propiedades/base.html' %}
+{% block titulo %}{% if plantilla and not plantilla.es_predeterminada %}Editar Plantilla{% else %}Nueva Plantilla{% endif %}{% endblock %}
+{% block encabezado %}Editor de Contrato Legal{% endblock %}
+
+{% block contenido %}
+<div class="row">
+    <div class="col-md-9">
+        <form method="post" id="form-plantilla">
+            {% csrf_token %}
+            
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="titulo" class="form-label fw-bold">Nombre de la Plantilla</label>
+                        <input type="text" class="form-control form-control-lg" id="titulo" name="titulo" 
+                               value="{% if plantilla %}{{ plantilla.titulo }}{% endif %}" 
+                               placeholder="Ej: Contrato Residencial Estándar" required>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label fw-bold">Cuerpo del Contrato</label>
+                        <p class="text-muted small mb-2">Usa las etiquetas dinámicas de la derecha. El sistema las reemplazará automáticamente por los datos reales al crear un contrato.</p>
+                        
+                        <!-- Contenedor del Editor -->
+                        <div id="editor-container" style="height: 600px; background: white;">
+                            {% if plantilla %}{{ plantilla.contenido|safe }}{% endif %}
+                        </div>
+                        
+                        <!-- Campo oculto para enviar el HTML al backend -->
+                        <input type="hidden" name="contenido" id="contenido-hidden">
+                    </div>
+                </div>
+                <div class="card-footer bg-white text-end py-3">
+                    <a href="{% url 'lista_plantillas' %}" class="btn btn-outline-secondary me-2">Cancelar</a>
+                    <button type="submit" class="btn btn-success px-4" id="btn-guardar">
+                        <i class="fa-solid fa-save me-1"></i> Guardar Plantilla
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card shadow-sm border-0 sticky-top" style="top: 80px;">
+            <div class="card-header bg-dark text-white">
+                <h6 class="m-0"><i class="fa-solid fa-tags me-1"></i> Etiquetas Dinámicas</h6>
+            </div>
+            <div class="card-body p-2" style="max-height: 70vh; overflow-y: auto;">
+                <p class="small text-muted mb-2 px-2">Haz clic para copiar una etiqueta y pégala en el editor.</p>
+                
+                <div class="list-group list-group-flush small">
+                    <div class="fw-bold px-2 pt-2 text-primary" style="font-size: 0.75rem;">PROPIETARIO</div>
+                    <button type="button" class="list-group-item list-group-item-action py-1 tag-btn" data-tag="{{PROPIETARIO_NOMBRE}}">{{PROPIETARIO_NOMBRE}}</button>
+                    <button type="button" class="list-group-item list-group-item-action py-1 tag-btn" data-tag="{{PROPIETARIO_CEDULA}}">{{PROPIETARIO_CEDULA}}</button>
+                    <button type="button" class="list-group-item list-group-item-action py-1 tag-btn" data-tag="{{PROPIETARIO_DIRECCION}}">{{PROPIETARIO_DIRECCION}}</button>
+
+                    <div class="fw-bold px-2 pt-3 text-success" style="font-size: 0.75rem;">INQUILINO</div>
+                    <button type="button" class="list-group-item list-group-item-action py-1 tag-btn" data-tag="{{INQUILINO_NOMBRE}}">{{INQUILINO_NOMBRE}}</button>
+                    <button type="button" class="list-group-item list-group-item-action py-1 tag-btn" data-tag="{{INQUILINO_CEDULA}}">{{INQUILINO_CEDULA}}</button>
+                    <button type="button" class="list-group-item list-group-item-action py-1 tag-btn" data-tag="{{INQUILINO_DIRECCION}}">{{INQUILINO_DIRECCION}}</button>
+                    <button type="button" class="list-group-item list-group-item-action py-1 tag-btn" data-tag="{{INQUILINO_TELEFONO}}">{{INQUILINO_TELEFONO}}</button>
+
+                    <div class="fw-bold px-2 pt-3 text-warning text-darken" style="font-size: 0.75rem;">FIADOR</div>
+                    <button type="button" class="list-group-item list-group-item-action py-1 tag-btn" data-tag="{{FIADOR_NOMBRE}}">{{FIADOR_NOMBRE}}</button>
+                    <button type="button" class="list-group-item list-group-item-action py-1 tag-btn" data-tag="{{FIADOR_CEDULA}}">{{FIADOR_CEDULA}}</button>
+                    <button type="button" class="list-group-item list-group-item-action py-1 tag-btn" data-tag="{{FIADOR_DIRECCION}}">{{FIADOR_DIRECCION}}</button>
+
+                    <div class="fw-bold px-2 pt-3 text-danger" style="font-size: 0.75rem;">CONTRATO & PROPIEDAD</div>
+                    <button type="button" class="list-group-item list-group-item-action py-1 tag-btn" data-tag="{{PROPIEDAD_DIRECCION}}">{{PROPIEDAD_DIRECCION}}</button>
+                    <button type="button" class="list-group-item list-group-item-action py-1 tag-btn" data-tag="{{MONTO_RENTA}}">{{MONTO_RENTA}}</button>
+                    <button type="button" class="list-group-item list-group-item-action py-1 tag-btn" data-tag="{{MONTO_DEPOSITO}}">{{MONTO_DEPOSITO}}</button>
+                    <button type="button" class="list-group-item list-group-item-action py-1 tag-btn" data-tag="{{FECHA_INICIO}}">{{FECHA_INICIO}}</button>
+                    <button type="button" class="list-group-item list-group-item-action py-1 tag-btn" data-tag="{{FECHA_FIN}}">{{FECHA_FIN}}</button>
+                    <button type="button" class="list-group-item list-group-item-action py-1 tag-btn" data-tag="{{DIA_PAGO}}">{{DIA_PAGO}}</button>
+                    
+                    <div class="fw-bold px-2 pt-3 text-secondary" style="font-size: 0.75rem;">SISTEMA / FECHAS</div>
+                    <button type="button" class="list-group-item list-group-item-action py-1 tag-btn" data-tag="{{DIA_ACTUAL}}">{{DIA_ACTUAL}}</button>
+                    <button type="button" class="list-group-item list-group-item-action py-1 tag-btn" data-tag="{{MES_ACTUAL}}">{{MES_ACTUAL}}</button>
+                    <button type="button" class="list-group-item list-group-item-action py-1 tag-btn" data-tag="{{ANIO_ACTUAL}}">{{ANIO_ACTUAL}}</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quill.js Text Editor -->
+<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+<script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Inicializar Quill Editor
+        var quill = new Quill('#editor-container', {
+            theme: 'snow',
+            placeholder: 'Redacta tu contrato aquí...',
+            modules: {
+                toolbar: [
+                    [{ 'header': [1, 2, 3, false] }],
+                    ['bold', 'italic', 'underline'],
+                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                    [{ 'align': [] }],
+                    ['clean']
+                ]
+            }
+        });
+
+        // Al enviar el formulario, pasar el contenido de Quill al input hidden
+        var form = document.getElementById('form-plantilla');
+        form.onsubmit = function() {
+            var contenido = document.querySelector('#contenido-hidden');
+            // Obtener el HTML interno del editor
+            contenido.value = quill.root.innerHTML;
+        };
+
+        // Lógica para copiar etiquetas
+        const tagBtns = document.querySelectorAll('.tag-btn');
+        tagBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const tag = this.getAttribute('data-tag');
+                navigator.clipboard.writeText(tag).then(() => {
+                    const originalText = this.innerText;
+                    this.innerText = "¡Copiado!";
+                    this.classList.add('bg-success', 'text-white');
+                    setTimeout(() => {
+                        this.innerText = originalText;
+                        this.classList.remove('bg-success', 'text-white');
+                    }, 1000);
+                });
+            });
+        });
+    });
+</script>
+{% endblock %}

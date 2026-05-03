@@ -218,6 +218,7 @@
                     {% else %}
                         {% if request.user.portafolios.all %}
                         <a class="nav-link {% if request.resolver_match.url_name == 'editar_portafolio' %}text-white fw-bold{% else %}text-white-50{% endif %}" href="{% url 'editar_portafolio' %}">⚙️ Ajustes (Marca Blanca)</a>
+                        <a class="nav-link {% if 'plantillas' in request.resolver_match.url_name %}text-white fw-bold{% else %}text-white-50{% endif %}" href="{% url 'lista_plantillas' %}">📄 Plantillas Contratos</a>
                         <a class="nav-link text-success fw-bold" href="{% url 'mi_equipo' %}">👥 Mi Equipo (Operacional)</a>
                         <a class="nav-link text-info fw-bold" href="{% url 'mi_suscripcion' %}">💳 Mi Facturación B2B</a>
                         {% else %}

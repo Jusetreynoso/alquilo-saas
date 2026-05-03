@@ -3,6 +3,7 @@ from django.contrib.auth import views as auth_views
 from . import views
 from . import views_portal
 from . import views_equipo
+from . import views_plantillas
 
 urlpatterns = [
     # Autenticación B2B SaaS
@@ -98,4 +99,10 @@ urlpatterns = [
     path('mi-equipo/invitar/', views_equipo.crear_asistente, name='crear_asistente'),
     path('mi-equipo/password/<int:usuario_id>/', views_equipo.cambiar_password, name='cambiar_password'),
     path('mi-equipo/revocar/<int:acceso_id>/', views_equipo.eliminar_asistente, name='eliminar_asistente'),
+    
+    # --- PLANTILLAS DE CONTRATO ---
+    path('plantillas/', views_plantillas.lista_plantillas, name='lista_plantillas'),
+    path('plantillas/crear/', views_plantillas.editar_plantilla, name='crear_plantilla'),
+    path('plantillas/editar/<int:plantilla_id>/', views_plantillas.editar_plantilla, name='editar_plantilla'),
+    path('plantillas/eliminar/<int:plantilla_id>/', views_plantillas.eliminar_plantilla, name='eliminar_plantilla'),
 ]
