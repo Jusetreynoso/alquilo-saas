@@ -166,6 +166,18 @@ class Inquilino(models.Model):
     def __str__(self):
         return self.nombre
 
+class PlantillaContrato(models.Model):
+    portafolio = models.ForeignKey(Portafolio, on_delete=models.CASCADE, related_name='plantillas_contrato', null=True, blank=True)
+    titulo = models.CharField(max_length=150, help_text="Ej: Contrato Estándar, Contrato Comercial")
+    contenido = models.TextField(help_text="Contenido HTML del contrato con variables dinámicas")
+    es_predeterminada = models.BooleanField(default=False, help_text="Indica si es la plantilla del sistema")
+    creada_en = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        if self.es_predeterminada:
+            return f"{self.titulo} (Sistema)"
+        return f"{self.titulo} - {self.portafolio.nombre}"
+
 class Contrato(models.Model):
     propiedad = models.ForeignKey(Propiedad, on_delete=models.CASCADE, related_name='contratos')
     inquilino = models.ForeignKey(Inquilino, on_delete=models.PROTECT, related_name='contratos')
@@ -188,6 +200,10 @@ class Contrato(models.Model):
     # --- MIGRACIÓN (OPCIONAL) ---
     deuda_renta_migrada = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Renta acumulada no pagada antes de Alquilo")
     deuda_mora_migrada = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Moras no pagadas antes de Alquilo")
+    
+    # --- PLANTILLAS DINÁMICAS ---
+    plantilla = models.ForeignKey(PlantillaContrato, on_delete=models.SET_NULL, null=True, blank=True, help_text="Plantilla base utilizada")
+    texto_legal_generado = models.TextField(blank=True, null=True, help_text="Copia exacta del texto generado al momento de crear el contrato")
     
     documento_contrato = models.FileField(upload_to='contratos/', blank=True, null=True)
     fotos_entrega = models.FileField(upload_to='entregas_galeria/', blank=True, null=True)
