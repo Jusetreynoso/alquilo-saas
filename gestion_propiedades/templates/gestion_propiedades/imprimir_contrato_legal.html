@@ -89,6 +89,11 @@
             transform: scale(1.05);
         }
 
+        /* Clases de alineación de Quill Editor */
+        .ql-align-center { text-align: center !important; }
+        .ql-align-right { text-align: right !important; }
+        .ql-align-justify { text-align: justify !important; }
+
         /* --- MODO IMPRESIÓN (SMART PRINT) --- */
         @media print {
             body {
@@ -131,7 +136,7 @@
     </div>
 
     <!-- Hoja Física -->
-    <div class="documento-hoja">
+    <div class="documento-hoja ql-editor">
         <div class="contenido-legal">
             {{ contrato.texto_legal_generado|safe }}
         </div>
