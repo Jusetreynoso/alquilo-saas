@@ -139,6 +139,7 @@
                 let htmlContent = quill.root.innerHTML;
                 
                 // Mapeo falso para la vista previa
+                {% verbatim %}
                 const fakeData = {
                     '{{PROPIETARIO_NOMBRE}}': 'JUAN PÉREZ (PROPIETARIO)',
                     '{{PROPIETARIO_CEDULA}}': '001-0000000-1',
@@ -160,6 +161,7 @@
                     '{{FIADOR_CEDULA}}': '001-1111111-1',
                     '{{FIADOR_DIRECCION}}': 'AV. 27 DE FEBRERO #100'
                 };
+                {% endverbatim %}
 
                 for(const [tag, val] of Object.entries(fakeData)) {
                     htmlContent = htmlContent.split(tag).join(val);
