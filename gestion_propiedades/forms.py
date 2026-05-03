@@ -33,7 +33,7 @@ class ContratoForm(forms.ModelForm):
     class Meta:
         model = Contrato
         fields = [
-            'propiedad', 'inquilino',
+            'propiedad', 'inquilino', 'plantilla',
             'fecha_inicio', 'fecha_fin', 'monto_renta', 'monto_deposito', 'monto_adelanto', 'dia_de_pago',
             'dias_gracia', 'porcentaje_mora', 'deuda_renta_migrada', 'deuda_mora_migrada',
             'documento_contrato', 'fotos_entrega', 'foto_entrega_2', 'foto_entrega_3',
@@ -42,6 +42,7 @@ class ContratoForm(forms.ModelForm):
         widgets = {
             'propiedad': forms.Select(attrs={'class': 'form-select'}),
             'inquilino': forms.Select(attrs={'class': 'form-select'}),
+            'plantilla': forms.Select(attrs={'class': 'form-select'}),
             'fecha_inicio': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'fecha_fin': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'monto_renta': forms.NumberInput(attrs={'class': 'form-control'}),
@@ -92,6 +93,13 @@ class ContratoForm(forms.ModelForm):
 
             self.fields['propiedad'].queryset = Propiedad.objects.filter(portafolio__in=portafolios, estado='DISPONIBLE')
             self.fields['propiedad'].empty_label = "--- SELECCIONAR PROPIEDAD DISPONIBLE ---"
+            
+        from .models import PlantillaContrato
+        self.fields['plantilla'].queryset = PlantillaContrato.objects.filter(
+            Q(portafolio__in=portafolios) | Q(es_predeterminada=True)
+        )
+        self.fields['plantilla'].empty_label = "--- SELECCIONAR PLANTILLA LEGAL ---"
+        self.fields['plantilla'].required = False
 
 class InquilinoForm(forms.ModelForm):
     class Meta:

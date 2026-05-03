@@ -295,10 +295,51 @@ def crear_contrato(request):
     from .forms import ContratoForm
     
     if request.method == 'POST':
-        # IMPORTANTE: Agregamos request.FILES aquí para guardar los PDFs/Fotos
         form = ContratoForm(request.user, request.POST, request.FILES)
         if form.is_valid():
-            nuevo_contrato = form.save()
+            nuevo_contrato = form.save(commit=False)
+            
+            # Si seleccionaron plantilla, generamos el texto legal
+            if nuevo_contrato.plantilla:
+                html = nuevo_contrato.plantilla.contenido
+                import datetime
+                hoy = datetime.date.today()
+                
+                # Intentamos sacar datos
+                prop_nombre = nuevo_contrato.propiedad.portafolio.propietario.get_full_name() or nuevo_contrato.propiedad.portafolio.propietario.username
+                prop_dir = nuevo_contrato.propiedad.portafolio.direccion_fisica or '___________________'
+                
+                meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+                mes_actual_es = meses[hoy.month - 1]
+                
+                reemplazos = {
+                    '{{PROPIETARIO_NOMBRE}}': prop_nombre,
+                    '{{PROPIETARIO_CEDULA}}': '___________________',
+                    '{{PROPIETARIO_DIRECCION}}': prop_dir,
+                    '{{INQUILINO_NOMBRE}}': nuevo_contrato.inquilino.nombre,
+                    '{{INQUILINO_CEDULA}}': nuevo_contrato.inquilino.cedula_o_pasaporte or '___________________',
+                    '{{INQUILINO_DIRECCION}}': '___________________',
+                    '{{INQUILINO_TELEFONO}}': nuevo_contrato.inquilino.telefono or '___________________',
+                    '{{PROPIEDAD_DIRECCION}}': nuevo_contrato.propiedad.direccion_completa or nuevo_contrato.propiedad.nombre_o_numero,
+                    '{{MONTO_RENTA}}': f"RD$ {nuevo_contrato.monto_renta:,.2f}",
+                    '{{MONTO_DEPOSITO}}': f"RD$ {nuevo_contrato.monto_deposito:,.2f}",
+                    '{{FECHA_INICIO}}': nuevo_contrato.fecha_inicio.strftime('%d/%m/%Y'),
+                    '{{FECHA_FIN}}': nuevo_contrato.fecha_fin.strftime('%d/%m/%Y') if nuevo_contrato.fecha_fin else 'Indefinida',
+                    '{{DIA_PAGO}}': str(nuevo_contrato.dia_de_pago),
+                    '{{DIA_ACTUAL}}': str(hoy.day),
+                    '{{MES_ACTUAL}}': mes_actual_es,
+                    '{{ANIO_ACTUAL}}': str(hoy.year),
+                    '{{FIADOR_NOMBRE}}': '___________________',
+                    '{{FIADOR_CEDULA}}': '___________________',
+                    '{{FIADOR_DIRECCION}}': '___________________',
+                }
+                
+                for tag, valor in reemplazos.items():
+                    html = html.replace(tag, str(valor))
+                
+                nuevo_contrato.texto_legal_generado = html
+
+            nuevo_contrato.save()
             
             # --- INYECCIÓN DE DEUDA MIGRADA ---
             if nuevo_contrato.deuda_renta_migrada > 0 or nuevo_contrato.deuda_mora_migrada > 0:
@@ -482,7 +523,48 @@ def editar_contrato(request, contrato_id):
     if request.method == 'POST':
         form = ContratoForm(request.user, request.POST, request.FILES, instance=contrato)
         if form.is_valid():
-            form.save()
+            contrato_editado = form.save(commit=False)
+            
+            # Si seleccionaron plantilla, regeneramos el texto legal
+            if contrato_editado.plantilla:
+                html = contrato_editado.plantilla.contenido
+                import datetime
+                hoy = datetime.date.today()
+                
+                prop_nombre = contrato_editado.propiedad.portafolio.propietario.get_full_name() or contrato_editado.propiedad.portafolio.propietario.username
+                prop_dir = contrato_editado.propiedad.portafolio.direccion_fisica or '___________________'
+                
+                meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+                mes_actual_es = meses[hoy.month - 1]
+                
+                reemplazos = {
+                    '{{PROPIETARIO_NOMBRE}}': prop_nombre,
+                    '{{PROPIETARIO_CEDULA}}': '___________________',
+                    '{{PROPIETARIO_DIRECCION}}': prop_dir,
+                    '{{INQUILINO_NOMBRE}}': contrato_editado.inquilino.nombre,
+                    '{{INQUILINO_CEDULA}}': contrato_editado.inquilino.cedula_o_pasaporte or '___________________',
+                    '{{INQUILINO_DIRECCION}}': '___________________',
+                    '{{INQUILINO_TELEFONO}}': contrato_editado.inquilino.telefono or '___________________',
+                    '{{PROPIEDAD_DIRECCION}}': contrato_editado.propiedad.direccion_completa or contrato_editado.propiedad.nombre_o_numero,
+                    '{{MONTO_RENTA}}': f"RD$ {contrato_editado.monto_renta:,.2f}",
+                    '{{MONTO_DEPOSITO}}': f"RD$ {contrato_editado.monto_deposito:,.2f}",
+                    '{{FECHA_INICIO}}': contrato_editado.fecha_inicio.strftime('%d/%m/%Y'),
+                    '{{FECHA_FIN}}': contrato_editado.fecha_fin.strftime('%d/%m/%Y') if contrato_editado.fecha_fin else 'Indefinida',
+                    '{{DIA_PAGO}}': str(contrato_editado.dia_de_pago),
+                    '{{DIA_ACTUAL}}': str(hoy.day),
+                    '{{MES_ACTUAL}}': mes_actual_es,
+                    '{{ANIO_ACTUAL}}': str(hoy.year),
+                    '{{FIADOR_NOMBRE}}': '___________________',
+                    '{{FIADOR_CEDULA}}': '___________________',
+                    '{{FIADOR_DIRECCION}}': '___________________',
+                }
+                
+                for tag, valor in reemplazos.items():
+                    html = html.replace(tag, str(valor))
+                
+                contrato_editado.texto_legal_generado = html
+
+            contrato_editado.save()
             messages.success(request, 'Contrato actualizado correctamente.')
             return redirect('detalle_propiedad', propiedad_id=contrato.propiedad.id)
     else:
@@ -1879,3 +1961,16 @@ def saas_detector_fugas(request):
     
     return render(request, 'gestion_propiedades/saas_detector_fugas.html', context)
 
+@login_required(login_url='/login/')
+def imprimir_contrato_legal(request, contrato_id):
+    """
+    Vista diseñada exclusivamente para imprimir el contrato generado (Smart Print).
+    """
+    portafolios = Portafolio.objects.filter(Q(propietario=request.user) | Q(accesos__usuario=request.user))
+    contrato = get_object_or_404(Contrato, id=contrato_id, propiedad__portafolio__in=portafolios)
+    
+    if not contrato.texto_legal_generado:
+        messages.warning(request, "Este contrato fue creado sin usar una plantilla. Por favor edítalo y selecciona una plantilla legal primero.")
+        return redirect('lista_contratos')
+        
+    return render(request, 'gestion_propiedades/imprimir_contrato_legal.html', {'contrato': contrato})

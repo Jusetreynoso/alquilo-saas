@@ -20,6 +20,7 @@
                         <th class="py-3">Día de Pago</th>
                         <th class="py-3">Vigencia</th>
                         <th class="py-3">Estado</th>
+                        <th class="py-3 text-center">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -48,6 +49,16 @@
                             {% else %}
                                 <span class="badge bg-secondary">Finalizado</span>
                             {% endif %}
+                        </td>
+                        <td class="py-3 text-center">
+                            {% if contrato.texto_legal_generado %}
+                            <a href="{% url 'imprimir_contrato_legal' contrato.id %}" target="_blank" class="btn btn-sm btn-dark" title="Imprimir Contrato">
+                                <i class="fa-solid fa-print"></i>
+                            </a>
+                            {% endif %}
+                            <a href="{% url 'editar_contrato' contrato.id %}" class="btn btn-sm btn-outline-secondary" title="Editar Contrato">
+                                <i class="fa-solid fa-pen"></i>
+                            </a>
                         </td>
                     </tr>
                     {% empty %}

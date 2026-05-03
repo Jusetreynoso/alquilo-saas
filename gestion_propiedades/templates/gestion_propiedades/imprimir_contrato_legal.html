@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contrato Legal - {{ contrato.inquilino.nombre }}</title>
+    <!-- CSS Bootstrap y Tipografías Profesionales -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --color-texto: #111827; /* Casi negro para máximo contraste de impresión */
+            --color-titulos: #000000;
+        }
+        
+        body {
+            font-family: 'Merriweather', serif; /* Fuente estilo legal clásico */
+            color: var(--color-texto);
+            background-color: #f3f4f6; /* Para visualización en pantalla */
+            line-height: 1.6;
+        }
+
+        .documento-hoja {
+            background-color: white;
+            max-width: 850px;
+            margin: 40px auto;
+            padding: 60px 70px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            border-radius: 4px;
+        }
+
+        /* Estilos Internos del Contrato (Editor CKEditor/Quill) */
+        .contenido-legal {
+            font-size: 11pt; /* Tamaño legal estándar */
+            text-align: justify; /* Justificado como todo contrato */
+            margin-bottom: 50px;
+        }
+
+        .contenido-legal h1, .contenido-legal h2, .contenido-legal h3 {
+            font-family: 'Roboto', sans-serif;
+            font-weight: 700;
+            color: var(--color-titulos);
+            text-align: center;
+            margin-top: 30px;
+            margin-bottom: 20px;
+        }
+        
+        .contenido-legal h1 { font-size: 16pt; text-transform: uppercase; }
+        .contenido-legal h2 { font-size: 14pt; }
+        .contenido-legal h3 { font-size: 12pt; }
+        
+        .contenido-legal p {
+            margin-bottom: 1.2em;
+        }
+        
+        .contenido-legal strong, .contenido-legal b {
+            font-weight: 700;
+            font-family: 'Roboto', sans-serif; /* Resalta negritas con sans-serif para leer fácil nombres */
+        }
+
+        /* Firmas */
+        .seccion-firmas {
+            margin-top: 80px;
+            page-break-inside: avoid; /* Evita que las firmas se dividan en dos páginas */
+        }
+        
+        .linea-firma {
+            border-top: 1px solid #000;
+            width: 80%;
+            margin: 0 auto;
+            padding-top: 5px;
+        }
+
+        .btn-flotante {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            z-index: 1000;
+            border-radius: 50px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            padding: 12px 25px;
+            font-family: 'Roboto', sans-serif;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+        
+        .btn-flotante:hover {
+            transform: scale(1.05);
+        }
+
+        /* --- MODO IMPRESIÓN (SMART PRINT) --- */
+        @media print {
+            body {
+                background-color: white;
+                margin: 0;
+                padding: 0;
+            }
+            .documento-hoja {
+                box-shadow: none;
+                margin: 0;
+                padding: 0;
+                max-width: 100%;
+            }
+            .no-print {
+                display: none !important;
+            }
+            
+            /* Márgenes físicos del papel */
+            @page {
+                margin: 2.5cm 2cm;
+                size: letter; /* Carta legal */
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Botones de Acción (Pantalla solamente) -->
+    <div class="no-print d-flex gap-2 btn-flotante">
+        <button onclick="window.print()" class="btn btn-dark">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-printer me-2" viewBox="0 0 16 16">
+              <path d="M2.5 8a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1z"/>
+              <path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2H5zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H4V3zm1 5a2 2 0 0 0-2 2v1H2a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v-1a2 2 0 0 0-2-2H5zm7 2v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1z"/>
+            </svg>
+            Imprimir / Guardar PDF
+        </button>
+        <button onclick="window.close()" class="btn btn-outline-dark bg-white">
+            Cerrar
+        </button>
+    </div>
+
+    <!-- Hoja Física -->
+    <div class="documento-hoja">
+        <div class="contenido-legal">
+            {{ contrato.texto_legal_generado|safe }}
+        </div>
+        
+        <!-- Bloque de Firmas -->
+        <div class="seccion-firmas mt-5 pt-4">
+            <div class="row text-center" style="font-family: 'Roboto', sans-serif;">
+                <div class="col-6 mb-5">
+                    <div class="linea-firma"></div>
+                    <p class="fw-bold mt-2 mb-0">PROPIETARIO / REPRESENTANTE</p>
+                    <p class="small text-muted">{{ contrato.propiedad.portafolio.propietario.get_full_name|default:contrato.propiedad.portafolio.propietario.username }}</p>
+                </div>
+                <div class="col-6 mb-5">
+                    <div class="linea-firma"></div>
+                    <p class="fw-bold mt-2 mb-0">EL INQUILINO</p>
+                    <p class="small text-muted">{{ contrato.inquilino.nombre }}</p>
+                </div>
+                
+                <!-- Si en un futuro agregamos fiador, se pone aquí abajo -->
+                <div class="col-12 mt-4">
+                    <div class="linea-firma" style="width: 40%"></div>
+                    <p class="fw-bold mt-2 mb-0">FIADOR SOLIDARIO</p>
+                    <p class="small text-muted">_______________________</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
