@@ -1974,3 +1974,102 @@ def imprimir_contrato_legal(request, contrato_id):
         return redirect('lista_contratos')
         
     return render(request, 'gestion_propiedades/imprimir_contrato_legal.html', {'contrato': contrato})
+
+@login_required(login_url='/login/')
+def reporte_propietario(request):
+    """
+    Genera un informe consolidado de una o más propiedades seleccionadas,
+    mostrando ingresos, gastos, ocupación, depósitos y morosidad.
+    """
+    from django.db.models import Sum, Q
+    from django.utils import timezone
+    import decimal
+    
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+    
+    # Obtener todas las propiedades disponibles para los filtros
+    todas_propiedades = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False).order_by('nombre_o_numero')
+    
+    # Obtener selección de propiedades (lista de IDs)
+    propiedades_seleccionadas_ids = request.GET.getlist('propiedades')
+    
+    if propiedades_seleccionadas_ids:
+        propiedades = todas_propiedades.filter(id__in=propiedades_seleccionadas_ids)
+    else:
+        # Por defecto seleccionamos todas
+        propiedades = todas_propiedades
+        propiedades_seleccionadas_ids = [str(p.id) for p in propiedades]
+        
+    # Variables a calcular
+    total_ingresos = decimal.Decimal('0.00')
+    total_gastos = decimal.Decimal('0.00')
+    total_morosidad = decimal.Decimal('0.00')
+    total_depositos = decimal.Decimal('0.00')
+    
+    propiedades_ocupadas = 0
+    contratos_activos = []
+    
+    if propiedades.exists():
+        # 1. Ingresos: Facturas pagadas en los contratos de estas propiedades
+        ingresos_agg = ReciboPago.objects.filter(
+            factura__contrato__propiedad__in=propiedades
+        ).aggregate(total=Sum('monto_pagado'))['total']
+        total_ingresos = ingresos_agg or decimal.Decimal('0.00')
+        
+        # 2. Gastos: Mantenimientos asociados a estas propiedades (Pagados/Todos)
+        gastos_agg = MantenimientoUnidad.objects.filter(
+            propiedad__in=propiedades
+        ).aggregate(total=Sum('costo'))['total']
+        total_gastos = gastos_agg or decimal.Decimal('0.00')
+        
+        # 3. Morosidad: Facturas atrasadas de estos contratos
+        facturas_vencidas = Factura.objects.filter(
+            contrato__propiedad__in=propiedades,
+            estado='ATRASADA'
+        ).annotate(mora_acumulada=Sum('moras__monto'))
+        
+        for f in facturas_vencidas:
+            mora = f.mora_acumulada or decimal.Decimal('0.00')
+            total_morosidad += f.monto_base + mora
+            
+        # 4. Depósitos en Garantía: contratos activos
+        contratos_activos_qs = Contrato.objects.filter(
+            propiedad__in=propiedades,
+            activo=True
+        ).select_related('propiedad', 'inquilino')
+        
+        for c in contratos_activos_qs:
+            total_depositos += c.monto_deposito
+            contratos_activos.append(c)
+            
+        # 5. Ocupación
+        propiedades_ocupadas = propiedades.filter(estado='OCUPADO').count()
+        
+    total_propiedades = propiedades.count()
+    porcentaje_ocupacion = (propiedades_ocupadas / total_propiedades * 100) if total_propiedades > 0 else 0
+    beneficio_neto = total_ingresos - total_gastos
+    
+    # Obtener incidencias recientes de las propiedades seleccionadas
+    incidencias = MantenimientoUnidad.objects.filter(
+        propiedad__in=propiedades
+    ).exclude(estado='COMPLETADO').order_by('-fecha_reporte')
+    
+    context = {
+        'titulo_pagina': 'Reporte de Propietario',
+        'todas_propiedades': todas_propiedades,
+        'propiedades_seleccionadas_ids': [int(id) for id in propiedades_seleccionadas_ids],
+        'total_ingresos': total_ingresos,
+        'total_gastos': total_gastos,
+        'beneficio_neto': beneficio_neto,
+        'total_morosidad': total_morosidad,
+        'total_depositos': total_depositos,
+        'porcentaje_ocupacion': round(porcentaje_ocupacion, 1),
+        'propiedades_ocupadas': propiedades_ocupadas,
+        'total_propiedades': total_propiedades,
+        'contratos_activos': contratos_activos,
+        'incidencias': incidencias,
+        'fecha_generacion': timezone.now()
+    }
+    return render(request, 'gestion_propiedades/reporte_propietario.html', context)

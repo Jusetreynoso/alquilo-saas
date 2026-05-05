@@ -1,0 +1,221 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+
+{% block contenido %}
+<style>
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+        .card {
+            border: none !important;
+            box-shadow: none !important;
+        }
+        .print-only {
+            display: block !important;
+        }
+        body {
+            background-color: white !important;
+        }
+        .report-header {
+            margin-top: 0;
+            padding-top: 0;
+            border-bottom: 2px solid #333;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+    }
+    .print-only {
+        display: none;
+    }
+</style>
+
+<div class="container-fluid">
+    <!-- Filtros de Propiedades (No imprimible) -->
+    <div class="card shadow-sm border-0 mb-4 no-print bg-light">
+        <div class="card-body">
+            <form method="GET" action="{% url 'reporte_propietario' %}">
+                <div class="row align-items-end">
+                    <div class="col-md-9">
+                        <label class="form-label fw-bold text-secondary"><i class="bi bi-funnel"></i> Seleccionar Propiedades a Incluir</label>
+                        <select name="propiedades" class="form-select" multiple size="3" required>
+                            {% for p in todas_propiedades %}
+                                <option value="{{ p.id }}" {% if p.id in propiedades_seleccionadas_ids %}selected{% endif %}>
+                                    {{ p.nombre_o_numero }} {% if p.grupo_o_residencial %}({{ p.grupo_o_residencial }}){% endif %}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">Mantén presionado Ctrl (o Cmd en Mac) para seleccionar múltiples propiedades.</small>
+                    </div>
+                    <div class="col-md-3 text-end">
+                        <button type="submit" class="btn btn-primary w-100 fw-bold shadow-sm mb-2">
+                            <i class="bi bi-arrow-clockwise"></i> Generar Reporte
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary w-100" onclick="window.print()">
+                            <i class="bi bi-printer"></i> Imprimir Reporte
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Cabecera para Impresión -->
+    <div class="print-only report-header">
+        <h2 class="fw-bold mb-0">Reporte Consolidado de Propiedades</h2>
+        <p class="text-muted mb-0">Generado el {{ fecha_generacion|date:"d M Y, h:i A" }}</p>
+        <p class="text-muted">Propiedades incluidas: {{ total_propiedades }}</p>
+    </div>
+
+    <!-- KPIs Financieros -->
+    <h5 class="fw-bold mb-3"><i class="bi bi-graph-up-arrow text-success"></i> Resumen Financiero</h5>
+    <div class="row mb-4 g-3">
+        <div class="col-md-3">
+            <div class="card bg-success text-white h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-title text-white-50 text-uppercase fw-bold"><i class="bi bi-cash-coin"></i> Ingresos Netos</h6>
+                    <h2 class="mb-0 fw-bold">RD${{ total_ingresos|dinero }}</h2>
+                    <small>Facturado y Pagado</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-title text-white-50 text-uppercase fw-bold"><i class="bi bi-tools"></i> Gastos & Mantenimiento</h6>
+                    <h2 class="mb-0 fw-bold">RD${{ total_gastos|dinero }}</h2>
+                    <small>Reparaciones e Inversiones</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-primary text-white h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-title text-white-50 text-uppercase fw-bold"><i class="bi bi-wallet2"></i> Beneficio Neto</h6>
+                    <h2 class="mb-0 fw-bold">RD${{ beneficio_neto|dinero }}</h2>
+                    <small>Ingresos menos Gastos</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark text-white h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-title text-white-50 text-uppercase fw-bold"><i class="bi bi-safe"></i> Depósitos en Garantía</h6>
+                    <h2 class="mb-0 fw-bold">RD${{ total_depositos|dinero }}</h2>
+                    <small>Total retenido en fondos</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- KPIs Operativos -->
+    <h5 class="fw-bold mb-3 mt-4"><i class="bi bi-activity text-primary"></i> Estado Operativo y Riesgos</h5>
+    <div class="row mb-4 g-3">
+        <div class="col-md-6">
+            <div class="card shadow-sm border-0 border-start border-warning border-4 h-100">
+                <div class="card-body">
+                    <h6 class="text-muted fw-bold text-uppercase small"><i class="bi bi-exclamation-triangle"></i> Deuda Pendiente (Morosidad)</h6>
+                    <h2 class="mb-0 fw-bold text-warning">RD${{ total_morosidad|dinero }}</h2>
+                    <small class="text-muted">Capital + Penalidades en la calle</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card shadow-sm border-0 border-start border-info border-4 h-100">
+                <div class="card-body">
+                    <h6 class="text-muted fw-bold text-uppercase small"><i class="bi bi-building"></i> Nivel de Ocupación</h6>
+                    <h2 class="mb-0 fw-bold text-info">{{ porcentaje_ocupacion }}%</h2>
+                    <small class="text-muted">{{ propiedades_ocupadas }} de {{ total_propiedades }} propiedades seleccionadas</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla Detalle de Inquilinos -->
+    <div class="card shadow-sm border-0 rounded-4 mt-4">
+        <div class="card-header bg-white border-bottom py-3">
+            <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-people-fill text-primary me-2"></i> Inquilinos Activos</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light text-secondary">
+                        <tr>
+                            <th scope="col" class="ps-4">Inquilino</th>
+                            <th scope="col">Propiedad</th>
+                            <th scope="col" class="text-end">Renta Base</th>
+                            <th scope="col" class="text-end pe-4">Fianza (Depósito)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for contrato in contratos_activos %}
+                        <tr>
+                            <td class="ps-4 fw-bold">
+                                {{ contrato.inquilino.nombre }}
+                                <div class="small fw-normal text-muted">{{ contrato.inquilino.telefono|default:'No Registrado' }}</div>
+                            </td>
+                            <td>
+                                {{ contrato.propiedad.nombre_o_numero }}
+                            </td>
+                            <td class="text-end fw-semibold">
+                                RD${{ contrato.monto_renta|dinero }}
+                            </td>
+                            <td class="text-end pe-4 text-secondary">
+                                RD${{ contrato.monto_deposito|dinero }}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center py-4 text-muted">
+                                No hay contratos activos en las propiedades seleccionadas.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de Incidencias -->
+    <div class="card shadow-sm border-0 rounded-4 mt-4 mb-5">
+        <div class="card-header bg-white border-bottom py-3">
+            <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-tools text-danger me-2"></i> Incidencias Activas</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light text-secondary">
+                        <tr>
+                            <th scope="col" class="ps-4">Propiedad</th>
+                            <th scope="col">Categoría</th>
+                            <th scope="col">Descripción</th>
+                            <th scope="col">Fecha Reporte</th>
+                            <th scope="col" class="text-end pe-4">Costo Estimado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for inc in incidencias %}
+                        <tr>
+                            <td class="ps-4 fw-bold">{{ inc.propiedad.nombre_o_numero }}</td>
+                            <td><span class="badge bg-secondary">{{ inc.get_categoria_display }}</span></td>
+                            <td class="text-muted">{{ inc.descripcion|truncatechars:50 }}</td>
+                            <td>{{ inc.fecha_reporte|date:"d M Y" }}</td>
+                            <td class="text-end pe-4 fw-semibold text-danger">RD${{ inc.costo|dinero }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center py-4 text-success fw-bold">
+                                <i class="bi bi-check-circle"></i> No hay mantenimientos ni incidencias activas.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
