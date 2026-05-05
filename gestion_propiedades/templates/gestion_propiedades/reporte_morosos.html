@@ -14,7 +14,7 @@
             <div class="card bg-danger text-white h-100 border-0 shadow-sm">
                 <div class="card-body">
                     <h6 class="card-title text-white-50 text-uppercase fw-bold"><i class="bi bi-exclamation-triangle"></i> Riesgo Total Acumulado</h6>
-                    <h2 class="display-6 fw-bold mb-0">RD${{ gran_total_riesgo|floatformat:2 }}</h2>
+                    <h2 class="display-6 fw-bold mb-0">RD${{ gran_total_riesgo|dinero }}</h2>
                     <small>Capital + Penalidades en la calle</small>
                 </div>
             </div>
@@ -23,7 +23,7 @@
             <div class="card text-white h-100 border-0 shadow-sm bg-primary">
                 <div class="card-body">
                     <h6 class="card-title text-white-50 text-uppercase fw-bold"><i class="bi bi-cash-stack"></i> Capital Vencido Neto</h6>
-                    <h2 class="display-6 fw-bold mb-0">RD${{ gran_total_deuda|floatformat:2 }}</h2>
+                    <h2 class="display-6 fw-bold mb-0">RD${{ gran_total_deuda|dinero }}</h2>
                 </div>
             </div>
         </div>
@@ -31,7 +31,7 @@
             <div class="card bg-dark text-white h-100 border-0 shadow-sm">
                 <div class="card-body">
                     <h6 class="card-title text-white-50 text-uppercase fw-bold"><i class="bi bi-graph-down-arrow"></i> Moras Generadas (A Favor)</h6>
-                    <h2 class="display-6 fw-bold text-warning mb-0">RD${{ gran_total_mora|floatformat:2 }}</h2>
+                    <h2 class="display-6 fw-bold text-warning mb-0">RD${{ gran_total_mora|dinero }}</h2>
                 </div>
             </div>
         </div>
@@ -74,20 +74,20 @@
                                 </span>
                             </td>
                             <td class="text-end text-secondary fw-semibold">
-                                RD${{ d.monto_base|floatformat:2 }}
+                                RD${{ d.monto_base|dinero }}
                             </td>
                             <td class="text-end text-danger fw-bold">
-                                RD${{ d.mora|floatformat:2 }}
+                                RD${{ d.mora|dinero }}
                             </td>
                             <td class="text-end pe-4 fw-bold fs-5 text-dark">
-                                RD${{ d.deuda_total|floatformat:2 }}
+                                RD${{ d.deuda_total|dinero }}
                             </td>
                             <td class="text-center">
                                 <a href="{% url 'detalle_inquilino' d.inquilino.id %}" class="btn btn-sm btn-outline-primary" title="Ver Perfil">
                                     <i class="bi bi-eye"></i> Perfil
                                 </a>
                                 {% if d.inquilino.telefono %}
-                                <a href="https://wa.me/{{ d.inquilino.telefono|cut:' ' }}?text=Hola%20{{ d.inquilino.nombre }},%20te%20escribimos%20de%20la%20Administración.%20%0A%0AEsta%20es%20una%20notificación%20de%20Cobro.%20Tu%20pago%20de%20{{ d.propiedad.nombre_o_numero }}%20está%20oficialmente%20ATRASADO.%0ADeuda%20Acumulada%20(Con%20Mora):%20RD${{ d.deuda_total|floatformat:2 }}.%0ADías%20de%20Retraso:%20{{ d.dias_retraso }}.%0A%0APor%20favor%20regulariza%20tu%20estatus%20para%20evitar%20sanciones%20mayores." target="_blank" class="btn btn-sm btn-success d-flex align-items-center gap-1 mt-1 justify-content-center" title="Recordatorio WhatsApp">
+                                <a href="https://wa.me/{{ d.inquilino.telefono|cut:' ' }}?text=Hola%20{{ d.inquilino.nombre }},%20te%20escribimos%20de%20la%20Administración.%20%0A%0AEsta%20es%20una%20notificación%20de%20Cobro.%20Tu%20pago%20de%20{{ d.propiedad.nombre_o_numero }}%20está%20oficialmente%20ATRASADO.%0ADeuda%20Acumulada%20(Con%20Mora):%20RD${{ d.deuda_total|dinero }}.%0ADías%20de%20Retraso:%20{{ d.dias_retraso }}.%0A%0APor%20favor%20regulariza%20tu%20estatus%20para%20evitar%20sanciones%20mayores." target="_blank" class="btn btn-sm btn-success d-flex align-items-center gap-1 mt-1 justify-content-center" title="Recordatorio WhatsApp">
                                     <i class="bi bi-whatsapp"></i> Cobrar
                                 </a>
                                 {% endif %}
