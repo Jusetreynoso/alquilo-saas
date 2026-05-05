@@ -39,14 +39,16 @@
                 <div class="row align-items-end">
                     <div class="col-md-9">
                         <label class="form-label fw-bold text-secondary"><i class="bi bi-funnel"></i> Seleccionar Propiedades a Incluir</label>
-                        <select name="propiedades" class="form-select" multiple size="3" required>
+                        <div class="border rounded px-3 py-2 bg-white shadow-sm mb-1" style="max-height: 120px; overflow-y: auto;">
                             {% for p in todas_propiedades %}
-                                <option value="{{ p.id }}" {% if p.id in propiedades_seleccionadas_ids %}selected{% endif %}>
-                                    {{ p.nombre_o_numero }} {% if p.grupo_o_residencial %}({{ p.grupo_o_residencial }}){% endif %}
-                                </option>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="propiedades" value="{{ p.id }}" id="prop_{{ p.id }}" {% if p.id in propiedades_seleccionadas_ids %}checked{% endif %}>
+                                <label class="form-check-label" for="prop_{{ p.id }}">
+                                    {{ p.nombre_o_numero }} {% if p.grupo_o_residencial %}<span class="text-muted small">({{ p.grupo_o_residencial }})</span>{% endif %}
+                                </label>
+                            </div>
                             {% endfor %}
-                        </select>
-                        <small class="text-muted">Mantén presionado Ctrl (o Cmd en Mac) para seleccionar múltiples propiedades.</small>
+                        </div>
                     </div>
                     <div class="col-md-3 text-end">
                         <button type="submit" class="btn btn-primary w-100 fw-bold shadow-sm mb-2">
