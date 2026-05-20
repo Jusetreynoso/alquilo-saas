@@ -375,4 +375,19 @@ class AuditLog(models.Model):
         ordering = ['-timestamp']
 
     def __str__(self):
-        return f"[{self.timestamp:%Y-%m-%d %H:%M}] {self.get_accion_display()} {self.modulo} por {self.usuario}"
+        return f"[{self.timestamp:%Y-%m-%d %H:%M}] {self.get_accion_display()} {self.modulo} por {self.usuario}"
+
+
+class HistorialAumentoRenta(models.Model):
+    contrato = models.ForeignKey(Contrato, on_delete=models.CASCADE, related_name='aumentos')
+    fecha_aumento = models.DateField(help_text="Fecha en que entra en vigencia el aumento")
+    monto_anterior = models.DecimalField(max_digits=10, decimal_places=2)
+    nuevo_monto = models.DecimalField(max_digits=10, decimal_places=2)
+    usuario = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='aumentos_registrados')
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-fecha_aumento', '-creado_en']
+
+    def __str__(self):
+        return f"Aumento Contrato #{self.contrato.id}: ${self.monto_anterior} -> ${self.nuevo_monto}"

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Portafolio, Propiedad, Contrato, Factura, CargoMora, ReciboPago, MantenimientoUnidad, SuscripcionCliente, PlanSaaS, AvisoSistema
+from .models import Portafolio, Propiedad, Contrato, Factura, CargoMora, ReciboPago, MantenimientoUnidad, SuscripcionCliente, PlanSaaS, AvisoSistema, Inquilino, HistorialAumentoRenta
 
 # Personalizando los títulos del panel de Django para "Alquilo"
 admin.site.site_header = "Administración Alquilo"
@@ -62,3 +62,16 @@ class PlanSaaSAdmin(admin.ModelAdmin):
 @admin.register(AvisoSistema)
 class AvisoSistemaAdmin(admin.ModelAdmin):
     list_display = ('mensaje', 'tipo', 'activo', 'fecha_creacion')
+
+
+@admin.register(Inquilino)
+class InquilinoAdmin(admin.ModelAdmin):
+    list_display = ('nombre', 'telefono', 'correo', 'cedula_o_pasaporte', 'recibir_alertas_correo')
+    search_fields = ('nombre', 'telefono', 'correo', 'cedula_o_pasaporte')
+
+
+@admin.register(HistorialAumentoRenta)
+class HistorialAumentoRentaAdmin(admin.ModelAdmin):
+    list_display = ('contrato', 'fecha_aumento', 'monto_anterior', 'nuevo_monto', 'usuario', 'creado_en')
+    list_filter = ('fecha_aumento', 'creado_en')
+    search_fields = ('contrato__inquilino__nombre', 'usuario__username')

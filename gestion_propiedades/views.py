@@ -587,6 +587,56 @@ def editar_contrato(request, contrato_id):
     }
     return render(request, 'gestion_propiedades/form_generico.html', context)
 
+
+@login_required(login_url='/login/')
+def registrar_aumento_renta(request, contrato_id):
+    from .models import Contrato, HistorialAumentoRenta, AuditLog
+    from django.db.models import Q
+    from django.shortcuts import get_object_or_404, redirect
+    from django.contrib import messages
+    
+    portafolios = Portafolio.objects.filter(Q(propietario=request.user) | Q(accesos__usuario=request.user)).distinct()
+    contrato = get_object_or_404(Contrato, id=contrato_id, propiedad__portafolio__in=portafolios)
+
+    if request.method == 'POST':
+        try:
+            nuevo_monto = float(request.POST.get('nuevo_monto', 0.00))
+            fecha_aumento = request.POST.get('fecha_aumento')
+            if not fecha_aumento:
+                raise ValueError("La fecha de aumento es requerida.")
+        except (ValueError, TypeError) as e:
+            messages.error(request, f"Error al registrar el aumento: {str(e)}")
+            return redirect('detalle_propiedad', propiedad_id=contrato.propiedad.id)
+
+        monto_anterior = contrato.monto_renta
+
+        # 1. Crear el registro en el historial de aumentos
+        HistorialAumentoRenta.objects.create(
+            contrato=contrato,
+            fecha_aumento=fecha_aumento,
+            monto_anterior=monto_anterior,
+            nuevo_monto=nuevo_monto,
+            usuario=request.user
+        )
+
+        # 2. Actualizar el monto de renta recurrente del contrato principal
+        contrato.monto_renta = nuevo_monto
+        contrato.save()
+
+        # 3. Registrar en Auditoría
+        AuditLog.objects.create(
+            accion='EDITAR',
+            modulo='Contrato',
+            descripcion=f'Registró aumento de renta para el contrato de {contrato.inquilino.nombre}. Monto anterior: ${monto_anterior} -> Nuevo monto: ${nuevo_monto}. Vigencia: {fecha_aumento}',
+            usuario=request.user,
+            portafolio=contrato.propiedad.portafolio
+        )
+
+        messages.success(request, f"Se ha registrado el aumento de renta correctamente. Nueva renta mensual: ${nuevo_monto:,.2f}")
+    
+    return redirect('detalle_propiedad', propiedad_id=contrato.propiedad.id)
+
+
 @login_required(login_url='/login/')
 def generar_solicitud(request, propiedad_id):
     from .forms import SolicitudAdminForm
@@ -892,7 +942,16 @@ def crear_inquilino(request):
 def editar_inquilino(request, inquilino_id):
     from .forms import InquilinoForm
     from .models import Inquilino
-    inquilino = get_object_or_404(Inquilino, id=inquilino_id)
+    
+    portafolios = Portafolio.objects.filter(Q(propietario=request.user) | Q(accesos__usuario=request.user))
+    inquilino = get_object_or_404(
+        Inquilino.objects.filter(
+            Q(creado_por=request.user) | 
+            Q(contratos__propiedad__portafolio__in=portafolios)
+        ).distinct(),
+        id=inquilino_id
+    )
+    
     if request.method == 'POST':
         form = InquilinoForm(request.POST, instance=inquilino)
         if form.is_valid():
@@ -908,7 +967,16 @@ def editar_inquilino(request, inquilino_id):
 @login_required(login_url='/login/')
 def detalle_inquilino(request, inquilino_id):
     from .models import Inquilino
-    inquilino = get_object_or_404(Inquilino, id=inquilino_id)
+    
+    portafolios = Portafolio.objects.filter(Q(propietario=request.user) | Q(accesos__usuario=request.user))
+    inquilino = get_object_or_404(
+        Inquilino.objects.filter(
+            Q(creado_por=request.user) | 
+            Q(contratos__propiedad__portafolio__in=portafolios)
+        ).distinct(),
+        id=inquilino_id
+    )
+    
     # Historial de contratos vinculados a este inquilino
     contratos = inquilino.contratos.all().select_related('propiedad').order_by('-fecha_inicio')
     
