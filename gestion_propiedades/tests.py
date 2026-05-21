@@ -1,8 +1,11 @@
 from django.test import TestCase, Client
 from django.contrib.auth.models import User
 from django.urls import reverse
-from datetime import date
-from .models import Portafolio, Propiedad, Inquilino, Contrato, HistorialAumentoRenta, AuditLog, PlanSaaS, SuscripcionCliente
+from datetime import date, timedelta
+from django.utils import timezone
+from django.core.files.uploadedfile import SimpleUploadedFile
+import os
+from .models import Portafolio, Propiedad, Inquilino, Contrato, HistorialAumentoRenta, AuditLog, PlanSaaS, SuscripcionCliente, PublicacionMarketplace, ImagenPublicacion
 
 class AlquiloTests(TestCase):
     def setUp(self):
@@ -112,3 +115,148 @@ class AlquiloTests(TestCase):
         # Verify AuditLog created
         logs = AuditLog.objects.filter(modulo='Contrato', accion='EDITAR')
         self.assertTrue(logs.exists())
+
+    def test_marketplace_acceso_publico(self):
+        # Create a public listing
+        pub = PublicacionMarketplace.objects.create(
+            propiedad=self.propiedad1,
+            titulo="Espectacular Apto 1A",
+            descripcion="Hermoso apartamento centrico",
+            precio_renta=12000.00,
+            telefono_contacto="+18095551234",
+            creado_por=self.user1
+        )
+        
+        # Test catalog access without logging in
+        url_catalogo = reverse('marketplace_catalogo')
+        response = self.client.get(url_catalogo)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Espectacular Apto 1A")
+        
+        # Test detail access without logging in
+        url_detalle = reverse('marketplace_detalle', args=[pub.pk])
+        response = self.client.get(url_detalle)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Espectacular Apto 1A")
+
+    def test_marketplace_permisos_y_seguridad(self):
+        # Ensure anonymous user cannot access creation view
+        url_crear = reverse('crear_publicacion_marketplace', args=[self.propiedad1.id])
+        response = self.client.get(url_crear)
+        self.assertEqual(response.status_code, 302) # Redirect to login
+
+        # Login as user2 (not authorized for propiedad1 which belongs to portafolio1 of user1)
+        self.client.login(username='propietario2', password='password123')
+        
+        # Attempt to view creation page for user1's property
+        response = self.client.get(url_crear)
+        self.assertEqual(response.status_code, 403) # PermissionDenied
+
+        # Try to post a creation request
+        post_data = {
+            'titulo': 'Apartamento Fraudulento',
+            'descripcion': 'Intento de publicar sin permiso',
+            'precio_renta': '15000.00',
+            'telefono_contacto': '+18091111111'
+        }
+        response = self.client.post(url_crear, post_data)
+        self.assertEqual(response.status_code, 403) # PermissionDenied
+
+    def test_marketplace_vigencia_y_periodo_de_gracia(self):
+        # 1. Active listing (<40 days old)
+        pub = PublicacionMarketplace.objects.create(
+            propiedad=self.propiedad1,
+            titulo="Apto Activo",
+            descripcion="Descripción",
+            precio_renta=10000.00,
+            telefono_contacto="+18090000000",
+            creado_por=self.user1,
+            fecha_activacion=timezone.now() - timedelta(days=10)
+        )
+        self.assertEqual(pub.estado_vigencia, 'ACTIVA')
+        self.assertEqual(pub.dias_restantes, 35)
+        self.assertTrue(pub.esta_visible)
+
+        # 2. Near expiration (40-44 days old)
+        pub.fecha_activacion = timezone.now() - timedelta(days=41)
+        pub.save()
+        self.assertEqual(pub.estado_vigencia, 'PROXIMA_A_VENCER')
+        self.assertEqual(pub.dias_restantes, 4)
+        self.assertTrue(pub.esta_visible)
+
+        # 3. Expired / In Grace Period (45-49 days old)
+        pub.fecha_activacion = timezone.now() - timedelta(days=47)
+        pub.save()
+        self.assertEqual(pub.estado_vigencia, 'VENCIDA')
+        self.assertEqual(pub.dias_restantes, 0)
+        self.assertFalse(pub.esta_visible)
+        self.assertEqual(pub.dias_gracia_restantes, 3)
+
+        # Public user should get a 404 when viewing an expired listing
+        response = self.client.get(reverse('marketplace_detalle', args=[pub.pk]))
+        self.assertEqual(response.status_code, 404)
+
+        # Authorized owner can still previsualize it
+        self.client.login(username='propietario1', password='password123')
+        response = self.client.get(reverse('marketplace_detalle', args=[pub.pk]))
+        self.assertEqual(response.status_code, 200)
+
+    def test_marketplace_borrado_fisico_multimedia(self):
+        # Create public listing
+        pub = PublicacionMarketplace.objects.create(
+            propiedad=self.propiedad1,
+            titulo="Apto con Fotos",
+            descripcion="Fotos de prueba",
+            precio_renta=10000.00,
+            telefono_contacto="+18095559999",
+            creado_por=self.user1
+        )
+        
+        # Mock simple image upload
+        image_content = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc`\x00\x00\x00\x02\x00\x01H\xaf\xa4q\x00\x00\x00\x00IEND\xaeB`\x82'
+        uploaded_image = SimpleUploadedFile("test_prop_photo.png", image_content, content_type="image/png")
+        
+        img_instance = ImagenPublicacion.objects.create(
+            publicacion=pub,
+            imagen=uploaded_image
+        )
+        
+        # Verify file physically exists on disk
+        img_path = img_instance.imagen.path
+        self.assertTrue(os.path.exists(img_path))
+        
+        # Delete listing and ensure file is physically deleted from disk
+        pub.delete()
+        self.assertFalse(os.path.exists(img_path))
+
+    def test_marketplace_limpieza_automatica_50_dias(self):
+        # Create listing older than 50 days
+        pub = PublicacionMarketplace.objects.create(
+            propiedad=self.propiedad1,
+            titulo="Apto Abandonado",
+            descripcion="Anuncio sin accion",
+            precio_renta=10000.00,
+            telefono_contacto="+18091234567",
+            creado_por=self.user1,
+            fecha_activacion=timezone.now() - timedelta(days=52)
+        )
+        
+        # Mock image
+        image_content = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc`\x00\x00\x00\x02\x00\x01H\xaf\xa4q\x00\x00\x00\x00IEND\xaeB`\x82'
+        uploaded_image = SimpleUploadedFile("abandoned_photo.png", image_content, content_type="image/png")
+        img_instance = ImagenPublicacion.objects.create(
+            publicacion=pub,
+            imagen=uploaded_image
+        )
+        img_path = img_instance.imagen.path
+        self.assertTrue(os.path.exists(img_path))
+        
+        # Trigger dynamic cleanup by querying public catalog view
+        response = self.client.get(reverse('marketplace_catalogo'))
+        self.assertEqual(response.status_code, 200)
+        
+        # Verify the listing record is completely purged from DB
+        self.assertFalse(PublicacionMarketplace.objects.filter(pk=pub.pk).exists())
+        # Verify the media file is physically deleted from disk
+        self.assertFalse(os.path.exists(img_path))
+

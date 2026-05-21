@@ -108,4 +108,13 @@ urlpatterns = [
     path('plantillas/crear/', views_plantillas.editar_plantilla, name='crear_plantilla'),
     path('plantillas/editar/<int:plantilla_id>/', views_plantillas.editar_plantilla, name='editar_plantilla'),
     path('plantillas/eliminar/<int:plantilla_id>/', views_plantillas.eliminar_plantilla, name='eliminar_plantilla'),
+
+    # --- MARKETPLACE PÚBLICO ---
+    path('marketplace/', views.marketplace_catalogo, name='marketplace_catalogo'),
+    path('marketplace/publicacion/<int:pk>/', views.marketplace_detalle, name='marketplace_detalle'),
+    path('propiedad/<int:propiedad_id>/marketplace/crear/', views.crear_publicacion_marketplace, name='crear_publicacion_marketplace'),
+    path('propiedad/<int:propiedad_id>/marketplace/editar/', views.editar_publicacion_marketplace, name='editar_publicacion_marketplace'),
+    path('propiedad/<int:propiedad_id>/marketplace/republicar/', views.republicar_publicacion_marketplace, name='republicar_publicacion_marketplace'),
+    path('propiedad/<int:propiedad_id>/marketplace/borrar/', views.borrar_publicacion_marketplace, name='borrar_publicacion_marketplace'),
+    path('marketplace/imagen/<int:imagen_id>/eliminar/', views.eliminar_imagen_publicacion, name='eliminar_imagen_publicacion'),
 ]

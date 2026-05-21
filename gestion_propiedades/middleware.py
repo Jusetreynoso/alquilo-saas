@@ -36,6 +36,7 @@ class SuscripcionMiddleware:
                 '/login/',
                 '/logout/',
                 '/portal/',        # Portal del inquilino B2C
+                '/marketplace/',   # Vista pública del marketplace
             ]
             
             es_exento = any(request.path.startswith(ruta) for ruta in rutas_exentas)

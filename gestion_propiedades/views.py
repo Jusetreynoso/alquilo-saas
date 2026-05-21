@@ -1,4 +1,5 @@
 from django.shortcuts import render, get_object_or_404, redirect
+from django.utils import timezone
 from django.http import HttpResponse
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login
@@ -86,6 +87,7 @@ def registro_publico(request):
 
 @login_required(login_url='/login/')
 def dashboard(request):
+    limpiar_anuncios_expirados()
     portafolios = Portafolio.objects.filter(
         Q(propietario=request.user) | Q(accesos__usuario=request.user)
     ).distinct()
@@ -2141,3 +2143,326 @@ def reporte_propietario(request):
         'fecha_generacion': timezone.now()
     }
     return render(request, 'gestion_propiedades/reporte_propietario.html', context)
+
+
+# --- MARKETPLACE VIEWS ---
+
+from django.core.exceptions import PermissionDenied
+from django.http import Http404
+from .models import PublicacionMarketplace, ImagenPublicacion
+from .forms import PublicacionMarketplaceForm
+
+def limpiar_anuncios_expirados():
+    """
+    Función autolimpiadora: busca anuncios con más de 50 días desde su activación o renovación
+    y los elimina por completo (incluyendo sus archivos multimedia de disco).
+    """
+    from django.utils import timezone
+    limite = timezone.now() - timezone.timedelta(days=50)
+    anuncios_obsoletos = PublicacionMarketplace.objects.filter(fecha_activacion__lte=limite)
+    for anuncio in anuncios_obsoletos:
+        anuncio.delete()  # Esto elimina en cascada las imágenes y sus archivos en disco
+
+
+def marketplace_catalogo(request):
+    """
+    Catálogo completamente público e indexable de propiedades en alquiler.
+    Exento de requerimiento de inicio de sesión o verificaciones de suscripción SaaS.
+    """
+    limpiar_anuncios_expirados()
+    
+    # Solo mostrar anuncios activos y no expirados (< 45 días)
+    limite_expiracion = timezone.now() - timezone.timedelta(days=45)
+    anuncios = PublicacionMarketplace.objects.filter(
+        activo=True,
+        fecha_activacion__gt=limite_expiracion
+    ).select_related('propiedad', 'propiedad__portafolio').order_by('-fecha_activacion')
+
+    # Filtrado por búsqueda libre (título, descripción, residencial)
+    q = request.GET.get('q', '').strip()
+    if q:
+        anuncios = anuncios.filter(
+            Q(titulo__icontains=q) |
+            Q(descripcion__icontains=q) |
+            Q(propiedad__grupo_o_residencial__icontains=q) |
+            Q(propiedad__nombre_o_numero__icontains=q)
+        )
+
+    # Filtrado por rango de precios
+    precio_min = request.GET.get('precio_min', '').strip()
+    precio_max = request.GET.get('precio_max', '').strip()
+    if precio_min:
+        try:
+            anuncios = anuncios.filter(precio_renta__gte=float(precio_min))
+        except ValueError:
+            pass
+    if precio_max:
+        try:
+            anuncios = anuncios.filter(precio_renta__lte=float(precio_max))
+        except ValueError:
+            pass
+
+    context = {
+        'titulo_pagina': 'Marketplace de Alquileres',
+        'anuncios': anuncios,
+        'q': q,
+        'precio_min': precio_min,
+        'precio_max': precio_max,
+    }
+    return render(request, 'gestion_propiedades/marketplace_catalogo.html', context)
+
+
+def marketplace_detalle(request, pk):
+    """
+    Ficha de detalle pública e indexable de un anuncio del Marketplace.
+    """
+    anuncio = get_object_or_404(PublicacionMarketplace, pk=pk)
+
+    # Regla de visibilidad:
+    # Solo es visible públicamente si está activa y no ha vencido (menos de 45 días).
+    # Sin embargo, el propietario o administradores autorizados pueden previsualizarla aunque esté vencida/inactiva.
+    es_propietario = False
+    if request.user.is_authenticated:
+        portafolio = anuncio.propiedad.portafolio
+        es_propietario = (
+            portafolio.propietario == request.user or
+            portafolio.accesos.filter(usuario=request.user).exists() or
+            request.user.is_superuser
+        )
+
+    if not anuncio.esta_visible and not es_propietario:
+        raise Http404("Este anuncio no está disponible o ha expirado.")
+
+    # Generar el enlace pre-llenado de WhatsApp
+    import urllib.parse
+    clean_phone = ''.join(filter(str.isdigit, anuncio.telefono_contacto))
+    # Asegurar código de país por defecto si es necesario (ej: +1 para RD si tiene 10 dígitos)
+    if len(clean_phone) == 10:
+        clean_phone = "1" + clean_phone
+    
+    mensaje = f"¡Hola! Estoy interesado en la propiedad en alquiler '{anuncio.titulo}' (Renta: ${anuncio.precio_renta:,.2f}) que vi en el Marketplace de Alquilo."
+    mensaje_enc = urllib.parse.quote(mensaje)
+    whatsapp_url = f"https://wa.me/{clean_phone}?text={mensaje_enc}"
+
+    context = {
+        'titulo_pagina': anuncio.titulo,
+        'anuncio': anuncio,
+        'whatsapp_url': whatsapp_url,
+        'es_propietario': es_propietario,
+    }
+    return render(request, 'gestion_propiedades/marketplace_detalle.html', context)
+
+
+@login_required(login_url='/login/')
+def crear_publicacion_marketplace(request, propiedad_id):
+    """
+    Crea una nueva publicación en el Marketplace público para una propiedad existente.
+    Verifica que el usuario logueado tenga acceso de administración sobre el portafolio.
+    """
+    propiedad = get_object_or_404(Propiedad, id=propiedad_id, is_deleted=False)
+    
+    # Control de Acceso Multi-tenant
+    portafolio = propiedad.portafolio
+    tiene_acceso = (
+        portafolio.propietario == request.user or
+        portafolio.accesos.filter(usuario=request.user).exists() or
+        request.user.is_superuser
+    )
+    if not tiene_acceso:
+        raise PermissionDenied("No tienes permisos para publicar esta propiedad.")
+
+    # Evitar publicaciones duplicadas
+    if hasattr(propiedad, 'publicacion_marketplace'):
+        messages.warning(request, "Esta propiedad ya tiene un anuncio en el Marketplace. Puedes editar el existente.")
+        return redirect('detalle_propiedad', propiedad_id=propiedad.id)
+
+    if request.method == 'POST':
+        form = PublicacionMarketplaceForm(request.POST, request.FILES)
+        if form.is_valid():
+            publicacion = form.save(commit=False)
+            publicacion.propiedad = propiedad
+            publicacion.creado_por = request.user
+            publicacion.fecha_activacion = timezone.now()
+            publicacion.activo = True
+            publicacion.save()
+
+            # Procesar imágenes múltiples
+            imagenes_subidas = request.FILES.getlist('imagenes')
+            for f in imagenes_subidas:
+                ImagenPublicacion.objects.create(publicacion=publicacion, imagen=f)
+
+            # Registrar log de auditoría
+            AuditLog.objects.create(
+                accion='CREAR',
+                modulo='Marketplace',
+                descripcion=f"Publicó la propiedad '{propiedad}' en el Marketplace público (Precio: ${publicacion.precio_renta}).",
+                usuario=request.user,
+                portafolio=portafolio
+            )
+
+            messages.success(request, "¡Propiedad publicada con éxito en el Marketplace! Estará activa durante 45 días.")
+            return redirect('detalle_propiedad', propiedad_id=propiedad.id)
+    else:
+        # Prefillar precio estimado si tiene un contrato previo, u otros datos útiles
+        form = PublicacionMarketplaceForm(initial={
+            'titulo': f"Alquiler de {propiedad.get_estado_display()} - {propiedad.nombre_o_numero}",
+            'descripcion': propiedad.detalles or '',
+        })
+
+    context = {
+        'titulo_pagina': 'Anunciar Propiedad',
+        'form': form,
+        'propiedad': propiedad,
+    }
+    return render(request, 'gestion_propiedades/crear_publicacion_marketplace.html', context)
+
+
+@login_required(login_url='/login/')
+def editar_publicacion_marketplace(request, propiedad_id):
+    """
+    Edita un anuncio existente en el Marketplace público.
+    """
+    publicacion = get_object_or_404(PublicacionMarketplace, propiedad_id=propiedad_id)
+    propiedad = publicacion.propiedad
+    
+    # Control de Acceso
+    portafolio = propiedad.portafolio
+    tiene_acceso = (
+        portafolio.propietario == request.user or
+        portafolio.accesos.filter(usuario=request.user).exists() or
+        request.user.is_superuser
+    )
+    if not tiene_acceso:
+        raise PermissionDenied("No tienes permisos para editar este anuncio.")
+
+    if request.method == 'POST':
+        form = PublicacionMarketplaceForm(request.POST, request.FILES, instance=publicacion)
+        if form.is_valid():
+            publicacion = form.save()
+
+            # Procesar nuevas imágenes subidas
+            imagenes_subidas = request.FILES.getlist('imagenes')
+            for f in imagenes_subidas:
+                ImagenPublicacion.objects.create(publicacion=publicacion, imagen=f)
+
+            # Registrar auditoría
+            AuditLog.objects.create(
+                accion='EDITAR',
+                modulo='Marketplace',
+                descripcion=f"Editó el anuncio del Marketplace para la propiedad '{propiedad}'.",
+                usuario=request.user,
+                portafolio=portafolio
+            )
+
+            messages.success(request, "El anuncio se ha actualizado correctamente.")
+            return redirect('detalle_propiedad', propiedad_id=propiedad.id)
+    else:
+        form = PublicacionMarketplaceForm(instance=publicacion)
+
+    context = {
+        'titulo_pagina': 'Editar Anuncio',
+        'form': form,
+        'publicacion': publicacion,
+        'propiedad': propiedad,
+    }
+    return render(request, 'gestion_propiedades/editar_publicacion_marketplace.html', context)
+
+
+@login_required(login_url='/login/')
+def eliminar_imagen_publicacion(request, imagen_id):
+    """
+    Elimina físicamente una imagen individual asociada a una publicación.
+    """
+    imagen = get_object_or_404(ImagenPublicacion, id=imagen_id)
+    publicacion = imagen.publicacion
+    propiedad = publicacion.propiedad
+
+    # Control de Acceso
+    portafolio = propiedad.portafolio
+    tiene_acceso = (
+        portafolio.propietario == request.user or
+        portafolio.accesos.filter(usuario=request.user).exists() or
+        request.user.is_superuser
+    )
+    if not tiene_acceso:
+        raise PermissionDenied("No tienes permisos para modificar este anuncio.")
+
+    # La eliminación física ocurre dentro del método delete() personalizado del modelo
+    imagen.delete()
+    messages.success(request, "Imagen eliminada con éxito.")
+    return redirect('editar_publicacion_marketplace', propiedad_id=propiedad.id)
+
+
+@login_required(login_url='/login/')
+def republicar_publicacion_marketplace(request, propiedad_id):
+    """
+    Acción rápida de un solo clic (POST): reinicia la vigencia de 45 días del anuncio.
+    """
+    if request.method != 'POST':
+        raise Http404("Método no permitido.")
+        
+    publicacion = get_object_or_404(PublicacionMarketplace, propiedad_id=propiedad_id)
+    propiedad = publicacion.propiedad
+
+    # Control de Acceso
+    portafolio = propiedad.portafolio
+    tiene_acceso = (
+        portafolio.propietario == request.user or
+        portafolio.accesos.filter(usuario=request.user).exists() or
+        request.user.is_superuser
+    )
+    if not tiene_acceso:
+        raise PermissionDenied("No tienes permisos para renovar este anuncio.")
+
+    publicacion.fecha_activacion = timezone.now()
+    publicacion.activo = True
+    publicacion.save()
+
+    # Log de Auditoría
+    AuditLog.objects.create(
+        accion='EDITAR',
+        modulo='Marketplace',
+        descripcion=f"Renovó la vigencia del anuncio en el Marketplace para la propiedad '{propiedad}' (Contador reiniciado a 45 días).",
+        usuario=request.user,
+        portafolio=portafolio
+    )
+
+    messages.success(request, "¡Anuncio renovado con éxito! Se ha reiniciado el contador de 45 días de vigencia pública.")
+    return redirect('detalle_propiedad', propiedad_id=propiedad.id)
+
+
+@login_required(login_url='/login/')
+def borrar_publicacion_marketplace(request, propiedad_id):
+    """
+    Acción rápida (POST): elimina definitivamente la publicación y todos sus archivos del servidor.
+    """
+    if request.method != 'POST':
+        raise Http404("Método no permitido.")
+
+    publicacion = get_object_or_404(PublicacionMarketplace, propiedad_id=propiedad_id)
+    propiedad = publicacion.propiedad
+
+    # Control de Acceso
+    portafolio = propiedad.portafolio
+    tiene_acceso = (
+        portafolio.propietario == request.user or
+        portafolio.accesos.filter(usuario=request.user).exists() or
+        request.user.is_superuser
+    )
+    if not tiene_acceso:
+        raise PermissionDenied("No tienes permisos para eliminar este anuncio.")
+
+    # La cascada física en cascada ocurre dentro del delete() personalizado del modelo
+    publicacion.delete()
+
+    # Log de Auditoría
+    AuditLog.objects.create(
+        accion='ELIMINAR',
+        modulo='Marketplace',
+        descripcion=f"Eliminó el anuncio de Marketplace y todos sus archivos multimedia para la propiedad '{propiedad}'.",
+        usuario=request.user,
+        portafolio=portafolio
+    )
+
+    messages.success(request, "Anuncio eliminado por completo. Las imágenes han sido removidas del disco del servidor para optimizar espacio.")
+    return redirect('detalle_propiedad', propiedad_id=propiedad.id)

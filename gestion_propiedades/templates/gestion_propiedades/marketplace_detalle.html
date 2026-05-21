@@ -1,0 +1,427 @@
+{% load static %}
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alquilo — {{ anuncio.titulo }}</title>
+    <meta name="description" content="{{ anuncio.descripcion|truncatewords:20 }}">
+    
+    <!-- Bootstrap 5 & Google Fonts -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root {
+            --bg: #0A0A0F;
+            --surface: #111118;
+            --surface2: #16161F;
+            --gold: #C9A84C;
+            --gold-light: #E8D5A3;
+            --gold-dim: rgba(201, 168, 76, 0.12);
+            --text: #F0EDE8;
+            --text-2: #8A8A9A;
+            --border: #1E1E2E;
+            --radius: 12px;
+            --glow: 0 0 30px rgba(201, 168, 76, 0.15);
+            --whatsapp: #25D366;
+            --whatsapp-hover: #20BA5A;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'DM Sans', sans-serif;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Fondo de ruido sutil */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 9999;
+            opacity: .4;
+        }
+
+        h1, h2, h3, .serif {
+            font-family: 'DM Serif Display', Georgia, serif;
+            font-weight: 400;
+        }
+
+        /* Custom Navbar */
+        .luxury-nav {
+            background: rgba(10, 10, 15, 0.85);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+            padding: 15px 0;
+        }
+
+        .nav-logo {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.6rem;
+            color: var(--text);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .nav-logo-icon {
+            width: 32px;
+            height: 32px;
+            background: var(--gold);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .nav-logo-icon svg {
+            width: 18px;
+            height: 18px;
+            fill: var(--bg);
+        }
+
+        .btn-gold-outline {
+            border: 1.5px solid var(--gold);
+            color: var(--gold);
+            background: transparent;
+            font-weight: 600;
+            padding: 8px 20px;
+            border-radius: 8px;
+            transition: all 0.25s ease;
+            text-decoration: none;
+        }
+
+        .btn-gold-outline:hover {
+            background: var(--gold);
+            color: var(--bg);
+            box-shadow: var(--glow);
+        }
+
+        .btn-gold-solid {
+            background: var(--gold);
+            color: var(--bg);
+            border: 1.5px solid var(--gold);
+            font-weight: 600;
+            padding: 10px 22px;
+            border-radius: 8px;
+            transition: all 0.25s ease;
+            text-decoration: none;
+        }
+
+        .btn-gold-solid:hover {
+            background: var(--gold-light);
+            border-color: var(--gold-light);
+            box-shadow: var(--glow);
+            transform: translateY(-1px);
+        }
+
+        /* Preview Banner */
+        .preview-banner {
+            background-color: var(--gold-dim);
+            border-bottom: 1px solid var(--gold);
+            color: var(--gold-light);
+            padding: 10px 0;
+            font-size: 0.9rem;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        /* Carousel Styles */
+        .carousel-container {
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+
+        .carousel-item {
+            height: clamp(300px, 50vh, 550px);
+            background-color: #050508;
+        }
+
+        .carousel-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* Detail Block */
+        .detail-card {
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+        }
+
+        .price-tag {
+            color: var(--gold);
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+        }
+
+        .price-tag span {
+            font-size: 1rem;
+            color: var(--text-2);
+            font-weight: 400;
+        }
+
+        .property-title {
+            font-size: 2rem;
+            color: var(--text);
+            margin-bottom: 15px;
+            line-height: 1.25;
+        }
+
+        .property-address {
+            color: var(--text-2);
+            font-size: 1rem;
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .property-address i {
+            color: var(--gold);
+        }
+
+        .section-title {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--gold);
+            font-weight: 700;
+            margin-bottom: 15px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+        }
+
+        .description-text {
+            color: var(--text-2);
+            line-height: 1.8;
+            font-size: 1.05rem;
+            white-space: pre-line;
+        }
+
+        /* Sidebar Action Card */
+        .action-card {
+            background-color: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 30px;
+            position: sticky;
+            top: 100px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+            text-align: center;
+        }
+
+        /* Glowing WhatsApp Button with Micro-animations */
+        .btn-whatsapp {
+            background-color: var(--whatsapp);
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            padding: 15px 25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            width: 100%;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 20px rgba(37, 211, 102, 0.35);
+            text-decoration: none;
+            animation: pulse-green 2s infinite;
+        }
+
+        .btn-whatsapp:hover {
+            background-color: var(--whatsapp-hover);
+            color: #ffffff;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(37, 211, 102, 0.5);
+        }
+
+        @keyframes pulse-green {
+            0% {
+                box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 12px rgba(37, 211, 102, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(37, 211, 102, 0);
+            }
+        }
+
+        /* Footer */
+        .luxury-footer {
+            background-color: #050508;
+            border-top: 1px solid var(--border);
+            padding: 40px 0;
+            color: var(--text-2);
+            font-size: 0.9rem;
+            margin-top: 50px;
+        }
+
+        .luxury-footer a {
+            color: var(--text-2);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .luxury-footer a:hover {
+            color: var(--gold);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Preview Banner -->
+    {% if es_propietario and not anuncio.esta_visible %}
+        <div class="preview-banner">
+            <i class="fas fa-eye-slash me-2"></i> Vista Previa de Propietario: Este anuncio está <strong>expirado o inactivo</strong> y no es visible para el público en general.
+        </div>
+    {% endif %}
+
+    <!-- NAVBAR -->
+    <nav class="luxury-nav">
+        <div class="container d-flex justify-content-between align-items-center">
+            <a href="{% url 'marketplace_catalogo' %}" class="nav-logo">
+                <div class="nav-logo-icon">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M3 22V8l9-6 9 6v14H3zm2-2h4v-4H5v4zm0-6h4v-4H5v4zm6 6h4v-4h-4v4zm0-6h4v-4h-4v4zm6 6h4v-4h-4v4zm0-6h4v-4h-4v4zM5 8h14l-7-4.67L5 8z"/>
+                    </svg>
+                </div>
+                Alquilo
+            </a>
+            <div class="d-flex gap-3">
+                <a href="{% url 'marketplace_catalogo' %}" class="btn-gold-outline"><i class="fas fa-arrow-left me-2"></i> Ver Catálogo</a>
+                {% if request.user.is_authenticated and es_propietario %}
+                    <a href="{% url 'detalle_propiedad' anuncio.propiedad.id %}" class="btn-gold-solid">Volver al Detalle</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <!-- CONTENT -->
+    <div class="container mt-5">
+        <div class="row">
+            <!-- Left Side: Images & Description -->
+            <div class="col-lg-8">
+                <!-- HD Photo Carousel -->
+                <div class="carousel-container">
+                    {% if anuncio.imagenes.exists %}
+                        <div id="propertyCarousel" class="carousel slide carousel-fade" data-bs-ride="carousel">
+                            <!-- Indicators -->
+                            {% if anuncio.imagenes.count > 1 %}
+                                <div class="carousel-indicators">
+                                    {% for img in anuncio.imagenes.all %}
+                                        <button type="button" data-bs-target="#propertyCarousel" data-bs-slide-to="{{ forloop.counter0 }}" class="{% if forloop.first %}active{% endif %}" aria-current="true" aria-label="Slide {{ forloop.counter }}"></button>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            
+                            <div class="carousel-inner">
+                                {% for img in anuncio.imagenes.all %}
+                                    <div class="carousel-item {% if forloop.first %}active{% endif %}" data-bs-interval="4000">
+                                        <img src="{{ img.imagen.url }}" alt="{{ anuncio.titulo }}">
+                                    </div>
+                                {% endfor %}
+                            </div>
+
+                            {% if anuncio.imagenes.count > 1 %}
+                                <button class="carousel-control-prev" type="button" data-bs-target="#propertyCarousel" data-bs-slide="prev">
+                                    <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                                    <span class="visually-hidden">Anterior</span>
+                                </button>
+                                <button class="carousel-control-next" type="button" data-bs-target="#propertyCarousel" data-bs-slide="next">
+                                    <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                                    <span class="visually-hidden">Siguiente</span>
+                                </button>
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <!-- Modern Placeholder -->
+                        <div class="d-flex flex-column align-items-center justify-content-center text-muted" style="height: 400px; background: linear-gradient(135deg, #111118 0%, #16161f 100%);">
+                            <i class="fas fa-image fa-4x mb-3" style="color: var(--border)"></i>
+                            <span class="text-uppercase tracking-wider">Sin fotografías publicadas</span>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- Main Details Card -->
+                <div class="detail-card">
+                    <div class="price-tag">
+                        ${{ anuncio.precio_renta|intcomma }} <span>/ mes</span>
+                    </div>
+                    <h1 class="property-title">{{ anuncio.titulo }}</h1>
+                    <div class="property-address">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>{{ anuncio.propiedad.nombre_o_numero }} ({{ anuncio.propiedad.get_estado_display }})</span>
+                    </div>
+
+                    <div class="section-title">Descripción de la Propiedad</div>
+                    <div class="description-text">
+                        {{ anuncio.descripcion }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Side: Sidebar Action Card -->
+            <div class="col-lg-4">
+                <div class="action-card">
+                    <h4 class="serif mb-3 text-white">¿Te interesa esta propiedad?</h4>
+                    <p class="text-muted small mb-4">La gestión del alquiler se realiza de forma directa con el administrador autorizado.</p>
+                    
+                    <hr class="my-4" style="border-color: var(--border)">
+
+                    <div class="text-start mb-4">
+                        <div class="small text-uppercase tracking-wider text-muted mb-2">Precio mensual</div>
+                        <div class="h3 fw-bold text-white">${{ anuncio.precio_renta|intcomma }} <small class="fs-6 text-muted">USD / DOP</small></div>
+                    </div>
+
+                    <!-- Glowing WhatsApp Button -->
+                    <a href="{{ whatsapp_url }}" target="_blank" class="btn-whatsapp mb-3">
+                        <i class="fab fa-whatsapp fa-lg"></i>
+                        <span>Contactar por WhatsApp</span>
+                    </a>
+
+                    <div class="small text-muted mt-3">
+                        <i class="fas fa-shield-alt me-1 text-success"></i> Operación 100% directa y transparente
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="luxury-footer">
+        <div class="container text-center">
+            <p class="mb-2">© {% now "Y" %} Alquilo. Todos los derechos reservados. · República Dominicana</p>
+            <p class="small text-muted mb-0">¿Eres propietario? <a href="{% url 'inicio_comercial' %}" class="text-decoration-underline">Conoce Alquilo</a> para automatizar tu cobranza.</p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap 5 Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

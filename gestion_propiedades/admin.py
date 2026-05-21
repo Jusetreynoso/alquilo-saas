@@ -75,3 +75,15 @@ class HistorialAumentoRentaAdmin(admin.ModelAdmin):
     list_display = ('contrato', 'fecha_aumento', 'monto_anterior', 'nuevo_monto', 'usuario', 'creado_en')
     list_filter = ('fecha_aumento', 'creado_en')
     search_fields = ('contrato__inquilino__nombre', 'usuario__username')
+
+from .models import PublicacionMarketplace, ImagenPublicacion
+
+@admin.register(PublicacionMarketplace)
+class PublicacionMarketplaceAdmin(admin.ModelAdmin):
+    list_display = ('titulo', 'propiedad', 'precio_renta', 'telefono_contacto', 'creado_por', 'fecha_activacion', 'activo')
+    list_filter = ('activo', 'fecha_activacion')
+    search_fields = ('titulo', 'descripcion', 'telefono_contacto', 'propiedad__nombre_o_numero')
+
+@admin.register(ImagenPublicacion)
+class ImagenPublicacionAdmin(admin.ModelAdmin):
+    list_display = ('id', 'publicacion', 'imagen', 'creado_en')

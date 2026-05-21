@@ -587,6 +587,7 @@ footer{
       <li><a href="#features">Características</a></li>
       <li><a href="#how">Cómo funciona</a></li>
       <li><a href="#pricing">Precios</a></li>
+      <li><a href="{% url 'marketplace_catalogo' %}">Marketplace</a></li>
       <li><a href="{% url 'login' %}">Acceso</a></li>
     </ul>
 
@@ -601,6 +602,7 @@ footer{
   <a href="#features">Características</a>
   <a href="#how">Cómo funciona</a>
   <a href="#pricing">Precios</a>
+  <a href="{% url 'marketplace_catalogo' %}">Marketplace Público</a>
   <a href="{% url 'login' %}">Acceso al sistema</a>
   <a href="/registro/" class="btn btn-gold-solid" style="text-align:center">Iniciar Prueba Gratis</a>
 </div>
@@ -625,8 +627,8 @@ footer{
           <a href="/registro/" class="btn btn-gold-solid" style="padding:14px 28px;font-size:.95rem">
             Comenzar gratis — 45 días
           </a>
-          <a href="https://wa.me/18493532097" target="_blank" class="btn btn-ghost" style="padding:14px 28px;font-size:.95rem">
-            Hablar con un asesor →
+          <a href="{% url 'marketplace_catalogo' %}" class="btn btn-ghost" style="padding:14px 28px;font-size:.95rem">
+            Explorar Marketplace de Alquileres →
           </a>
         </div>
         <div class="hero-metrics">
@@ -1060,6 +1062,7 @@ footer{
             <li><a href="#features">Características</a></li>
             <li><a href="#pricing">Precios</a></li>
             <li><a href="#how">Cómo funciona</a></li>
+            <li><a href="{% url 'marketplace_catalogo' %}">Marketplace Público</a></li>
             <li><a href="/registro/">Registrarse</a></li>
           </ul>
         </div>

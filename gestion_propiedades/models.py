@@ -390,4 +390,70 @@ class HistorialAumentoRenta(models.Model):
         ordering = ['-fecha_aumento', '-creado_en']
 
     def __str__(self):
-        return f"Aumento Contrato #{self.contrato.id}: ${self.monto_anterior} -> ${self.nuevo_monto}"
+        return f"Aumento Contrato #{self.contrato.id}: ${self.monto_anterior} -> ${self.nuevo_monto}"
+
+
+from django.utils import timezone
+
+class PublicacionMarketplace(models.Model):
+    propiedad = models.OneToOneField(Propiedad, on_delete=models.CASCADE, related_name='publicacion_marketplace')
+    titulo = models.CharField(max_length=200, help_text="Ej: Hermoso Apartamento con Vista al Parque")
+    descripcion = models.TextField(help_text="Descripción detallada de la propiedad, amenidades y condiciones.")
+    precio_renta = models.DecimalField(max_digits=10, decimal_places=2, help_text="Precio de renta mensual en pesos ($)")
+    telefono_contacto = models.CharField(max_length=50, help_text="Número de contacto para WhatsApp (Ej: +1809XXXXXXX)")
+    creado_por = models.ForeignKey(User, on_delete=models.CASCADE, related_name='publicaciones_marketplace')
+    creado_en = models.DateTimeField(auto_now_add=True)
+    fecha_activacion = models.DateTimeField(default=timezone.now, help_text="Fecha en que se activó o renovó la publicación")
+    activo = models.BooleanField(default=True)
+
+    @property
+    def dias_transcurridos(self):
+        delta = timezone.now() - self.fecha_activacion
+        return delta.days
+
+    @property
+    def dias_restantes(self):
+        restantes = 45 - self.dias_transcurridos
+        return max(0, restantes)
+
+    @property
+    def estado_vigencia(self):
+        dias = self.dias_transcurridos
+        if dias >= 45:
+            return 'VENCIDA'
+        elif dias >= 40:
+            return 'PROXIMA_A_VENCER'
+        return 'ACTIVA'
+
+    @property
+    def esta_visible(self):
+        return self.activo and self.dias_transcurridos < 45
+
+    @property
+    def dias_gracia_restantes(self):
+        return max(0, 50 - self.dias_transcurridos)
+
+    def delete(self, *args, **kwargs):
+        # Delete associated images from disk
+        for img in self.imagenes.all():
+            img.delete()
+        super().delete(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.titulo} - {self.propiedad.nombre_o_numero}"
+
+
+class ImagenPublicacion(models.Model):
+    publicacion = models.ForeignKey(PublicacionMarketplace, on_delete=models.CASCADE, related_name='imagenes')
+    imagen = models.ImageField(upload_to='marketplace_fotos/')
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    def delete(self, *args, **kwargs):
+        # Delete file from storage
+        if self.imagen:
+            self.imagen.storage.delete(self.imagen.name)
+        super().delete(*args, **kwargs)
+
+    def __str__(self):
+        return f"Imagen #{self.id} de {self.publicacion.titulo}"
+

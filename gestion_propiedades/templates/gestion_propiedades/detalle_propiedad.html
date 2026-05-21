@@ -274,6 +274,70 @@
                 </ul>
             </div>
         </div>
+
+        <!-- 🌐 CARD DE CONTROL DE MARKETPLACE PÚBLICO -->
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white fw-bold text-secondary py-3 d-flex justify-content-between align-items-center">
+                <span>🌐 Marketplace Público</span>
+            </div>
+            <div class="card-body">
+                {% if propiedad.publicacion_marketplace %}
+                    {% with pub=propiedad.publicacion_marketplace %}
+                    <div class="d-flex align-items-center mb-3">
+                        <span class="fw-bold me-2">Estado:</span>
+                        {% if pub.estado_vigencia == 'ACTIVA' %}
+                            <span class="badge bg-success">Activa</span>
+                        {% elif pub.estado_vigencia == 'PROXIMA_A_VENCER' %}
+                            <span class="badge bg-warning text-dark">Próxima a vencer</span>
+                        {% else %}
+                            <span class="badge bg-danger">Vencida (Período de gracia)</span>
+                        {% endif %}
+                    </div>
+                    
+                    <p class="mb-2"><strong>Días restantes:</strong> {{ pub.dias_restantes }} de 45 días</p>
+                    {% if pub.estado_vigencia == 'VENCIDA' %}
+                        <div class="alert alert-danger border-0 py-2 small mb-3">
+                            <i class="fa-solid fa-triangle-exclamation me-1"></i> Anuncio en período de gracia. Se auto-eliminará físicamente en <strong>{{ pub.dias_gracia_restantes }} días</strong> si no realizas ninguna acción.
+                        </div>
+                    {% endif %}
+                    
+                    <div class="d-flex flex-wrap gap-2 mt-3">
+                        <a href="{% url 'marketplace_detalle' pub.pk %}" target="_blank" class="btn btn-sm btn-outline-primary">
+                            👁️ Previsualizar
+                        </a>
+                        <a href="{% url 'editar_publicacion_marketplace' propiedad.id %}" class="btn btn-sm btn-outline-secondary">
+                            ✏️ Editar Anuncio
+                        </a>
+                    </div>
+                    
+                    <hr class="my-3">
+                    
+                    <div class="d-flex justify-content-between">
+                        <form method="POST" action="{% url 'republicar_publicacion_marketplace' propiedad.id %}" class="m-0 p-0">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('¿Estás seguro de que quieres renovar este anuncio? Esto reiniciará el contador de 45 días de vigencia pública.');">
+                                🔄 Renovar (45 días)
+                            </button>
+                        </form>
+                        
+                        <form method="POST" action="{% url 'borrar_publicacion_marketplace' propiedad.id %}" class="m-0 p-0">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('¿Estás seguro de que quieres borrar este anuncio? Se eliminará de la base de datos y todas sus fotos físicas serán borradas del disco.');">
+                                🗑️ Borrar Anuncio
+                            </button>
+                        </form>
+                    </div>
+                    {% endwith %}
+                {% else %}
+                    <div class="text-center py-3">
+                        <p class="text-muted small mb-3">Esta propiedad no está publicada en el Marketplace Público.</p>
+                        <a href="{% url 'crear_publicacion_marketplace' propiedad.id %}" class="btn btn-sm btn-outline-primary fw-bold w-100">
+                            🌐 + Anunciar en el Marketplace
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
     </div>
 
     <div class="col-md-7 mb-4">

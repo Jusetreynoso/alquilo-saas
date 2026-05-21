@@ -194,7 +194,7 @@ class PlanSaaSForm(forms.ModelForm):
             'activo': forms.CheckboxInput(attrs={'class': 'form-check-input'})
         }
 
-from .models import ConfiguracionGlobal
+from .models import ConfiguracionGlobal, PublicacionMarketplace
 class ConfiguracionGlobalForm(forms.ModelForm):
     class Meta:
         model = ConfiguracionGlobal
@@ -202,3 +202,38 @@ class ConfiguracionGlobalForm(forms.ModelForm):
         widgets = {
             'tasa_dolar_manual': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Ej. 60.50 (Opcional)'}),
         }
+
+
+class MultipleFileInput(forms.ClearableFileInput):
+    allow_multiple_selected = True
+
+
+class MultipleImageField(forms.ImageField):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("widget", MultipleFileInput(attrs={'multiple': True, 'class': 'form-control', 'accept': 'image/*'}))
+        super().__init__(*args, **kwargs)
+
+    def clean(self, data, initial=None):
+        single_file_clean = super().clean
+        if isinstance(data, (list, tuple)):
+            result = [single_file_clean(d, initial) for d in data]
+        else:
+            result = single_file_clean(data, initial)
+        return result
+
+
+class PublicacionMarketplaceForm(forms.ModelForm):
+    imagenes = MultipleImageField(
+        required=False,
+        label="Subir Fotografías"
+    )
+
+    class Meta:
+        model = PublicacionMarketplace
+        fields = ['titulo', 'descripcion', 'precio_renta', 'telefono_contacto']
+        widgets = {
+            'titulo': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Espectacular Penthouse con Vista al Mar', 'required': True}),
+            'descripcion': forms.Textarea(attrs={'class': 'form-control', 'rows': 4, 'placeholder': 'Describe los detalles de la propiedad, amenidades (piscina, balcón, seguridad), etc.', 'required': True}),
+            'precio_renta': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Monto mensual en $', 'required': True}),
+            'telefono_contacto': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: +18095551234', 'required': True}),
+        }

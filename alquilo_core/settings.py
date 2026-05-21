@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.humanize',
     'cloudinary_storage',
     'cloudinary',
     'gestion_propiedades',
@@ -151,14 +152,25 @@ MEDIA_ROOT = BASE_DIR / 'media'
 import os
 os.environ.setdefault('CLOUDINARY_URL', 'cloudinary://284174934694294:GKUr66a6Tabj1iwE7oRi2fcM9Kg@df7iu3qdl')
 
-STORAGES = {
-    "default": {
-        "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
-    },
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-    },
-}
+import sys
+if 'test' in sys.argv:
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+else:
+    STORAGES = {
+        "default": {
+            "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
 
 # --- RAILWAY PRODUCTION CONFIGS ---
 if 'DATABASE_URL' in os.environ:
