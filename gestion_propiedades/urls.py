@@ -37,6 +37,12 @@ urlpatterns = [
     path('propiedad/<int:propiedad_id>/editar/', views.editar_propiedad, name='editar_propiedad'),
     path('propiedad/<int:propiedad_id>/eliminar/', views.eliminar_propiedad, name='eliminar_propiedad'),
     path('propiedad/<int:propiedad_id>/gasto/nuevo/', views.registrar_gasto, name='registrar_gasto'),
+    
+    # Gastos Programados
+    path('propiedad/<int:propiedad_id>/gasto-programado/nuevo/', views.crear_gasto_programado, name='crear_gasto_programado'),
+    path('gasto-programado/<int:gasto_id>/editar/', views.editar_gasto_programado, name='editar_gasto_programado'),
+    path('gasto-programado/<int:gasto_id>/eliminar/', views.eliminar_gasto_programado, name='eliminar_gasto_programado'),
+    path('gasto-programado/<int:gasto_id>/pagar/', views.pagar_gasto_programado, name='pagar_gasto_programado'),
 
     # Contratos
     path('contratos/', views.lista_contratos, name='lista_contratos'),

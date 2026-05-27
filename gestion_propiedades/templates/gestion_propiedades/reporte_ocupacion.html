@@ -1,4 +1,5 @@
 {% extends 'gestion_propiedades/base.html' %}
+{% load l10n %}
 {% block titulo %}{{ titulo_pagina }}{% endblock %}
 {% block encabezado %}
     <div class="d-flex w-100 justify-content-between align-items-center">
@@ -40,8 +41,8 @@
                                 <div class="progress flex-grow-1" style="height: 12px; max-width: 120px;">
                                     <div class="progress-bar {% if row.porcentaje >= 75 %}bg-success{% elif row.porcentaje >= 40 %}bg-warning{% else %}bg-danger{% endif %}"
                                          role="progressbar"
-                                         style="width: {{ row.porcentaje }}%;"
-                                         aria-valuenow="{{ row.porcentaje }}"
+                                         style="width: {{ row.porcentaje|unlocalize }}%;"
+                                         aria-valuenow="{{ row.porcentaje|unlocalize }}"
                                          aria-valuemin="0"
                                          aria-valuemax="100">
                                     </div>

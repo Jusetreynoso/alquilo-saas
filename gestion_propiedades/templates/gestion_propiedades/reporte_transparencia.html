@@ -1,4 +1,5 @@
 {% extends 'gestion_propiedades/base.html' %}
+{% load l10n %}
 {% block titulo %}{{ titulo_pagina }}{% endblock %}
 
 {% block encabezado %}
@@ -52,8 +53,8 @@
                 <div class="progress mb-2" style="height: 18px; border-radius: 10px;">
                     <div class="progress-bar {% if eficiencia >= 80 %}bg-success{% elif eficiencia >= 50 %}bg-warning{% else %}bg-danger{% endif %}"
                          role="progressbar"
-                         style="width: {{ eficiencia }}%; border-radius: 10px;"
-                         aria-valuenow="{{ eficiencia }}" aria-valuemin="0" aria-valuemax="100">
+                         style="width: {{ eficiencia|unlocalize }}%; border-radius: 10px;"
+                         aria-valuenow="{{ eficiencia|unlocalize }}" aria-valuemin="0" aria-valuemax="100">
                         <span class="small fw-bold">{{ eficiencia }}%</span>
                     </div>
                 </div>

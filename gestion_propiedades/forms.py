@@ -1,5 +1,5 @@
 from django import forms
-from .models import Propiedad, Contrato, Portafolio, MantenimientoUnidad, SolicitudAlquiler, Inquilino, Factura, ReciboPago, SuscripcionCliente, PlanSaaS
+from .models import Propiedad, Contrato, Portafolio, MantenimientoUnidad, SolicitudAlquiler, Inquilino, Factura, ReciboPago, SuscripcionCliente, PlanSaaS, GastoProgramado
 from django.db.models import Q
 
 class PortafolioForm(forms.ModelForm):
@@ -236,4 +236,15 @@ class PublicacionMarketplaceForm(forms.ModelForm):
             'descripcion': forms.Textarea(attrs={'class': 'form-control', 'rows': 4, 'placeholder': 'Describe los detalles de la propiedad, amenidades (piscina, balcón, seguridad), etc.', 'required': True}),
             'precio_renta': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Monto mensual en $', 'required': True}),
             'telefono_contacto': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: +18095551234', 'required': True}),
+        }
+
+class GastoProgramadoForm(forms.ModelForm):
+    class Meta:
+        model = GastoProgramado
+        fields = ['concepto', 'monto', 'dia_pago', 'activo']
+        widgets = {
+            'concepto': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Mantenimiento Residencial', 'required': True}),
+            'monto': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': '0.00', 'required': True}),
+            'dia_pago': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 31, 'required': True}),
+            'activo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }

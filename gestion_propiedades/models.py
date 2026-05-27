@@ -292,6 +292,17 @@ class ReciboPago(models.Model):
     def __str__(self):
         return f"Recibo #{self.id} - Factura #{self.factura.id}"
 
+class GastoProgramado(models.Model):
+    propiedad = models.ForeignKey(Propiedad, on_delete=models.CASCADE, related_name='gastos_programados')
+    concepto = models.CharField(max_length=150, help_text="Ej: Pago de Mantenimiento Residencial")
+    monto = models.DecimalField(max_digits=10, decimal_places=2)
+    dia_pago = models.IntegerField(default=1, help_text="Día del mes en que se debe pagar este gasto (1-31)")
+    activo = models.BooleanField(default=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.concepto} - {self.propiedad.nombre_o_numero} - ${self.monto}"
+
 class MantenimientoUnidad(models.Model):
     CATEGORIA_CHOICES = [
         ('REPARACION', 'Reparación'),
@@ -314,6 +325,7 @@ class MantenimientoUnidad(models.Model):
     fecha_resolucion = models.DateField(blank=True, null=True)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='PENDIENTE')
     factura_adjunta = models.FileField(upload_to='comprobantes_mantenimiento/', blank=True, null=True)
+    gasto_programado = models.ForeignKey(GastoProgramado, on_delete=models.SET_NULL, null=True, blank=True, related_name='pagos_registrados')
 
     def __str__(self):
         return f"{self.get_categoria_display()} - {self.propiedad.nombre_o_numero}"
