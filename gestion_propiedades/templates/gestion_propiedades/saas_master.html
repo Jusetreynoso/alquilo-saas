@@ -124,4 +124,64 @@
         </div>
     </div>
 </div>
+
+<!-- Monitor de Procesos (Rentas / Cron) -->
+<div class="card shadow-sm border-0 mt-4 mb-4">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 fw-bold">🖥️ Monitor de Ejecución de Procesos (Cobros/Rentas)</h5>
+        <span class="badge bg-secondary">Últimos 15 Procesos</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="px-4 py-3">Proceso</th>
+                        <th>Fecha de Ejecución</th>
+                        <th class="text-center">Estado</th>
+                        <th class="text-center">Facturas Creadas</th>
+                        <th>Ejecutado Por</th>
+                        <th>Detalles / Observaciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for proc in procesos %}
+                    <tr>
+                        <td class="px-4 py-3 fw-bold">{{ proc.nombre_proceso }}</td>
+                        <td>{{ proc.fecha_ejecucion|date:"d M Y, H:i" }}</td>
+                        <td class="text-center">
+                            {% if proc.exitoso %}
+                                <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-1 rounded-pill">
+                                    🟢 Exitoso
+                                </span>
+                            {% else %}
+                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-1 rounded-pill">
+                                    🔴 Fallido
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center fw-bold">{{ proc.facturas_creadas }}</td>
+                        <td>
+                            {% if proc.ejecutado_por %}
+                                <span class="text-dark">{{ proc.ejecutado_por.get_full_name|default:proc.ejecutado_por.username }}</span>
+                            {% else %}
+                                <span class="text-muted">🤖 Sistema (Cron Job)</span>
+                            {% endif %}
+                        </td>
+                        <td class="small text-muted" style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ proc.detalles }}">
+                            {{ proc.detalles|default:"Sin detalles adicionales" }}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-muted">
+                            Aún no hay registros de ejecución de procesos.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 {% endblock %}

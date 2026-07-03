@@ -16,9 +16,11 @@
         <a href="{% url 'crear_contrato' %}" class="btn btn-outline-secondary">📝 + Contrato</a>
         <a href="{% url 'crear_inquilino' %}" class="btn btn-primary shadow-sm fw-bold">👤 + Agregar Inquilino</a>
     </div>
+    {% if request.user.portafolios.all or request.user.is_superuser %}
     <a href="{% url 'generar_facturas_masivas' %}" class="btn btn-success shadow-sm fw-bold">
         ⚡ Generar Facturas del Mes
     </a>
+    {% endif %}
 </div>
 
 <div class="row mb-4 g-3">

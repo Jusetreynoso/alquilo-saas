@@ -5,7 +5,7 @@ import calendar
 import decimal
 from django.db import transaction
 from django.contrib.auth.models import User
-from gestion_propiedades.models import Propiedad, FacturaSaaS, Contrato, Factura, CargoMora, AccesoPortafolio
+from gestion_propiedades.models import Propiedad, FacturaSaaS, Contrato, Factura, CargoMora, AccesoPortafolio, RegistroProceso
 from gestion_propiedades.utils import obtener_nombre_mes
 from gestion_propiedades.utils_correo import (
     enviar_aviso_factura_saas, 
@@ -67,34 +67,48 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"[OK] SaaS (B2B): {facturas_saas} facturas a dueños emitidas."))
 
         # ---------------------------------------------------------
-        # FASE 2: AUTOMATIZACIÓN DE RENTAS INQUILINOS (B2C)
-        # ---------------------------------------------------------
         contratos_activos = Contrato.objects.filter(activo=True)
         facturas_b2c = 0
+        errores_cron = []
         
         for contrato in contratos_activos:
-            ultimo_dia_mes = calendar.monthrange(hoy.year, hoy.month)[1]
-            dia_cobro_efectivo = min(contrato.dia_de_pago, ultimo_dia_mes)
-            
-            if hoy.day >= dia_cobro_efectivo:
-                ya_facturado = Factura.objects.filter(
-                    contrato=contrato, fecha_emision__year=hoy.year, fecha_emision__month=hoy.month
-                ).exists()
+            try:
+                ultimo_dia_mes = calendar.monthrange(hoy.year, hoy.month)[1]
+                dia_cobro_efectivo = min(contrato.dia_de_pago, ultimo_dia_mes)
                 
-                if not ya_facturado:
-                    nueva_fact = Factura.objects.create(
-                        contrato=contrato,
-                        fecha_emision=hoy,
-                        fecha_vencimiento=hoy + timedelta(days=contrato.dias_gracia),
-                        monto_base=contrato.monto_renta,
-                        estado='PENDIENTE',
-                        concepto=f'Renta {obtener_nombre_mes(hoy.month)} {hoy.year}'
-                    )
-                    facturas_b2c += 1
+                if hoy.day >= dia_cobro_efectivo:
+                    ya_facturado = Factura.objects.filter(
+                        contrato=contrato, fecha_emision__year=hoy.year, fecha_emision__month=hoy.month
+                    ).exists()
                     
-                    # Enviar estado de cuenta Inquilino
-                    enviar_aviso_factura_generada(nueva_fact)
+                    if not ya_facturado:
+                        nueva_fact = Factura.objects.create(
+                            contrato=contrato,
+                            fecha_emision=hoy,
+                            fecha_vencimiento=hoy + timedelta(days=contrato.dias_gracia),
+                            monto_base=contrato.monto_renta,
+                            estado='PENDIENTE',
+                            concepto=f'Renta {obtener_nombre_mes(hoy.month)} {hoy.year}'
+                        )
+                        facturas_b2c += 1
+                        
+                        # Enviar estado de cuenta Inquilino
+                        enviar_aviso_factura_generada(nueva_fact)
+            except Exception as e:
+                errores_cron.append(f"Error en contrato {contrato.id} ({contrato.inquilino.nombre}): {str(e)}")
                     
+        exitoso = len(errores_cron) == 0
+        detalles = f"Proceso diario ejecutado. Se crearon {facturas_b2c} facturas B2C."
+        if errores_cron:
+            detalles += "\nErrores detectados:\n" + "\n".join(errores_cron)
+            
+        RegistroProceso.objects.create(
+            nombre_proceso="Generación de Rentas (Cron)",
+            exitoso=exitoso,
+            facturas_creadas=facturas_b2c,
+            detalles=detalles
+        )
+
         self.stdout.write(self.style.SUCCESS(f"[OK] Rentas (B2C): {facturas_b2c} recibos emitidos a inquilinos."))
 
         # ---------------------------------------------------------

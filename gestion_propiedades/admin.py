@@ -76,7 +76,7 @@ class HistorialAumentoRentaAdmin(admin.ModelAdmin):
     list_filter = ('fecha_aumento', 'creado_en')
     search_fields = ('contrato__inquilino__nombre', 'usuario__username')
 
-from .models import PublicacionMarketplace, ImagenPublicacion
+from .models import PublicacionMarketplace, ImagenPublicacion, RegistroProceso
 
 @admin.register(PublicacionMarketplace)
 class PublicacionMarketplaceAdmin(admin.ModelAdmin):
@@ -86,4 +86,11 @@ class PublicacionMarketplaceAdmin(admin.ModelAdmin):
 
 @admin.register(ImagenPublicacion)
 class ImagenPublicacionAdmin(admin.ModelAdmin):
-    list_display = ('id', 'publicacion', 'imagen', 'creado_en')
+    list_display = ('id', 'publicacion', 'imagen', 'creado_en')
+
+@admin.register(RegistroProceso)
+class RegistroProcesoAdmin(admin.ModelAdmin):
+    list_display = ('nombre_proceso', 'fecha_ejecucion', 'exitoso', 'facturas_creadas', 'ejecutado_por')
+    list_filter = ('exitoso', 'fecha_ejecucion', 'nombre_proceso')
+    search_fields = ('nombre_proceso', 'detalles')
+

@@ -468,4 +468,21 @@ class ImagenPublicacion(models.Model):
 
     def __str__(self):
         return f"Imagen #{self.id} de {self.publicacion.titulo}"
+
+
+class RegistroProceso(models.Model):
+    nombre_proceso = models.CharField(max_length=150, help_text="Ej: Generación de Rentas (Cron) o Generación de Rentas (Manual)")
+    fecha_ejecucion = models.DateTimeField(auto_now_add=True)
+    exitoso = models.BooleanField(default=True)
+    facturas_creadas = models.IntegerField(default=0)
+    detalles = models.TextField(blank=True, null=True, help_text="Mensaje de error, advertencia o resumen general")
+    ejecutado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, help_text="Usuario que ejecutó, vacío si fue el cron")
+
+    class Meta:
+        ordering = ['-fecha_ejecucion']
+
+    def __str__(self):
+        estado = "Exitoso" if self.exitoso else "Fallido"
+        return f"{self.nombre_proceso} - {self.fecha_ejecucion:%Y-%m-%d %H:%M} ({estado})"
+
 

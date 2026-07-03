@@ -6,7 +6,7 @@ from django.contrib.auth import login
 from django.db.models import Sum, Q, Prefetch, F
 from django.contrib import messages
 from datetime import date
-from .models import Portafolio, Propiedad, Factura, CargoMora, ReciboPago, Contrato, SolicitudAlquiler, MantenimientoUnidad, Inquilino, PlanSaaS, SuscripcionCliente, AuditLog, GastoProgramado
+from .models import Portafolio, Propiedad, Factura, CargoMora, ReciboPago, Contrato, SolicitudAlquiler, MantenimientoUnidad, Inquilino, PlanSaaS, SuscripcionCliente, AuditLog, GastoProgramado, RegistroProceso
 from .forms import NuevoClienteSaaSForm, EditarSuscripcionForm, PropiedadForm, ContratoForm, InquilinoForm, MantenimientoForm, PlanSaaSForm
 from .utils import render_to_pdf, obtener_nombre_mes
 import calendar
@@ -415,6 +415,7 @@ def crear_contrato(request):
     return render(request, 'gestion_propiedades/form_generico.html', context)
 
 @login_required(login_url='/login/')
+@propietario_requerido
 def generar_facturas_masivas(request):
     # 1. Buscamos los portafolios del usuario
     portafolios = Portafolio.objects.filter(
@@ -429,6 +430,7 @@ def generar_facturas_masivas(request):
 
     hoy = date.today()
     facturas_creadas = 0
+    errores = []
 
     for contrato in contratos:
         # 3. Verificamos si YA existe una factura para este mes y año
@@ -439,30 +441,50 @@ def generar_facturas_masivas(request):
         ).exists()
 
         if not existe:
-            # Calcular fecha de vencimiento (Manejo de errores si el mes es febrero y el día es 30)
             try:
-                fecha_vencimiento = date(hoy.year, hoy.month, contrato.dia_de_pago)
-            except ValueError:
-                # Si el día de pago es 31 y el mes solo tiene 30 (o 28), usamos el último día del mes
-                ultimo_dia_mes = calendar.monthrange(hoy.year, hoy.month)[1]
-                fecha_vencimiento = date(hoy.year, hoy.month, ultimo_dia_mes)
+                # Calcular fecha de vencimiento (Manejo de errores si el mes es febrero y el día es 30)
+                try:
+                    fecha_vencimiento = date(hoy.year, hoy.month, contrato.dia_de_pago)
+                except ValueError:
+                    # Si el día de pago es 31 y el mes solo tiene 30 (o 28), usamos el último día del mes
+                    ultimo_dia_mes = calendar.monthrange(hoy.year, hoy.month)[1]
+                    fecha_vencimiento = date(hoy.year, hoy.month, ultimo_dia_mes)
 
-            # 4. Crear la Factura
-            Factura.objects.create(
-                contrato=contrato,
-                fecha_emision=hoy,
-                fecha_vencimiento=fecha_vencimiento,
-                monto_base=contrato.monto_renta,
-                concepto=f"Renta {obtener_nombre_mes(hoy.month)} {hoy.year}",
-                estado='PENDIENTE'
-            )
-            facturas_creadas += 1
+                # 4. Crear la Factura
+                Factura.objects.create(
+                    contrato=contrato,
+                    fecha_emision=hoy,
+                    fecha_vencimiento=fecha_vencimiento,
+                    monto_base=contrato.monto_renta,
+                    concepto=f"Renta {obtener_nombre_mes(hoy.month)} {hoy.year}",
+                    estado='PENDIENTE'
+                )
+                facturas_creadas += 1
+            except Exception as e:
+                errores.append(f"Error en contrato {contrato.id} ({contrato.inquilino.nombre}): {str(e)}")
+
+    exitoso = len(errores) == 0
+    detalles = f"Se generaron {facturas_creadas} facturas de renta."
+    if errores:
+        detalles += " Errores ocurridos:\n" + "\n".join(errores)
+
+    # Crear RegistroProceso
+    RegistroProceso.objects.create(
+        nombre_proceso="Generación de Rentas (Manual)",
+        exitoso=exitoso,
+        facturas_creadas=facturas_creadas,
+        detalles=detalles,
+        ejecutado_por=request.user
+    )
 
     # 5. Mensaje de éxito
     if facturas_creadas > 0:
         messages.success(request, f'¡Éxito! Se han generado {facturas_creadas} facturas nuevas.')
     else:
-        messages.info(request, 'No se generaron facturas. Todos tus inquilinos ya tienen su factura de este mes.')
+        if exitoso:
+            messages.info(request, 'No se generaron facturas. Todos tus inquilinos ya tienen su factura de este mes.')
+        else:
+            messages.error(request, 'Ocurrieron algunos errores al generar las facturas. Por favor contacta al soporte.')
 
     return redirect('dashboard')
 
@@ -1167,6 +1189,8 @@ def saas_master_control(request):
             'propiedades': props_count
         })
         
+    procesos = RegistroProceso.objects.all().select_related('ejecutado_por')[:15]
+
     context = {
         'titulo_pagina': 'Centro de Mando SaaS',
         'clientes': clientes_data,
@@ -1174,6 +1198,7 @@ def saas_master_control(request):
         'total_activos': sum(1 for c in clientes_data if c['estado'] == 'ACTIVA'),
         'total_suspendidos': sum(1 for c in clientes_data if c['estado'] == 'SUSPENDIDA'),
         'total_trials': sum(1 for c in clientes_data if c['estado'] == 'TRIAL'),
+        'procesos': procesos,
     }
     return render(request, 'gestion_propiedades/saas_master.html', context)
 

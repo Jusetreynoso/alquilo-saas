@@ -10,6 +10,8 @@ def propietario_requerido(view_func):
     """
     @wraps(view_func)
     def _wrapped_view(request, *args, **kwargs):
+        if request.user.is_superuser:
+            return view_func(request, *args, **kwargs)
         if not Portafolio.objects.filter(propietario=request.user).exists():
             messages.error(request, "Acción denegada. Solo el Administrador de la cuenta puede acceder a esta área.")
             return redirect('dashboard')
