@@ -38,7 +38,7 @@
                         <label class="form-label text-muted fw-bold small">Monto a Pagar</label>
                         <div class="input-group input-group-lg">
                             <span class="input-group-text border-end-0 bg-white text-success fw-bold">$</span>
-                            <input type="text" class="form-control border-start-0 text-success fw-bold" value="{{ monto_renta }}" disabled>
+                            <input type="text" class="form-control border-start-0 text-success fw-bold" value="{{ monto_renta|stringformat:'.2f' }}" disabled>
                             <input type="hidden" name="monto" value="{{ monto_renta }}">
                         </div>
                         <small class="text-muted mt-1 d-block">El anticipo cubrirá la totalidad de la renta base de ese mes.</small>

@@ -6,6 +6,7 @@ import decimal
 from django.db import transaction
 from django.contrib.auth.models import User
 from gestion_propiedades.models import Propiedad, FacturaSaaS, Contrato, Factura, CargoMora, AccesoPortafolio
+from gestion_propiedades.utils import obtener_nombre_mes
 from gestion_propiedades.utils_correo import (
     enviar_aviso_factura_saas, 
     enviar_aviso_factura_generada, 
@@ -87,7 +88,7 @@ class Command(BaseCommand):
                         fecha_vencimiento=hoy + timedelta(days=contrato.dias_gracia),
                         monto_base=contrato.monto_renta,
                         estado='PENDIENTE',
-                        concepto=f'Renta mensual ({hoy.strftime("%m/%Y")})'
+                        concepto=f'Renta {obtener_nombre_mes(hoy.month)} {hoy.year}'
                     )
                     facturas_b2c += 1
                     

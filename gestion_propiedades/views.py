@@ -8,7 +8,7 @@ from django.contrib import messages
 from datetime import date
 from .models import Portafolio, Propiedad, Factura, CargoMora, ReciboPago, Contrato, SolicitudAlquiler, MantenimientoUnidad, Inquilino, PlanSaaS, SuscripcionCliente, AuditLog, GastoProgramado
 from .forms import NuevoClienteSaaSForm, EditarSuscripcionForm, PropiedadForm, ContratoForm, InquilinoForm, MantenimientoForm, PlanSaaSForm
-from .utils import render_to_pdf
+from .utils import render_to_pdf, obtener_nombre_mes
 import calendar
 import decimal
 from django.db.models.functions import TruncMonth
@@ -453,7 +453,7 @@ def generar_facturas_masivas(request):
                 fecha_emision=hoy,
                 fecha_vencimiento=fecha_vencimiento,
                 monto_base=contrato.monto_renta,
-                concepto=f"Renta {hoy.strftime('%B %Y')}", # Ej: Renta February 2026
+                concepto=f"Renta {obtener_nombre_mes(hoy.month)} {hoy.year}",
                 estado='PENDIENTE'
             )
             facturas_creadas += 1
@@ -1801,7 +1801,7 @@ def registrar_pago_anticipado(request, contrato_id):
             fecha_emision=fecha_proxima_emision,
             fecha_vencimiento=fecha_vencimiento_proxima,
             monto_base=contrato.monto_renta,
-            concepto=f"Pago Anticipado Renta ({fecha_proxima_emision.strftime('%m/%Y')})",
+            concepto=f"Renta {obtener_nombre_mes(fecha_proxima_emision.month)} {fecha_proxima_emision.year} (Anticipada)",
             estado='PAGADA'
         )
         

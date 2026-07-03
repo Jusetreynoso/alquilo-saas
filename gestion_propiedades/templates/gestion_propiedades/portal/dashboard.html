@@ -18,7 +18,7 @@
         <div class="d-flex justify-content-between align-items-center bg-light p-3 rounded-3 mt-3">
             <div>
                 <span class="d-block text-muted small">Renta Mensual</span>
-                <span class="fw-bold text-dark fs-5">RD$ {{ contrato.monto_renta }}</span>
+                <span class="fw-bold text-dark fs-5">RD$ {{ contrato.monto_renta|dinero }}</span>
             </div>
             <div class="text-end">
                 <span class="d-block text-muted small">Día de pago</span>
@@ -38,7 +38,7 @@
         {% for factura in facturas_pendientes %}
         <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3">
             <div>
-                <h5 class="fw-bold mb-1">RD$ {{ factura.monto_total_con_mora }}</h5>
+                <h5 class="fw-bold mb-1">RD$ {{ factura.monto_total_con_mora|dinero }}</h5>
                 <span class="text-muted small">{{ factura.concepto }}</span>
             </div>
             <div class="text-end">
@@ -85,7 +85,7 @@
                         <div class="small text-muted">{{ factura.fecha_emision|date:"d M, Y" }}</div>
                     </div>
                     <div class="text-end">
-                        <div class="fw-bold">RD$ {{ factura.monto_total_con_mora }}</div>
+                        <div class="fw-bold">RD$ {{ factura.monto_total_con_mora|dinero }}</div>
                         <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill small">Pagada</span>
                     </div>
                 </div>
