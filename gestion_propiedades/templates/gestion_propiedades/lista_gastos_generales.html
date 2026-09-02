@@ -1,0 +1,99 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+
+{% block encabezado %}
+    <div class="d-flex justify-content-between align-items-center w-100 flex-wrap gap-2">
+        <span>💸 {{ titulo_pagina }}</span>
+        <a href="{% url 'registrar_gasto_general' %}" class="btn btn-primary fw-bold shadow-sm">+ Registrar Gasto General</a>
+    </div>
+{% endblock %}
+
+{% block contenido %}
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-primary text-white shadow-sm border-0">
+                <div class="card-body py-3">
+                    <h6 class="text-white-50 text-uppercase fw-bold mb-1 small">Total Gastos Registrados</h6>
+                    <h3 class="fw-bold mb-0">${{ total_monto|dinero }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <input type="text" id="buscadorGastos" class="form-control form-control-lg shadow-sm" placeholder="🔍 Buscar gasto por concepto, categoría, propietario o fecha...">
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="px-4 py-3">Fecha</th>
+                            <th class="py-3">Concepto / Descripción</th>
+                            <th class="py-3">Categoría</th>
+                            <th class="py-3">Propietario Afectado</th>
+                            <th class="py-3">Propiedad (Opcional)</th>
+                            <th class="py-3 text-end">Monto</th>
+                            <th class="py-3 text-end px-4">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for g in gastos %}
+                        <tr>
+                            <td class="px-4 py-3 text-muted">{{ g.fecha|date:"d/m/Y" }}</td>
+                            <td class="py-3 fw-bold text-dark">{{ g.concepto }}</td>
+                            <td class="py-3">
+                                <span class="badge bg-secondary-subtle text-secondary border px-2 py-1">
+                                    {{ g.get_categoria_display }}
+                                </span>
+                            </td>
+                            <td class="py-3">
+                                {% if g.propietario_inmueble %}
+                                    <a href="{% url 'detalle_propietario' g.propietario_inmueble.id %}" class="text-decoration-none fw-bold">
+                                        🏢 {{ g.propietario_inmueble.nombre }}
+                                    </a>
+                                {% else %}
+                                    <span class="text-muted">General (Portafolio)</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-3 text-muted">
+                                {{ g.propiedad.nombre_o_numero|default:"---" }}
+                            </td>
+                            <td class="py-3 text-end fw-bold text-danger">
+                                ${{ g.monto|dinero }}
+                            </td>
+                            <td class="py-3 text-end px-4">
+                                <form method="POST" action="{% url 'eliminar_gasto_general' g.id %}" style="display:inline;" onsubmit="return confirm('¿Confirma eliminar este registro de gasto?');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">🗑️</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-muted">
+                                <h5>No hay gastos generales o deducciones registradas.</h5>
+                                <p class="mb-0">Utiliza este módulo para registrar impuestos de comisiones, asesorías legales u otros gastos no específicos.</p>
+                                <a href="{% url 'registrar_gasto_general' %}" class="btn btn-primary mt-3">+ Registrar Primer Gasto</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById("buscadorGastos").addEventListener("keyup", function() {
+            let filter = this.value.toLowerCase();
+            let rows = document.querySelectorAll("tbody tr");
+            rows.forEach(row => {
+                row.style.display = row.innerText.toLowerCase().includes(filter) ? "" : "none";
+            });
+        });
+    </script>
+{% endblock %}

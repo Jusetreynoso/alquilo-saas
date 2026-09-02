@@ -179,6 +179,9 @@
                         <a class="nav-link text-white-50" href="{% url 'lista_propiedades' %}">🏠 Propiedades</a>
                     </li>
                     <li class="nav-item mb-2">
+                        <a class="nav-link {% if 'propietario' in request.resolver_match.url_name %}text-white fw-bold{% else %}text-white-50{% endif %}" href="{% url 'lista_propietarios' %}">👥 Propietarios</a>
+                    </li>
+                    <li class="nav-item mb-2">
                         <a class="nav-link text-white-50" href="{% url 'lista_inquilinos' %}">👤 Inquilinos</a>
                     </li>
                     <li class="nav-item mb-2">
@@ -201,11 +204,14 @@
                             <a class="nav-link text-white-50 py-1 small" href="{% url 'reporte_ocupacion' %}">📅 Ocupación Anual</a>
                             <a class="nav-link text-white-50 py-1 small" href="{% url 'reporte_morosos' %}">🚨 Inquilinos Morosos</a>
                             <a class="nav-link text-white-50 py-1 small" href="{% url 'reporte_transparencia' %}">🔍 Transparencia</a>
-                            <a class="nav-link text-white-50 py-1 small" href="{% url 'reporte_propietario' %}">🏢 Consolidado Propietario</a>
+                            <a class="nav-link text-white-50 py-1 small" href="{% url 'reporte_propietario' %}">🏢 Consolidado y Liquidación</a>
                         </div>
                     </li>
                     <li class="nav-item mb-2">
                         <a class="nav-link {% if request.resolver_match.url_name == 'lista_mantenimientos_global' %}text-white fw-bold{% else %}text-white-50{% endif %}" href="{% url 'lista_mantenimientos_global' %}">🔧 Mantenimientos</a>
+                    </li>
+                    <li class="nav-item mb-2">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'lista_gastos_generales' %}text-white fw-bold{% else %}text-white-50{% endif %}" href="{% url 'lista_gastos_generales' %}">💸 Gastos Generales</a>
                     </li>
                     {% if request.user.portafolios.all or request.user.is_superuser %}
                     <li class="nav-item mb-2">

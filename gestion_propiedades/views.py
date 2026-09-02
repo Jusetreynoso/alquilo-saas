@@ -3,11 +3,11 @@ from django.utils import timezone
 from django.http import HttpResponse
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login
-from django.db.models import Sum, Q, Prefetch, F
+from django.db.models import Sum, Q, Prefetch, F, Count
 from django.contrib import messages
 from datetime import date
-from .models import Portafolio, Propiedad, Factura, CargoMora, ReciboPago, Contrato, SolicitudAlquiler, MantenimientoUnidad, Inquilino, PlanSaaS, SuscripcionCliente, AuditLog, GastoProgramado, RegistroProceso
-from .forms import NuevoClienteSaaSForm, EditarSuscripcionForm, PropiedadForm, ContratoForm, InquilinoForm, MantenimientoForm, PlanSaaSForm
+from .models import Portafolio, Propiedad, Factura, CargoMora, ReciboPago, Contrato, SolicitudAlquiler, MantenimientoUnidad, Inquilino, PlanSaaS, SuscripcionCliente, AuditLog, GastoProgramado, RegistroProceso, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario
+from .forms import NuevoClienteSaaSForm, EditarSuscripcionForm, PropiedadForm, ContratoForm, InquilinoForm, MantenimientoForm, PlanSaaSForm, PropietarioInmuebleForm, GastoGeneralPropietarioForm, LiquidacionPropietarioForm
 from .utils import render_to_pdf, obtener_nombre_mes
 import calendar
 import decimal
@@ -2035,56 +2035,260 @@ def imprimir_contrato_legal(request, contrato_id):
         
     return render(request, 'gestion_propiedades/imprimir_contrato_legal.html', {'contrato': contrato})
 
+# --- MÓDULO DE GESTIÓN DE PROPIETARIOS DE INMUEBLES ---
+
 @login_required(login_url='/login/')
-def reporte_propietario(request):
-    """
-    Genera un informe consolidado de una o más propiedades seleccionadas,
-    mostrando ingresos, gastos, ocupación, depósitos y morosidad.
-    """
-    from django.db.models import Sum, Q
-    from django.utils import timezone
-    import decimal
-    
+def lista_propietarios(request):
     portafolios = Portafolio.objects.filter(
         Q(propietario=request.user) | Q(accesos__usuario=request.user)
     ).distinct()
     
-    # Obtener todas las propiedades disponibles para los filtros
+    propietarios = PropietarioInmueble.objects.filter(
+        portafolio__in=portafolios
+    ).annotate(
+        cant_propiedades=Count('propiedades', filter=Q(propiedades__is_deleted=False))
+    ).order_by('nombre')
+    
+    context = {
+        'titulo_pagina': 'Gestión de Propietarios',
+        'propietarios': propietarios,
+    }
+    return render(request, 'gestion_propiedades/lista_propietarios.html', context)
+
+
+@login_required(login_url='/login/')
+def crear_propietario(request):
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+    
+    if not portafolios.exists():
+        messages.error(request, "Debes tener al menos un portafolio activo.")
+        return redirect('dashboard')
+        
+    if request.method == 'POST':
+        form = PropietarioInmuebleForm(request.POST)
+        if form.is_valid():
+            propietario = form.save(commit=False)
+            portafolio_id = request.POST.get('portafolio_id')
+            if portafolio_id:
+                propietario.portafolio = get_object_or_404(portafolios, id=portafolio_id)
+            else:
+                propietario.portafolio = portafolios.first()
+            propietario.save()
+            messages.success(request, f'Propietario "{propietario.nombre}" registrado exitosamente.')
+            return redirect('lista_propietarios')
+    else:
+        form = PropietarioInmuebleForm()
+        
+    context = {
+        'titulo_pagina': 'Registrar Propietario de Inmueble',
+        'form': form,
+        'portafolios': portafolios
+    }
+    return render(request, 'gestion_propiedades/form_generico.html', context)
+
+
+@login_required(login_url='/login/')
+def editar_propietario(request, propietario_id):
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+    propietario = get_object_or_404(PropietarioInmueble, id=propietario_id, portafolio__in=portafolios)
+    
+    if request.method == 'POST':
+        form = PropietarioInmuebleForm(request.POST, instance=propietario)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Información del propietario "{propietario.nombre}" actualizada.')
+            return redirect('detalle_propietario', propietario_id=propietario.id)
+    else:
+        form = PropietarioInmuebleForm(instance=propietario)
+        
+    context = {
+        'titulo_pagina': f'Editar Propietario: {propietario.nombre}',
+        'form': form,
+        'propietario': propietario
+    }
+    return render(request, 'gestion_propiedades/form_generico.html', context)
+
+
+@login_required(login_url='/login/')
+def detalle_propietario(request, propietario_id):
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+    propietario = get_object_or_404(PropietarioInmueble, id=propietario_id, portafolio__in=portafolios)
+    
+    propiedades = propietario.propiedades.filter(is_deleted=False)
+    contratos = Contrato.objects.filter(propiedad__in=propiedades, activo=True).select_related('propiedad', 'inquilino')
+    gastos_generales = GastoGeneralPropietario.objects.filter(propietario_inmueble=propietario).order_by('-fecha')[:10]
+    liquidaciones = LiquidacionPropietario.objects.filter(propietario_inmueble=propietario).order_by('-periodo_anio', '-periodo_mes')[:12]
+    
+    context = {
+        'titulo_pagina': f'Expediente de Propietario: {propietario.nombre}',
+        'propietario': propietario,
+        'propiedades': propiedades,
+        'contratos': contratos,
+        'gastos_generales': gastos_generales,
+        'liquidaciones': liquidaciones
+    }
+    return render(request, 'gestion_propiedades/detalle_propietario.html', context)
+
+
+# --- MÓDULO DE GASTOS GENERALES Y DEDUCCIONES ---
+
+@login_required(login_url='/login/')
+def lista_gastos_generales(request):
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+    
+    gastos = GastoGeneralPropietario.objects.filter(
+        portafolio__in=portafolios
+    ).select_related('propietario_inmueble', 'propiedad', 'portafolio').order_by('-fecha', '-creado_en')
+    
+    total_monto = gastos.aggregate(total=Sum('monto'))['total'] or decimal.Decimal('0.00')
+    
+    context = {
+        'titulo_pagina': 'Gastos Generales y Deducciones',
+        'gastos': gastos,
+        'total_monto': total_monto
+    }
+    return render(request, 'gestion_propiedades/lista_gastos_generales.html', context)
+
+
+@login_required(login_url='/login/')
+def registrar_gasto_general(request):
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+    
+    if request.method == 'POST':
+        form = GastoGeneralPropietarioForm(request.POST, request.FILES)
+        if form.is_valid():
+            gasto = form.save(commit=False)
+            gasto.portafolio = portafolios.first()
+            gasto.creado_por = request.user
+            gasto.save()
+            messages.success(request, f'Gasto general "{gasto.concepto}" registrado correctamente.')
+            return redirect('lista_gastos_generales')
+    else:
+        form = GastoGeneralPropietarioForm()
+        form.fields['propietario_inmueble'].queryset = PropietarioInmueble.objects.filter(portafolio__in=portafolios, activo=True)
+        form.fields['propiedad'].queryset = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False)
+        
+    context = {
+        'titulo_pagina': 'Registrar Gasto General o Deducción',
+        'form': form,
+    }
+    return render(request, 'gestion_propiedades/form_generico.html', context)
+
+
+@login_required(login_url='/login/')
+def eliminar_gasto_general(request, gasto_id):
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+    gasto = get_object_or_404(GastoGeneralPropietario, id=gasto_id, portafolio__in=portafolios)
+    if request.method == 'POST':
+        gasto.delete()
+        messages.success(request, 'Gasto eliminado exitosamente.')
+    return redirect('lista_gastos_generales')
+
+
+# --- REPORTE CONSOLIDADO Y LIQUIDACIÓN A PROPIETARIOS ---
+
+@login_required(login_url='/login/')
+def reporte_propietario(request):
+    """
+    Informe consolidado por Propietario de Inmuebles o propiedades seleccionadas.
+    Calcula rentas cobradas, comisiones, gastos directos/generales y neto a liquidar.
+    """
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+    
+    propietarios_list = PropietarioInmueble.objects.filter(portafolio__in=portafolios, activo=True).order_by('nombre')
     todas_propiedades = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False).order_by('nombre_o_numero')
     
-    # Obtener selección de propiedades (lista de IDs)
-    propiedades_seleccionadas_ids = request.GET.getlist('propiedades')
+    propietario_id = request.GET.get('propietario_id')
+    mes = int(request.GET.get('mes', date.today().month))
+    anio = int(request.GET.get('anio', date.today().year))
     
-    if propiedades_seleccionadas_ids:
-        propiedades = todas_propiedades.filter(id__in=propiedades_seleccionadas_ids)
-    else:
-        # Por defecto seleccionamos todas
-        propiedades = todas_propiedades
-        propiedades_seleccionadas_ids = [str(p.id) for p in propiedades]
+    propietario_seleccionado = None
+    if propietario_id:
+        propietario_seleccionado = propietarios_list.filter(id=propietario_id).first()
         
-    # Variables a calcular
+    if propietario_seleccionado:
+        propiedades = todas_propiedades.filter(propietario_inmueble=propietario_seleccionado)
+    else:
+        propiedades_seleccionadas_ids = request.GET.getlist('propiedades')
+        if propiedades_seleccionadas_ids:
+            propiedades = todas_propiedades.filter(id__in=propiedades_seleccionadas_ids)
+        else:
+            propiedades = todas_propiedades
+            
     total_ingresos = decimal.Decimal('0.00')
-    total_gastos = decimal.Decimal('0.00')
+    total_gastos_propiedades = decimal.Decimal('0.00')
+    total_gastos_generales = decimal.Decimal('0.00')
+    monto_comision = decimal.Decimal('0.00')
     total_morosidad = decimal.Decimal('0.00')
     total_depositos = decimal.Decimal('0.00')
-    
     propiedades_ocupadas = 0
     contratos_activos = []
+    recibos_cobrados = []
+    gastos_directos_list = []
+    gastos_generales_list = []
     
     if propiedades.exists():
-        # 1. Ingresos: Facturas pagadas en los contratos de estas propiedades
-        ingresos_agg = ReciboPago.objects.filter(
-            factura__contrato__propiedad__in=propiedades
-        ).aggregate(total=Sum('monto_pagado'))['total']
-        total_ingresos = ingresos_agg or decimal.Decimal('0.00')
+        # Recibos cobrados en el mes/año
+        recibos_qs = ReciboPago.objects.filter(
+            factura__contrato__propiedad__in=propiedades,
+            fecha_pago__month=mes,
+            fecha_pago__year=anio
+        ).select_related('factura__contrato__propiedad', 'factura__contrato__inquilino')
         
-        # 2. Gastos: Mantenimientos asociados a estas propiedades (Pagados/Todos)
-        gastos_agg = MantenimientoUnidad.objects.filter(
-            propiedad__in=propiedades
-        ).aggregate(total=Sum('costo'))['total']
-        total_gastos = gastos_agg or decimal.Decimal('0.00')
+        recibos_cobrados = list(recibos_qs)
+        ingresos_agg = sum(r.monto_pagado for r in recibos_cobrados)
+        total_ingresos = decimal.Decimal(str(ingresos_agg)) if ingresos_agg else decimal.Decimal('0.00')
         
-        # 3. Morosidad: Facturas atrasadas de estos contratos
+        # Mantenimientos directos de las propiedades en el mes/año
+        mantenimientos_qs = MantenimientoUnidad.objects.filter(
+            propiedad__in=propiedades,
+            fecha_reporte__month=mes,
+            fecha_reporte__year=anio
+        ).select_related('propiedad')
+        gastos_directos_list = list(mantenimientos_qs)
+        gastos_agg = sum(m.costo for m in gastos_directos_list)
+        total_gastos_propiedades = decimal.Decimal(str(gastos_agg)) if gastos_agg else decimal.Decimal('0.00')
+        
+        # Gastos generales / deducciones asociadas al propietario o a sus propiedades
+        if propietario_seleccionado:
+            gastos_gen_qs = GastoGeneralPropietario.objects.filter(
+                Q(propietario_inmueble=propietario_seleccionado) | Q(propiedad__in=propiedades),
+                fecha__month=mes,
+                fecha__year=anio
+            )
+        else:
+            gastos_gen_qs = GastoGeneralPropietario.objects.filter(
+                propiedad__in=propiedades,
+                fecha__month=mes,
+                fecha__year=anio
+            )
+        gastos_generales_list = list(gastos_gen_qs)
+        gastos_gen_agg = sum(g.monto for g in gastos_generales_list)
+        total_gastos_generales = decimal.Decimal(str(gastos_gen_agg)) if gastos_gen_agg else decimal.Decimal('0.00')
+        
+        # Cálculo de comisión de administración si hay propietario seleccionado
+        if propietario_seleccionado:
+            if propietario_seleccionado.tipo_comision == 'PORCENTAJE':
+                factor = propietario_seleccionado.porcentaje_comision / decimal.Decimal('100.0')
+                monto_comision = round(total_ingresos * factor, 2)
+            else:
+                monto_comision = propietario_seleccionado.monto_comision_fijo
+                
+        # Morosidad general
         facturas_vencidas = Factura.objects.filter(
             contrato__propiedad__in=propiedades,
             estado='ATRASADA'
@@ -2094,7 +2298,7 @@ def reporte_propietario(request):
             mora = f.mora_acumulada or decimal.Decimal('0.00')
             total_morosidad += f.monto_base + mora
             
-        # 4. Depósitos en Garantía: contratos activos
+        # Depósitos y contratos activos
         contratos_activos_qs = Contrato.objects.filter(
             propiedad__in=propiedades,
             activo=True
@@ -2104,35 +2308,189 @@ def reporte_propietario(request):
             total_depositos += c.monto_deposito
             contratos_activos.append(c)
             
-        # 5. Ocupación
         propiedades_ocupadas = propiedades.filter(estado='OCUPADO').count()
         
     total_propiedades = propiedades.count()
     porcentaje_ocupacion = (propiedades_ocupadas / total_propiedades * 100) if total_propiedades > 0 else 0
-    beneficio_neto = total_ingresos - total_gastos
     
-    # Obtener incidencias recientes de las propiedades seleccionadas
-    incidencias = MantenimientoUnidad.objects.filter(
-        propiedad__in=propiedades
-    ).exclude(estado='COMPLETADO').order_by('-fecha_reporte')
+    total_deducciones = monto_comision + total_gastos_propiedades + total_gastos_generales
+    neto_a_liquidar = max(decimal.Decimal('0.00'), total_ingresos - total_deducciones)
     
+    # Verificar si ya existe liquidación registrada para este propietario y periodo
+    liquidacion_existente = None
+    if propietario_seleccionado:
+        liquidacion_existente = LiquidacionPropietario.objects.filter(
+            propietario_inmueble=propietario_seleccionado,
+            periodo_mes=mes,
+            periodo_anio=anio
+        ).first()
+
     context = {
-        'titulo_pagina': 'Reporte de Propietario',
+        'titulo_pagina': 'Reporte y Liquidación de Propietario',
+        'propietarios_list': propietarios_list,
+        'propietario_seleccionado': propietario_seleccionado,
         'todas_propiedades': todas_propiedades,
-        'propiedades_seleccionadas_ids': [int(id) for id in propiedades_seleccionadas_ids],
+        'mes': mes,
+        'nombre_mes': obtener_nombre_mes(mes),
+        'anio': anio,
+        'anios_disponibles': range(date.today().year - 2, date.today().year + 2),
         'total_ingresos': total_ingresos,
-        'total_gastos': total_gastos,
-        'beneficio_neto': beneficio_neto,
+        'monto_comision': monto_comision,
+        'total_gastos_propiedades': total_gastos_propiedades,
+        'total_gastos_generales': total_gastos_generales,
+        'total_deducciones': total_deducciones,
+        'neto_a_liquidar': neto_a_liquidar,
         'total_morosidad': total_morosidad,
         'total_depositos': total_depositos,
         'porcentaje_ocupacion': round(porcentaje_ocupacion, 1),
         'propiedades_ocupadas': propiedades_ocupadas,
         'total_propiedades': total_propiedades,
         'contratos_activos': contratos_activos,
-        'incidencias': incidencias,
+        'recibos_cobrados': recibos_cobrados,
+        'gastos_directos_list': gastos_directos_list,
+        'gastos_generales_list': gastos_generales_list,
+        'liquidacion_existente': liquidacion_existente,
         'fecha_generacion': timezone.now()
     }
     return render(request, 'gestion_propiedades/reporte_propietario.html', context)
+
+
+@login_required(login_url='/login/')
+def procesar_liquidacion_propietario(request, propietario_id):
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+    propietario = get_object_or_404(PropietarioInmueble, id=propietario_id, portafolio__in=portafolios)
+    
+    if request.method == 'POST':
+        mes = int(request.POST.get('mes', date.today().month))
+        anio = int(request.POST.get('anio', date.today().year))
+        
+        propiedades = propietario.propiedades.filter(is_deleted=False)
+        
+        recibos = ReciboPago.objects.filter(
+            factura__contrato__propiedad__in=propiedades,
+            fecha_pago__month=mes,
+            fecha_pago__year=anio
+        )
+        total_ingresos = recibos.aggregate(total=Sum('monto_pagado'))['total'] or decimal.Decimal('0.00')
+        
+        if propietario.tipo_comision == 'PORCENTAJE':
+            factor = propietario.porcentaje_comision / decimal.Decimal('100.0')
+            monto_comision = round(total_ingresos * factor, 2)
+        else:
+            monto_comision = propietario.monto_comision_fijo
+            
+        gastos_prop = MantenimientoUnidad.objects.filter(
+            propiedad__in=propiedades,
+            fecha_reporte__month=mes,
+            fecha_reporte__year=anio
+        ).aggregate(total=Sum('costo'))['total'] or decimal.Decimal('0.00')
+        
+        gastos_gen = GastoGeneralPropietario.objects.filter(
+            Q(propietario_inmueble=propietario) | Q(propiedad__in=propiedades),
+            fecha__month=mes,
+            fecha__year=anio
+        ).aggregate(total=Sum('monto'))['total'] or decimal.Decimal('0.00')
+        
+        total_deducciones = monto_comision + gastos_prop + gastos_gen
+        neto_pagar = max(decimal.Decimal('0.00'), total_ingresos - total_deducciones)
+        
+        metodo = request.POST.get('metodo_pago', 'TRANSFERENCIA')
+        referencia = request.POST.get('referencia_transaccion', '')
+        fecha_pago_val = request.POST.get('fecha_pago', date.today())
+        notas = request.POST.get('notas', '')
+        
+        LiquidacionPropietario.objects.update_or_create(
+            propietario_inmueble=propietario,
+            periodo_mes=mes,
+            periodo_anio=anio,
+            defaults={
+                'monto_rentas_cobradas': total_ingresos,
+                'monto_comision': monto_comision,
+                'monto_gastos_propiedades': gastos_prop,
+                'monto_gastos_generales': gastos_gen,
+                'monto_neto_pagado': neto_pagar,
+                'estado': 'PAGADO',
+                'fecha_pago': fecha_pago_val,
+                'metodo_pago': metodo,
+                'referencia_transaccion': referencia,
+                'notas': notas,
+                'registrado_por': request.user
+            }
+        )
+        
+        messages.success(request, f'Liquidación de {obtener_nombre_mes(mes)} {anio} para {propietario.nombre} registrada correctamente.')
+    return redirect(f'/reportes/propietario/?propietario_id={propietario.id}&mes={mes}&anio={anio}')
+
+
+@login_required(login_url='/login/')
+def imprimir_liquidacion_propietario(request, propietario_id):
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+    propietario = get_object_or_404(PropietarioInmueble, id=propietario_id, portafolio__in=portafolios)
+    
+    mes = int(request.GET.get('mes', date.today().month))
+    anio = int(request.GET.get('anio', date.today().year))
+    
+    propiedades = propietario.propiedades.filter(is_deleted=False)
+    
+    recibos = ReciboPago.objects.filter(
+        factura__contrato__propiedad__in=propiedades,
+        fecha_pago__month=mes,
+        fecha_pago__year=anio
+    ).select_related('factura__contrato__propiedad', 'factura__contrato__inquilino')
+    
+    total_ingresos = recibos.aggregate(total=Sum('monto_pagado'))['total'] or decimal.Decimal('0.00')
+    
+    if propietario.tipo_comision == 'PORCENTAJE':
+        monto_comision = round(total_ingresos * (propietario.porcentaje_comision / decimal.Decimal('100.0')), 2)
+    else:
+        monto_comision = propietario.monto_comision_fijo
+        
+    gastos_propiedades = MantenimientoUnidad.objects.filter(
+        propiedad__in=propiedades,
+        fecha_reporte__month=mes,
+        fecha_reporte__year=anio
+    ).select_related('propiedad')
+    total_gastos_prop = gastos_propiedades.aggregate(total=Sum('costo'))['total'] or decimal.Decimal('0.00')
+    
+    gastos_generales = GastoGeneralPropietario.objects.filter(
+        Q(propietario_inmueble=propietario) | Q(propiedad__in=propiedades),
+        fecha__month=mes,
+        fecha__year=anio
+    )
+    total_gastos_gen = gastos_generales.aggregate(total=Sum('monto'))['total'] or decimal.Decimal('0.00')
+    
+    total_deducciones = monto_comision + total_gastos_prop + total_gastos_gen
+    neto_a_pagar = max(decimal.Decimal('0.00'), total_ingresos - total_deducciones)
+    
+    liquidacion = LiquidacionPropietario.objects.filter(
+        propietario_inmueble=propietario,
+        periodo_mes=mes,
+        periodo_anio=anio
+    ).first()
+    
+    context = {
+        'propietario': propietario,
+        'mes': mes,
+        'nombre_mes': obtener_nombre_mes(mes),
+        'anio': anio,
+        'propiedades': propiedades,
+        'recibos': recibos,
+        'gastos_propiedades': gastos_propiedades,
+        'gastos_generales': gastos_generales,
+        'total_ingresos': total_ingresos,
+        'monto_comision': monto_comision,
+        'total_gastos_prop': total_gastos_prop,
+        'total_gastos_gen': total_gastos_gen,
+        'total_deducciones': total_deducciones,
+        'neto_a_pagar': neto_a_pagar,
+        'liquidacion': liquidacion,
+        'fecha_emision': timezone.now()
+    }
+    return render(request, 'gestion_propiedades/imprimir_liquidacion_propietario.html', context)
 
 
 # --- MARKETPLACE VIEWS ---

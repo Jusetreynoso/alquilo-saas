@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Estado de Cuenta y Liquidación - {{ propietario.nombre }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #333;
+            background-color: #f8f9fa;
+        }
+        .invoice-box {
+            max-width: 900px;
+            margin: 20px auto;
+            padding: 30px;
+            background: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+            border-radius: 8px;
+        }
+        .header-title {
+            color: #1e293b;
+            font-weight: 700;
+        }
+        .summary-card {
+            background-color: #f1f5f9;
+            border-radius: 6px;
+            padding: 15px;
+        }
+        @media print {
+            body { background-color: #fff; }
+            .invoice-box { box-shadow: none; padding: 0; max-width: 100%; margin: 0; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container no-print text-center my-3">
+    <button onclick="window.print()" class="btn btn-primary btn-lg shadow-sm fw-bold">🖨️ Imprimir / Guardar en PDF</button>
+    <button onclick="window.close()" class="btn btn-outline-secondary btn-lg ms-2">Cerrar Ventana</button>
+</div>
+
+<div class="invoice-box">
+    <!-- Encabezado del Documento -->
+    <div class="row align-items-center mb-4 pb-3 border-bottom">
+        <div class="col-8">
+            <h2 class="header-title mb-1">ESTADO DE CUENTA Y LIQUIDACIÓN</h2>
+            <p class="text-muted mb-0">Gestión de Inmuebles y Administración de Alquileres</p>
+            <p class="text-secondary small">Período de Liquidación: <strong>{{ nombre_mes }} {{ anio }}</strong></p>
+        </div>
+        <div class="col-4 text-end">
+            <h4 class="fw-bold text-primary mb-0">ALQUILO</h4>
+            <span class="badge bg-secondary">Fecha Emisión: {{ fecha_emision|date:"d/m/Y" }}</span>
+        </div>
+    </div>
+
+    <!-- Información del Propietario -->
+    <div class="row mb-4">
+        <div class="col-6">
+            <div class="summary-card h-100">
+                <h6 class="fw-bold text-uppercase text-secondary small mb-2">Propietario / Cliente</h6>
+                <h5 class="fw-bold text-dark mb-1">{{ propietario.nombre }}</h5>
+                <p class="mb-1 small"><strong>Cédula / RNC:</strong> {{ propietario.cedula_o_rnc|default:"---" }}</p>
+                <p class="mb-1 small"><strong>Teléfono:</strong> {{ propietario.telefono|default:"---" }}</p>
+                <p class="mb-0 small"><strong>Correo:</strong> {{ propietario.correo|default:"---" }}</p>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="summary-card h-100">
+                <h6 class="fw-bold text-uppercase text-secondary small mb-2">Datos para Transferencia</h6>
+                <p class="mb-1 small"><strong>Banco:</strong> {{ propietario.banco_nombre|default:"No registrado" }}</p>
+                <p class="mb-1 small"><strong>Tipo Cuenta:</strong> {{ propietario.tipo_cuenta|default:"---" }}</p>
+                <p class="mb-1 small"><strong>No. Cuenta:</strong> {{ propietario.numero_cuenta|default:"---" }}</p>
+                <p class="mb-0 small"><strong>Estado Pago:</strong> 
+                    {% if liquidacion %}
+                        <span class="badge bg-success">Liquidado ({{ liquidacion.fecha_pago|date:"d/m/Y" }})</span>
+                    {% else %}
+                        <span class="badge bg-warning text-dark">Pendiente</span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 1. Detalle de Rentas Cobradas -->
+    <h5 class="fw-bold text-secondary mb-2">1. Ingresos por Cobros de Renta</h5>
+    <table class="table table-bordered align-middle mb-4">
+        <thead class="table-light">
+            <tr>
+                <th>Propiedad</th>
+                <th>Inquilino</th>
+                <th>Fecha Cobro</th>
+                <th class="text-end">Monto Cobrado</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in recibos %}
+            <tr>
+                <td>{{ r.factura.contrato.propiedad.nombre_o_numero }}</td>
+                <td>{{ r.factura.contrato.inquilino.nombre }}</td>
+                <td>{{ r.fecha_pago|date:"d/m/Y" }}</td>
+                <td class="text-end fw-bold">${{ r.monto_pagado|dinero }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4" class="text-center text-muted py-3">No hubieron cobros de renta en este período.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot class="table-light">
+            <tr>
+                <th colspan="3" class="text-end">Total Rentas Cobradas:</th>
+                <th class="text-end text-success fs-6">${{ total_ingresos|dinero }}</th>
+            </tr>
+        </tfoot>
+    </table>
+
+    <!-- 2. Detalle de Deducciones y Gastos -->
+    <h5 class="fw-bold text-secondary mb-2">2. Deducciones y Gastos del Período</h5>
+    <table class="table table-bordered align-middle mb-4">
+        <thead class="table-light">
+            <tr>
+                <th>Concepto / Descripción</th>
+                <th>Categoría</th>
+                <th class="text-end">Monto Deducido</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Comisión -->
+            <tr>
+                <td>
+                    <strong>Comisión de Administración</strong>
+                    <br><small class="text-muted">{% if propietario.tipo_comision == 'PORCENTAJE' %}{{ propietario.porcentaje_comision }}% sobre el total cobrado{% else %}Monto fijo contractual{% endif %}</small>
+                </td>
+                <td><span class="badge bg-secondary">Honorarios Admin</span></td>
+                <td class="text-end text-danger fw-bold">${{ monto_comision|dinero }}</td>
+            </tr>
+
+            <!-- Gastos Directos -->
+            {% for g in gastos_propiedades %}
+            <tr>
+                <td>Mantenimiento / Reparación: {{ g.descripcion }} ({{ g.propiedad.nombre_o_numero }})</td>
+                <td><span class="badge bg-secondary">Mantenimiento</span></td>
+                <td class="text-end text-danger fw-bold">${{ g.costo|dinero }}</td>
+            </tr>
+            {% endfor %}
+
+            <!-- Gastos Generales -->
+            {% for g in gastos_generales %}
+            <tr>
+                <td>{{ g.concepto }}</td>
+                <td><span class="badge bg-secondary">{{ g.get_categoria_display }}</span></td>
+                <td class="text-end text-danger fw-bold">${{ g.monto|dinero }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot class="table-light">
+            <tr>
+                <th colspan="2" class="text-end">Total Deducciones:</th>
+                <th class="text-end text-danger fs-6">${{ total_deducciones|dinero }}</th>
+            </tr>
+        </tfoot>
+    </table>
+
+    <!-- Resumen Final de Liquidación -->
+    <div class="row justify-content-end mb-4">
+        <div class="col-6">
+            <div class="border rounded p-3 bg-light">
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Total Rentas Cobradas:</span>
+                    <strong class="text-success">${{ total_ingresos|dinero }}</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>(-) Total Deducciones:</span>
+                    <strong class="text-danger">-${{ total_deducciones|dinero }}</strong>
+                </div>
+                <hr class="my-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold mb-0">NETO A TRANSFIRAR:</h5>
+                    <h3 class="fw-bold text-primary mb-0">${{ neto_a_pagar|dinero }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firmas -->
+    <div class="row mt-5 pt-4 text-center">
+        <div class="col-6">
+            <div class="border-top pt-2 mx-4">
+                <strong>Administrador / Gestión Alquilo</strong>
+                <p class="text-muted small">Firma y Sello Autorizado</p>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="border-top pt-2 mx-4">
+                <strong>Propietario / Recibido Conforme</strong>
+                <p class="text-muted small">{{ propietario.nombre }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

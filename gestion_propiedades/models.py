@@ -133,6 +133,34 @@ class AccesoPortafolio(models.Model):
     def __str__(self):
         return f"{self.usuario.username} - {self.portafolio.nombre} ({self.rol})"
 
+class PropietarioInmueble(models.Model):
+    TIPO_COMISION_CHOICES = [
+        ('PORCENTAJE', 'Porcentaje sobre Cobro (%)'),
+        ('FIJO', 'Monto Fijo Mensual ($)'),
+    ]
+    
+    portafolio = models.ForeignKey(Portafolio, on_delete=models.CASCADE, related_name='propietarios_inmuebles')
+    nombre = models.CharField(max_length=150, help_text="Nombre completo o razón social del propietario del inmueble")
+    cedula_o_rnc = models.CharField(max_length=50, blank=True, null=True, help_text="Cédula o RNC fiscal")
+    telefono = models.CharField(max_length=20, blank=True, null=True)
+    correo = models.EmailField(blank=True, null=True)
+    direccion = models.TextField(blank=True, null=True)
+    
+    tipo_comision = models.CharField(max_length=20, choices=TIPO_COMISION_CHOICES, default='PORCENTAJE')
+    porcentaje_comision = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="Ej: 10.00 para 10%")
+    monto_comision_fijo = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Monto fijo si aplica tipo FIJO")
+    
+    banco_nombre = models.CharField(max_length=100, blank=True, null=True, help_text="Ej: Banco Popular, Banreservas")
+    tipo_cuenta = models.CharField(max_length=50, blank=True, null=True, help_text="Ej: Corriente, Ahorros")
+    numero_cuenta = models.CharField(max_length=50, blank=True, null=True, help_text="Número de cuenta para liquidaciones")
+    
+    activo = models.BooleanField(default=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.nombre} ({self.portafolio.nombre})"
+
+
 class Propiedad(models.Model):
     ESTADO_CHOICES = [
         ('DISPONIBLE', 'Disponible'),
@@ -142,6 +170,14 @@ class Propiedad(models.Model):
     ]
     
     portafolio = models.ForeignKey(Portafolio, on_delete=models.CASCADE, related_name='propiedades')
+    propietario_inmueble = models.ForeignKey(
+        PropietarioInmueble, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='propiedades',
+        help_text="Dueño/Propietario del inmueble (Opcional)"
+    )
     nombre_o_numero = models.CharField(max_length=100, help_text="Ej: Apt 2B, Casa #4, o Local Comercial 1")
     grupo_o_residencial = models.CharField(max_length=100, blank=True, null=True, help_text="Ej: Residencial Los Pinos (Opcional, para agrupar)")
     direccion_completa = models.TextField(blank=True, null=True)
@@ -484,5 +520,67 @@ class RegistroProceso(models.Model):
     def __str__(self):
         estado = "Exitoso" if self.exitoso else "Fallido"
         return f"{self.nombre_proceso} - {self.fecha_ejecucion:%Y-%m-%d %H:%M} ({estado})"
+
+
+class GastoGeneralPropietario(models.Model):
+    CATEGORIA_CHOICES = [
+        ('GESTION_LEGAL', 'Gestión Legal / Abogado'),
+        ('IMPUESTO_COMISION', 'Impuestos de Comisión / ITBIS / Retenciones'),
+        ('HONORARIOS', 'Honorarios Profesionales'),
+        ('REPARACION_GENERAL', 'Gastos Generales no asignados a propiedad'),
+        ('PUBLICIDAD', 'Publicidad y Mercadeo'),
+        ('OTRO', 'Otros Gastos / Deducciones'),
+    ]
+
+    portafolio = models.ForeignKey(Portafolio, on_delete=models.CASCADE, related_name='gastos_generales')
+    propietario_inmueble = models.ForeignKey(PropietarioInmueble, on_delete=models.CASCADE, null=True, blank=True, related_name='gastos_generales', help_text="Propietario al que aplica el gasto (Opcional)")
+    propiedad = models.ForeignKey(Propiedad, on_delete=models.SET_NULL, null=True, blank=True, related_name='gastos_directos_adicionales', help_text="Propiedad específica si aplica (Opcional)")
+    
+    concepto = models.CharField(max_length=200, help_text="Descripción del gasto o deducción")
+    monto = models.DecimalField(max_digits=10, decimal_places=2)
+    categoria = models.CharField(max_length=30, choices=CATEGORIA_CHOICES, default='OTRO')
+    fecha = models.DateField(default=timezone.now)
+    factura_adjunta = models.FileField(upload_to='gastos_comprobantes/', blank=True, null=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    creado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        ordering = ['-fecha', '-creado_en']
+
+    def __str__(self):
+        return f"{self.concepto} - ${self.monto} ({self.fecha})"
+
+
+class LiquidacionPropietario(models.Model):
+    ESTADO_CHOICES = [
+        ('PENDIENTE', 'Pendiente de Pago'),
+        ('PAGADO', 'Liquidado / Pagado'),
+    ]
+    
+    propietario_inmueble = models.ForeignKey(PropietarioInmueble, on_delete=models.CASCADE, related_name='liquidaciones')
+    periodo_mes = models.IntegerField(help_text="Mes de liquidación (1-12)")
+    periodo_anio = models.IntegerField(help_text="Año de liquidación (Ej: 2026)")
+    
+    monto_rentas_cobradas = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    monto_comision = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    monto_gastos_propiedades = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    monto_gastos_generales = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    monto_neto_pagado = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Neto transferido al propietario")
+    
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='PENDIENTE')
+    fecha_pago = models.DateField(blank=True, null=True)
+    metodo_pago = models.CharField(max_length=50, blank=True, null=True, help_text="Ej: Transferencia Bancaria, Cheque, Efectivo")
+    referencia_transaccion = models.CharField(max_length=100, blank=True, null=True)
+    notas = models.TextField(blank=True, null=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    registrado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        unique_together = ('propietario_inmueble', 'periodo_mes', 'periodo_anio')
+        ordering = ['-periodo_anio', '-periodo_mes']
+
+    def __str__(self):
+        return f"Liquidación {self.propietario_inmueble.nombre} - {self.periodo_mes}/{self.periodo_anio} (${self.monto_neto_pagado})"
+
 
 

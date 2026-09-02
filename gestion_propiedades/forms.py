@@ -1,5 +1,5 @@
 from django import forms
-from .models import Propiedad, Contrato, Portafolio, MantenimientoUnidad, SolicitudAlquiler, Inquilino, Factura, ReciboPago, SuscripcionCliente, PlanSaaS, GastoProgramado
+from .models import Propiedad, Contrato, Portafolio, MantenimientoUnidad, SolicitudAlquiler, Inquilino, Factura, ReciboPago, SuscripcionCliente, PlanSaaS, GastoProgramado, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario
 from django.db.models import Q
 
 class PortafolioForm(forms.ModelForm):
@@ -20,14 +20,19 @@ class PortafolioForm(forms.ModelForm):
 class PropiedadForm(forms.ModelForm):
     class Meta:
         model = Propiedad
-        fields = ['nombre_o_numero', 'grupo_o_residencial', 'direccion_completa', 'detalles', 'estado']
+        fields = ['nombre_o_numero', 'grupo_o_residencial', 'propietario_inmueble', 'direccion_completa', 'detalles', 'estado']
         widgets = {
-            'nombre_o_numero': forms.TextInput(attrs={'class': 'form-control'}),
+            'nombre_o_numero': forms.TextInput(attrs={'class': 'form-control', 'required': True}),
             'grupo_o_residencial': forms.TextInput(attrs={'class': 'form-control'}),
+            'propietario_inmueble': forms.Select(attrs={'class': 'form-select'}),
             'direccion_completa': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'detalles': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'estado': forms.Select(attrs={'class': 'form-select'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['propietario_inmueble'].required = False
 
 class ContratoForm(forms.ModelForm):
     class Meta:
@@ -247,4 +252,79 @@ class GastoProgramadoForm(forms.ModelForm):
             'monto': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': '0.00', 'required': True}),
             'dia_pago': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 31, 'required': True}),
             'activo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-        }
+        }
+
+
+class PropietarioInmuebleForm(forms.ModelForm):
+    class Meta:
+        model = PropietarioInmueble
+        fields = [
+            'nombre', 'cedula_o_rnc', 'telefono', 'correo', 'direccion',
+            'tipo_comision', 'porcentaje_comision', 'monto_comision_fijo',
+            'banco_nombre', 'tipo_cuenta', 'numero_cuenta', 'activo'
+        ]
+        widgets = {
+            'nombre': forms.TextInput(attrs={'class': 'form-control', 'required': True, 'placeholder': 'Ej: Juan Pérez / Inmobiliaria S.A.'}),
+            'cedula_o_rnc': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: 001-0000000-0'}),
+            'telefono': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: 809-555-0000'}),
+            'correo': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'correo@ejemplo.com'}),
+            'direccion': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+            'tipo_comision': forms.Select(attrs={'class': 'form-select'}),
+            'porcentaje_comision': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': 'Ej: 10.00'}),
+            'monto_comision_fijo': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': 'Ej: 5000.00'}),
+            'banco_nombre': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Banco Popular'}),
+            'tipo_cuenta': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Ahorros / Corriente'}),
+            'numero_cuenta': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: 123456789'}),
+            'activo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['porcentaje_comision'].required = False
+        self.fields['monto_comision_fijo'].required = False
+        self.fields['cedula_o_rnc'].required = False
+        self.fields['telefono'].required = False
+        self.fields['correo'].required = False
+        self.fields['direccion'].required = False
+        self.fields['banco_nombre'].required = False
+        self.fields['tipo_cuenta'].required = False
+        self.fields['numero_cuenta'].required = False
+
+
+class GastoGeneralPropietarioForm(forms.ModelForm):
+    class Meta:
+        model = GastoGeneralPropietario
+        fields = ['propietario_inmueble', 'propiedad', 'concepto', 'categoria', 'monto', 'fecha', 'factura_adjunta']
+        widgets = {
+            'propietario_inmueble': forms.Select(attrs={'class': 'form-select'}),
+            'propiedad': forms.Select(attrs={'class': 'form-select'}),
+            'concepto': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Pago de impuestos por comisión de administración', 'required': True}),
+            'categoria': forms.Select(attrs={'class': 'form-select'}),
+            'monto': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00', 'required': True}),
+            'fecha': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'factura_adjunta': forms.FileInput(attrs={'class': 'form-control'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['propietario_inmueble'].required = False
+        self.fields['propiedad'].required = False
+        self.fields['factura_adjunta'].required = False
+
+
+class LiquidacionPropietarioForm(forms.ModelForm):
+    class Meta:
+        model = LiquidacionPropietario
+        fields = ['fecha_pago', 'metodo_pago', 'referencia_transaccion', 'notas']
+        widgets = {
+            'fecha_pago': forms.DateInput(attrs={'class': 'form-control', 'type': 'date', 'required': True}),
+            'metodo_pago': forms.Select(choices=[
+                ('TRANSFERENCIA', 'Transferencia Bancaria'),
+                ('CHEQUE', 'Cheque'),
+                ('EFECTIVO', 'Efectivo'),
+                ('OTRO', 'Otro Método'),
+            ], attrs={'class': 'form-select', 'required': True}),
+            'referencia_transaccion': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: TXN-987654321'}),
+            'notas': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Comentarios opcionales sobre la liquidación'}),
+        }
+

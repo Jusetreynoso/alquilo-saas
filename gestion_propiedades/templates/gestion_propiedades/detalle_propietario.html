@@ -1,0 +1,175 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+
+{% block encabezado %}
+    <div class="d-flex justify-content-between align-items-center w-100 flex-wrap gap-2">
+        <div>
+            <a href="{% url 'lista_propietarios' %}" class="btn btn-sm btn-outline-secondary me-2">⬅ Volver</a>
+            <span>👥 Expediente de Propietario</span>
+        </div>
+        <div>
+            <a href="{% url 'reporte_propietario' %}?propietario_id={{ propietario.id }}" class="btn btn-success fw-bold shadow-sm me-2">
+                📊 Liquidación y Estado de Cuenta
+            </a>
+            <a href="{% url 'editar_propietario' propietario.id %}" class="btn btn-outline-primary fw-bold">
+                ✏️ Editar Información
+            </a>
+        </div>
+    </div>
+{% endblock %}
+
+{% block contenido %}
+<div class="row g-4">
+    <!-- Información Principal del Propietario -->
+    <div class="col-md-4">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white py-3">
+                <h5 class="fw-bold mb-0 text-primary">🏢 {{ propietario.nombre }}</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <span class="text-muted">Cédula / RNC:</span>
+                        <span class="fw-bold">{{ propietario.cedula_o_rnc|default:"---" }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <span class="text-muted">Teléfono:</span>
+                        <span class="fw-bold">{{ propietario.telefono|default:"---" }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <span class="text-muted">Correo:</span>
+                        <span class="fw-bold">{{ propietario.correo|default:"---" }}</span>
+                    </li>
+                    <li class="list-group-item px-0">
+                        <span class="text-muted d-block mb-1">Dirección:</span>
+                        <span class="fw-bold">{{ propietario.direccion|default:"Sin dirección especificada" }}</span>
+                    </li>
+                    <li class="list-group-item px-0 pt-3">
+                        <h6 class="fw-bold text-secondary mb-2">💰 Comisión de Administración</h6>
+                        {% if propietario.tipo_comision == 'PORCENTAJE' %}
+                            <div class="alert alert-success py-2 mb-0">
+                                <strong>{{ propietario.porcentaje_comision }}%</strong> sobre cobros de renta
+                            </div>
+                        {% else %}
+                            <div class="alert alert-info py-2 mb-0">
+                                <strong>${{ propietario.monto_comision_fijo|dinero }}</strong> monto fijo mensual
+                            </div>
+                        {% endif %}
+                    </li>
+                    <li class="list-group-item px-0 pt-3">
+                        <h6 class="fw-bold text-secondary mb-2">🏦 Datos Bancarios de Transferencia</h6>
+                        <div class="bg-light p-3 rounded">
+                            <p class="mb-1"><strong>Banco:</strong> {{ propietario.banco_nombre|default:"No especificado" }}</p>
+                            <p class="mb-1"><strong>Tipo Cuenta:</strong> {{ propietario.tipo_cuenta|default:"No especificado" }}</p>
+                            <p class="mb-0"><strong>Número Cuenta:</strong> {{ propietario.numero_cuenta|default:"No especificado" }}</p>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Propiedades y Estado Financiero -->
+    <div class="col-md-8">
+        <!-- Propiedades del Propietario -->
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0 text-secondary">🏠 Propiedades Pertenecientes ({{ propiedades.count }})</h5>
+                <a href="{% url 'crear_propiedad' %}" class="btn btn-sm btn-outline-primary">+ Asignar Propiedad</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="px-4 py-2">Propiedad</th>
+                                <th class="py-2">Grupo / Residencial</th>
+                                <th class="py-2 text-center">Estado</th>
+                                <th class="py-2 text-end px-4">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for prop in propiedades %}
+                            <tr>
+                                <td class="px-4 py-3 fw-bold">
+                                    <a href="{% url 'detalle_propiedad' prop.id %}" class="text-decoration-none text-dark">
+                                        {{ prop.nombre_o_numero }} ↗
+                                    </a>
+                                </td>
+                                <td class="py-3 text-muted">{{ prop.grupo_o_residencial|default:"---" }}</td>
+                                <td class="py-3 text-center">
+                                    {% if prop.estado == 'OCUPADO' %}
+                                        <span class="badge bg-success">Ocupada</span>
+                                    {% elif prop.estado == 'DISPONIBLE' %}
+                                        <span class="badge bg-primary">Disponible</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">{{ prop.estado }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="py-3 text-end px-4">
+                                    <a href="{% url 'detalle_propiedad' prop.id %}" class="btn btn-sm btn-outline-secondary">Ver Detalle</a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-4 text-muted">
+                                    Este propietario aún no tiene propiedades asignadas. Puedes asignarle propiedades al crear o editar una propiedad.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Historial de Liquidaciones Registradas -->
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0 text-secondary">📋 Historial de Liquidaciones Registradas</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="px-4 py-2">Período</th>
+                                <th class="py-2">Rentas Cobradas</th>
+                                <th class="py-2">Neto Pagado</th>
+                                <th class="py-2 text-center">Estado</th>
+                                <th class="py-2 text-end px-4">Comprobante</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for liq in liquidaciones %}
+                            <tr>
+                                <td class="px-4 py-3 fw-bold">
+                                    {{ liq.periodo_mes }}/{{ liq.periodo_anio }}
+                                </td>
+                                <td class="py-3 text-success fw-bold">${{ liq.monto_rentas_cobradas|dinero }}</td>
+                                <td class="py-3 text-primary fw-bold">${{ liq.monto_neto_pagado|dinero }}</td>
+                                <td class="py-3 text-center">
+                                    <span class="badge bg-success">Liquidado</span>
+                                </td>
+                                <td class="py-3 text-end px-4">
+                                    <a href="{% url 'imprimir_liquidacion_propietario' propietario.id %}?mes={{ liq.periodo_mes }}&anio={{ liq.periodo_anio }}" target="_blank" class="btn btn-sm btn-outline-dark">
+                                        🖨️ Ver Recibo
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-4 text-muted">
+                                    No hay registros de liquidación guardados previamente para este propietario.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

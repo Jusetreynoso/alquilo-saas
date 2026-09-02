@@ -65,6 +65,20 @@ urlpatterns = [
     path('reportes/transparencia/', views.reporte_transparencia, name='reporte_transparencia'),
     path('reportes/morosidad/', views.reporte_morosos, name='reporte_morosos'),
     path('reportes/propietario/', views.reporte_propietario, name='reporte_propietario'),
+    path('reportes/propietario/liquidar/<int:propietario_id>/', views.procesar_liquidacion_propietario, name='procesar_liquidacion_propietario'),
+    path('reportes/propietario/imprimir-liquidacion/<int:propietario_id>/', views.imprimir_liquidacion_propietario, name='imprimir_liquidacion_propietario'),
+
+    # Propietarios de Inmuebles
+    path('propietarios/', views.lista_propietarios, name='lista_propietarios'),
+    path('propietario/crear/', views.crear_propietario, name='crear_propietario'),
+    path('propietario/<int:propietario_id>/', views.detalle_propietario, name='detalle_propietario'),
+    path('propietario/<int:propietario_id>/editar/', views.editar_propietario, name='editar_propietario'),
+
+    # Gastos Generales y Deducciones
+    path('gastos-generales/', views.lista_gastos_generales, name='lista_gastos_generales'),
+    path('gastos-generales/crear/', views.registrar_gasto_general, name='registrar_gasto_general'),
+    path('gasto-general/<int:gasto_id>/eliminar/', views.eliminar_gasto_general, name='eliminar_gasto_general'),
+
     path('auditoria/', views.vista_auditoria, name='auditoria'),
 
     # Rutas limpias

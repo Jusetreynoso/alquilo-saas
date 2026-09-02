@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from django.utils import timezone
 from django.core.files.uploadedfile import SimpleUploadedFile
 import os
-from .models import Portafolio, Propiedad, Inquilino, Contrato, HistorialAumentoRenta, AuditLog, PlanSaaS, SuscripcionCliente, PublicacionMarketplace, ImagenPublicacion
+from .models import Portafolio, Propiedad, Inquilino, Contrato, HistorialAumentoRenta, AuditLog, PlanSaaS, SuscripcionCliente, PublicacionMarketplace, ImagenPublicacion, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, Factura, ReciboPago, MantenimientoUnidad
 
 class AlquiloTests(TestCase):
     def setUp(self):
@@ -259,4 +259,115 @@ class AlquiloTests(TestCase):
         self.assertFalse(PublicacionMarketplace.objects.filter(pk=pub.pk).exists())
         # Verify the media file is physically deleted from disk
         self.assertFalse(os.path.exists(img_path))
+
+    def test_propietario_inmueble_crud(self):
+        self.client.login(username='propietario1', password='password123')
+        
+        # 1. Crear Propietario Inmueble
+        post_data = {
+            'nombre': 'Don Carlos Almonte',
+            'cedula_o_rnc': '001-1234567-8',
+            'telefono': '809-555-4321',
+            'correo': 'carlos@almonte.com',
+            'tipo_comision': 'PORCENTAJE',
+            'porcentaje_comision': '10.00',
+            'banco_nombre': 'Banco Popular',
+            'numero_cuenta': '123456789',
+            'activo': True
+        }
+        res = self.client.post(reverse('crear_propietario'), post_data)
+        self.assertEqual(res.status_code, 302)
+        
+        prop_owner = PropietarioInmueble.objects.get(nombre='Don Carlos Almonte')
+        self.assertEqual(prop_owner.portafolio, self.portafolio1)
+        self.assertEqual(float(prop_owner.porcentaje_comision), 10.00)
+        
+        # 2. Asignar propietario a una propiedad existente
+        self.propiedad1.propietario_inmueble = prop_owner
+        self.propiedad1.save()
+        self.assertEqual(self.propiedad1.propietario_inmueble, prop_owner)
+
+    def test_calculo_liquidacion_propietario(self):
+        self.client.login(username='propietario1', password='password123')
+        
+        # Crear Propietario con 10% de comisión
+        owner = PropietarioInmueble.objects.create(
+            portafolio=self.portafolio1,
+            nombre='Doña Maria Lopez',
+            tipo_comision='PORCENTAJE',
+            porcentaje_comision=10.00
+        )
+        self.propiedad1.propietario_inmueble = owner
+        self.propiedad1.save()
+        
+        # Simulamos cobro de factura de 20,000 en el mes actual
+        hoy = date.today()
+        factura = Factura.objects.create(
+            contrato=self.contrato1,
+            fecha_emision=hoy,
+            fecha_vencimiento=hoy,
+            monto_base=20000.00,
+            concepto='Renta Prueba Liquidacion',
+            estado='PAGADA'
+        )
+        ReciboPago.objects.create(
+            factura=factura,
+            fecha_pago=hoy,
+            monto_pagado=20000.00,
+            metodo_pago='TRANSFERENCIA'
+        )
+        
+        # Registramos mantenimiento directo de $2,000
+        MantenimientoUnidad.objects.create(
+            propiedad=self.propiedad1,
+            descripcion='Reparación Tubería',
+            costo=2000.00,
+            estado='COMPLETADO',
+            fecha_reporte=hoy
+        )
+        
+        # Registramos Gasto General de $1,000 (Gestión Legal)
+        GastoGeneralPropietario.objects.create(
+            portafolio=self.portafolio1,
+            propietario_inmueble=owner,
+            concepto='Honorarios Abogado Contrato',
+            monto=1000.00,
+            categoria='GESTION_LEGAL',
+            fecha=hoy
+        )
+        
+        # Consultamos el reporte de liquidación
+        url = f"{reverse('reporte_propietario')}?propietario_id={owner.id}&mes={hoy.month}&anio={hoy.year}"
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 200)
+        
+        # Comprobamos cálculos:
+        # Total Cobrado = 20,000
+        # Comisión (10%) = 2,000
+        # Gastos Propiedad = 2,000
+        # Gastos Generales = 1,000
+        # Total Deducciones = 5,000
+        # Neto a Liquidar = 20,000 - 5,000 = 15,000
+        self.assertEqual(float(res.context['total_ingresos']), 20000.00)
+        self.assertEqual(float(res.context['monto_comision']), 2000.00)
+        self.assertEqual(float(res.context['total_gastos_propiedades']), 2000.00)
+        self.assertEqual(float(res.context['total_gastos_generales']), 1000.00)
+        self.assertEqual(float(res.context['total_deducciones']), 5000.00)
+        self.assertEqual(float(res.context['neto_a_liquidar']), 15000.00)
+        
+        # Procesamos la liquidación oficial
+        liq_url = reverse('procesar_liquidacion_propietario', args=[owner.id])
+        post_liq = {
+            'mes': hoy.month,
+            'anio': hoy.year,
+            'fecha_pago': hoy.strftime('%Y-%m-%d'),
+            'metodo_pago': 'TRANSFERENCIA',
+            'referencia_transaccion': 'TXN-TEST-12345'
+        }
+        res_post = self.client.post(liq_url, post_liq)
+        self.assertEqual(res_post.status_code, 302)
+        
+        liq = LiquidacionPropietario.objects.get(propietario_inmueble=owner, periodo_mes=hoy.month, periodo_anio=hoy.year)
+        self.assertEqual(float(liq.monto_neto_pagado), 15000.00)
+        self.assertEqual(liq.estado, 'PAGADO')
 

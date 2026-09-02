@@ -76,7 +76,25 @@ class HistorialAumentoRentaAdmin(admin.ModelAdmin):
     list_filter = ('fecha_aumento', 'creado_en')
     search_fields = ('contrato__inquilino__nombre', 'usuario__username')
 
-from .models import PublicacionMarketplace, ImagenPublicacion, RegistroProceso
+from .models import PublicacionMarketplace, ImagenPublicacion, RegistroProceso, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario
+
+@admin.register(PropietarioInmueble)
+class PropietarioInmuebleAdmin(admin.ModelAdmin):
+    list_display = ('nombre', 'portafolio', 'cedula_o_rnc', 'tipo_comision', 'porcentaje_comision', 'monto_comision_fijo', 'activo')
+    list_filter = ('activo', 'portafolio', 'tipo_comision')
+    search_fields = ('nombre', 'cedula_o_rnc', 'telefono', 'correo')
+
+@admin.register(GastoGeneralPropietario)
+class GastoGeneralPropietarioAdmin(admin.ModelAdmin):
+    list_display = ('concepto', 'portafolio', 'propietario_inmueble', 'propiedad', 'categoria', 'monto', 'fecha')
+    list_filter = ('categoria', 'fecha', 'portafolio')
+    search_fields = ('concepto', 'propietario_inmueble__nombre')
+
+@admin.register(LiquidacionPropietario)
+class LiquidacionPropietarioAdmin(admin.ModelAdmin):
+    list_display = ('propietario_inmueble', 'periodo_mes', 'periodo_anio', 'monto_rentas_cobradas', 'monto_neto_pagado', 'estado', 'fecha_pago')
+    list_filter = ('estado', 'periodo_anio', 'periodo_mes')
+    search_fields = ('propietario_inmueble__nombre', 'referencia_transaccion')
 
 @admin.register(PublicacionMarketplace)
 class PublicacionMarketplaceAdmin(admin.ModelAdmin):
@@ -93,4 +111,5 @@ class RegistroProcesoAdmin(admin.ModelAdmin):
     list_display = ('nombre_proceso', 'fecha_ejecucion', 'exitoso', 'facturas_creadas', 'ejecutado_por')
     list_filter = ('exitoso', 'fecha_ejecucion', 'nombre_proceso')
     search_fields = ('nombre_proceso', 'detalles')
+
 
