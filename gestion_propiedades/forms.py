@@ -1,6 +1,6 @@
 import decimal
 from django import forms
-from .models import Propiedad, Contrato, Portafolio, MantenimientoUnidad, SolicitudAlquiler, Inquilino, Factura, ReciboPago, SuscripcionCliente, PlanSaaS, GastoProgramado, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, LiquidacionDepositoInquilino
+from .models import Propiedad, Contrato, Portafolio, MantenimientoUnidad, SolicitudAlquiler, Inquilino, Factura, ReciboPago, SuscripcionCliente, PlanSaaS, GastoProgramado, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, LiquidacionDepositoInquilino, HistorialPrecioPropiedad
 from django.db.models import Q
 
 class PortafolioForm(forms.ModelForm):
@@ -21,19 +21,31 @@ class PortafolioForm(forms.ModelForm):
 class PropiedadForm(forms.ModelForm):
     class Meta:
         model = Propiedad
-        fields = ['nombre_o_numero', 'grupo_o_residencial', 'propietario_inmueble', 'direccion_completa', 'detalles', 'estado']
+        fields = [
+            'nombre_o_numero', 'grupo_o_residencial', 'propietario_inmueble',
+            'precio_alquiler_sugerido', 'direccion_completa', 'latitud', 'longitud',
+            'imagen_principal', 'detalles', 'estado'
+        ]
         widgets = {
-            'nombre_o_numero': forms.TextInput(attrs={'class': 'form-control', 'required': True}),
-            'grupo_o_residencial': forms.TextInput(attrs={'class': 'form-control'}),
+            'nombre_o_numero': forms.TextInput(attrs={'class': 'form-control', 'required': True, 'placeholder': 'Ej: Apt 2B, Casa #4, u Oficina 101'}),
+            'grupo_o_residencial': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Torre Vista Mar (Opcional)'}),
             'propietario_inmueble': forms.Select(attrs={'class': 'form-select'}),
-            'direccion_completa': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-            'detalles': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'precio_alquiler_sugerido': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': 'Ej: 25000.00'}),
+            'direccion_completa': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Calle, Sector, Ciudad...'}),
+            'latitud': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.0000001', 'placeholder': 'Ej: 18.486058'}),
+            'longitud': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.0000001', 'placeholder': 'Ej: -69.931211'}),
+            'imagen_principal': forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/*'}),
+            'detalles': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Ej: 3 habitaciones, 2 baños, 1 parqueo'}),
             'estado': forms.Select(attrs={'class': 'form-select'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['propietario_inmueble'].required = False
+        self.fields['precio_alquiler_sugerido'].required = False
+        self.fields['latitud'].required = False
+        self.fields['longitud'].required = False
+        self.fields['imagen_principal'].required = False
 
 class ContratoForm(forms.ModelForm):
     class Meta:
@@ -372,4 +384,20 @@ class LiquidacionDepositoForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['referencia_pago'].required = False
         self.fields['detalles_danos'].required = False
+
+
+class HistorialPrecioForm(forms.ModelForm):
+    class Meta:
+        model = HistorialPrecioPropiedad
+        fields = ['nuevo_precio', 'motivo', 'fecha_cambio', 'notas']
+        widgets = {
+            'nuevo_precio': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'required': True, 'placeholder': '0.00'}),
+            'motivo': forms.Select(attrs={'class': 'form-select', 'required': True}),
+            'fecha_cambio': forms.DateInput(attrs={'class': 'form-control', 'type': 'date', 'required': True}),
+            'notas': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Explica el motivo del ajuste o aumento de precio...'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['notas'].required = False
 

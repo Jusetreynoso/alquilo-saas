@@ -2,10 +2,17 @@
 
 {% block titulo %}{{ titulo_pagina }}{% endblock %}
 {% block encabezado %}
-    {{ titulo_pagina }}
-    {% if request.user.portafolios.all %}
-    <a href="{% url 'crear_propiedad' %}" class="btn btn-primary">+ Nueva Propiedad</a>
-    {% endif %}
+    <div class="d-flex justify-content-between align-items-center w-100 flex-wrap gap-2">
+        <span>{{ titulo_pagina }}</span>
+        <div class="d-flex gap-2">
+            <a href="{% url 'mapa_propiedades_global' %}" class="btn btn-outline-primary fw-bold">
+                🗺️ Vista Mapa Global
+            </a>
+            <a href="{% url 'crear_propiedad' %}" class="btn btn-primary fw-bold shadow-sm">
+                + Nueva Propiedad
+            </a>
+        </div>
+    </div>
 {% endblock %}
 
 {% block contenido %}

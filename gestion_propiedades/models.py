@@ -186,10 +186,39 @@ class Propiedad(models.Model):
     detalles = models.TextField(blank=True, null=True, help_text="Ej: 2 habitaciones, 1 baño")
     is_deleted = models.BooleanField(default=False, help_text="Indica si la propiedad fue eliminada lógicamente (Soft Delete)")
 
+    precio_alquiler_sugerido = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, blank=True, null=True, help_text="Precio de alquiler sugerido / publicado ($)")
+    latitud = models.DecimalField(max_digits=10, decimal_places=7, blank=True, null=True, help_text="Coordenada GPS Latitud (Ej: 18.486058)")
+    longitud = models.DecimalField(max_digits=10, decimal_places=7, blank=True, null=True, help_text="Coordenada GPS Longitud (Ej: -69.931211)")
+    imagen_principal = models.ImageField(upload_to='propiedades_fotos/', blank=True, null=True, help_text="Foto principal o fachada de la propiedad")
+
     def __str__(self):
         if self.grupo_o_residencial:
             return f"{self.grupo_o_residencial} - {self.nombre_o_numero}"
         return self.nombre_o_numero
+
+
+class HistorialPrecioPropiedad(models.Model):
+    MOTIVO_CHOICES = [
+        ('AJUSTE_MERCADO', 'Ajuste de Precio de Lista / Mercado'),
+        ('AUMENTO_CONTRATO', 'Aumento por Renovación o Contrato'),
+        ('MEJORA_PROPIEDAD', 'Mejora o Remodelación de Unidad'),
+        ('OTRO', 'Otro Motivo'),
+    ]
+    
+    propiedad = models.ForeignKey(Propiedad, on_delete=models.CASCADE, related_name='historial_precios')
+    precio_anterior = models.DecimalField(max_digits=10, decimal_places=2)
+    nuevo_precio = models.DecimalField(max_digits=10, decimal_places=2)
+    motivo = models.CharField(max_length=30, choices=MOTIVO_CHOICES, default='AJUSTE_MERCADO')
+    notas = models.TextField(blank=True, null=True, help_text="Justificación o detalles del cambio de precio")
+    fecha_cambio = models.DateField(default=date.today)
+    registrado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-fecha_cambio', '-creado_en']
+
+    def __str__(self):
+        return f"{self.propiedad.nombre_o_numero}: ${self.precio_anterior} -> ${self.nuevo_precio} ({self.fecha_cambio})"
 
 class Inquilino(models.Model):
     nombre = models.CharField(max_length=150)

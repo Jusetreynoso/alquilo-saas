@@ -406,3 +406,36 @@ class AlquiloTests(TestCase):
         self.assertEqual(float(liq.monto_neto_devuelto), 17000.00) # 20,000 - 3,000 = 17,000
         self.assertEqual(liq.estado, 'DEVUELTO')
 
+    def test_historial_precios_y_mapa_propiedades(self):
+        # 1. Asignar coordenadas y precio sugerido a propiedad1
+        self.propiedad1.precio_alquiler_sugerido = 15000.00
+        self.propiedad1.latitud = 18.486058
+        self.propiedad1.longitud = -69.931211
+        self.propiedad1.save()
+        
+        # 2. Registrar cambio de precio mediante la vista
+        self.client.login(username='propietario1', password='password123')
+        url_cambio = reverse('registrar_cambio_precio_propiedad', args=[self.propiedad1.id])
+        post_data = {
+            'nuevo_precio': '17500.00',
+            'motivo': 'AJUSTE_MERCADO',
+            'fecha_cambio': date.today().strftime('%Y-%m-%d'),
+            'notas': 'Aumento general del sector'
+        }
+        response = self.client.post(url_cambio, post_data)
+        self.assertEqual(response.status_code, 302)
+        
+        # Verificamos actualización en Propiedad y en HistorialPrecioPropiedad
+        self.propiedad1.refresh_from_db()
+        self.assertEqual(float(self.propiedad1.precio_alquiler_sugerido), 17500.00)
+        self.assertEqual(self.propiedad1.historial_precios.count(), 1)
+        hist = self.propiedad1.historial_precios.first()
+        self.assertEqual(float(hist.precio_anterior), 15000.00)
+        self.assertEqual(float(hist.nuevo_precio), 17500.00)
+        
+        # 3. Probar vista mapa global
+        url_mapa = reverse('mapa_propiedades_global')
+        res_mapa = self.client.get(url_mapa)
+        self.assertEqual(res_mapa.status_code, 200)
+        self.assertIn('Apto 1A', res_mapa.content.decode('utf-8'))
+

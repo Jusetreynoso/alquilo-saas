@@ -6,8 +6,8 @@ from django.contrib.auth import login
 from django.db.models import Sum, Q, Prefetch, F, Count
 from django.contrib import messages
 from datetime import date
-from .models import Portafolio, Propiedad, Factura, CargoMora, ReciboPago, Contrato, SolicitudAlquiler, MantenimientoUnidad, Inquilino, PlanSaaS, SuscripcionCliente, AuditLog, GastoProgramado, RegistroProceso, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, LiquidacionDepositoInquilino
-from .forms import NuevoClienteSaaSForm, EditarSuscripcionForm, PropiedadForm, ContratoForm, InquilinoForm, MantenimientoForm, PlanSaaSForm, PropietarioInmuebleForm, GastoGeneralPropietarioForm, LiquidacionPropietarioForm, LiquidacionDepositoForm
+from .models import Portafolio, Propiedad, Factura, CargoMora, ReciboPago, Contrato, SolicitudAlquiler, MantenimientoUnidad, Inquilino, PlanSaaS, SuscripcionCliente, AuditLog, GastoProgramado, RegistroProceso, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, LiquidacionDepositoInquilino, HistorialPrecioPropiedad
+from .forms import NuevoClienteSaaSForm, EditarSuscripcionForm, PropiedadForm, ContratoForm, InquilinoForm, MantenimientoForm, PlanSaaSForm, PropietarioInmuebleForm, GastoGeneralPropietarioForm, LiquidacionPropietarioForm, LiquidacionDepositoForm, HistorialPrecioForm
 from .utils import render_to_pdf, obtener_nombre_mes
 import calendar
 import decimal
@@ -195,6 +195,13 @@ def detalle_propiedad(request, propiedad_id):
     # Buscar las solicitudes creadas para esta propiedad
     solicitudes = propiedad.solicitudes.all().order_by('-creada_en')
 
+    # Historial de Precios de Alquiler de la propiedad
+    historial_precios = propiedad.historial_precios.all().order_by('-fecha_cambio', '-creado_en')
+    form_precio = HistorialPrecioForm(initial={
+        'nuevo_precio': propiedad.precio_alquiler_sugerido or decimal.Decimal('0.00'),
+        'fecha_cambio': date.today()
+    })
+
     context = {
         'titulo_pagina': f'Detalle: {propiedad.nombre_o_numero}',
         'propiedad': propiedad,
@@ -202,8 +209,79 @@ def detalle_propiedad(request, propiedad_id):
         'facturas': facturas,
         'mantenimientos': mantenimientos,
         'solicitudes': solicitudes,
+        'historial_precios': historial_precios,
+        'form_precio': form_precio,
     }
     return render(request, 'gestion_propiedades/detalle_propiedad.html', context)
+
+
+@login_required(login_url='/login/')
+def registrar_cambio_precio_propiedad(request, propiedad_id):
+    """
+    Registra una actualización en el historial de precios de la propiedad y actualiza su canon sugerido.
+    """
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+    propiedad = get_object_or_404(Propiedad, id=propiedad_id, portafolio__in=portafolios)
+    
+    if request.method == 'POST':
+        form = HistorialPrecioForm(request.POST)
+        if form.is_valid():
+            hist = form.save(commit=False)
+            hist.propiedad = propiedad
+            hist.precio_anterior = propiedad.precio_alquiler_sugerido or decimal.Decimal('0.00')
+            hist.registrado_por = request.user
+            hist.save()
+            
+            # Actualizar precio en la propiedad
+            propiedad.precio_alquiler_sugerido = hist.nuevo_precio
+            propiedad.save()
+            
+            messages.success(request, f'Precio de alquiler de {propiedad.nombre_o_numero} actualizado a RD${hist.nuevo_precio:,.2f}.')
+    return redirect('detalle_propiedad', propiedad_id=propiedad.id)
+
+
+@login_required(login_url='/login/')
+def mapa_propiedades_global(request):
+    """
+    Vista global interactiva de Mapa (Leaflet.js) con todas las propiedades geolocalizadas.
+    """
+    import json
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+    
+    propiedades_qs = Propiedad.objects.filter(
+        portafolio__in=portafolios,
+        is_deleted=False
+    ).select_related('propietario_inmueble')
+    
+    propiedades_mapa = []
+    for p in propiedades_qs:
+        if p.latitud and p.longitud:
+            img_url = p.imagen_principal.url if p.imagen_principal else ''
+            propiedades_mapa.append({
+                'id': p.id,
+                'nombre': p.nombre_o_numero,
+                'grupo': p.grupo_o_residencial or '',
+                'direccion': p.direccion_completa or 'Sin dirección específica',
+                'estado': p.estado,
+                'estado_display': p.get_estado_display(),
+                'precio': float(p.precio_alquiler_sugerido or 0.00),
+                'lat': float(p.latitud),
+                'lng': float(p.longitud),
+                'imagen_url': img_url,
+                'google_maps_url': f"https://www.google.com/maps/search/?api=1&query={p.latitud},{p.longitud}"
+            })
+            
+    context = {
+        'titulo_pagina': 'Mapa Global de Propiedades',
+        'propiedades_mapa_json': json.dumps(propiedades_mapa),
+        'total_geolocalizadas': len(propiedades_mapa),
+        'total_propiedades': propiedades_qs.count()
+    }
+    return render(request, 'gestion_propiedades/mapa_propiedades.html', context)
 
 @login_required(login_url='/login/')
 def registrar_pago(request, factura_id):

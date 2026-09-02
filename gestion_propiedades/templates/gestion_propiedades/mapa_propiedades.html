@@ -1,0 +1,153 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+
+{% block encabezado %}
+    <div class="d-flex justify-content-between align-items-center w-100 flex-wrap gap-2">
+        <span>🗺️ Mapa Global de Propiedades</span>
+        <div class="d-flex gap-2">
+            <a href="{% url 'lista_propiedades' %}" class="btn btn-outline-secondary fw-bold">
+                📋 Vista Lista de Propiedades
+            </a>
+            <a href="{% url 'crear_propiedad' %}" class="btn btn-primary fw-bold shadow-sm">
+                🏠 + Nueva Propiedad
+            </a>
+        </div>
+    </div>
+{% endblock %}
+
+{% block contenido %}
+<!-- Leaflet CSS y JS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+    #mapaGlobalContainer {
+        height: 650px;
+        width: 100%;
+        border-radius: 12px;
+        z-index: 1;
+    }
+    .leaflet-popup-content-wrapper {
+        border-radius: 10px;
+        padding: 4px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    }
+    .popup-img-thumb {
+        width: 100%;
+        height: 120px;
+        object-fit: cover;
+        border-radius: 6px;
+    }
+</style>
+
+<div class="container-fluid">
+    <!-- Bar de Resumen -->
+    <div class="card shadow-sm border-0 mb-4 bg-light">
+        <div class="card-body py-3">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <h5 class="fw-bold mb-1 text-primary">📍 Geolocalización de Inmuebles</h5>
+                    <p class="text-muted mb-0 small">
+                        Mostrando <strong>{{ total_geolocalizadas }}</strong> de <strong>{{ total_propiedades }}</strong> propiedades con coordenadas GPS registradas.
+                    </p>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <span class="badge bg-success p-2">🟢 Disponible</span>
+                    <span class="badge bg-primary p-2">🔵 Ocupada</span>
+                    <span class="badge bg-warning text-dark p-2">🟡 Mantenimiento</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contenedor del Mapa -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body p-2">
+            <div id="mapaGlobalContainer"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const rawPropiedades = JSON.parse('{{ propiedades_mapa_json|escapejs }}');
+        
+        // Coordenadas por defecto (Santo Domingo, República Dominicana)
+        const defaultLat = 18.486058;
+        const defaultLng = -69.931211;
+
+        // Inicializar mapa Leaflet
+        const map = L.map('mapaGlobalContainer').setView([defaultLat, defaultLng], 12);
+
+        // Capa OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        if (rawPropiedades.length > 0) {
+            const bounds = [];
+
+            rawPropiedades.forEach(prop => {
+                const markerLat = prop.lat;
+                const markerLng = prop.lng;
+                bounds.push([markerLat, markerLng]);
+
+                // Icono según estado
+                let statusBadgeClass = 'bg-secondary';
+                if (prop.estado === 'DISPONIBLE') statusBadgeClass = 'bg-success';
+                else if (prop.estado === 'OCUPADO') statusBadgeClass = 'bg-primary';
+                else if (prop.estado === 'MANTENIMIENTO') statusBadgeClass = 'bg-warning text-dark';
+
+                // Contenido del Popup
+                let popupHtml = `
+                    <div style="min-width: 220px; max-width: 260px;" class="p-1">
+                `;
+
+                if (prop.imagen_url) {
+                    popupHtml += `<img src="${prop.imagen_url}" class="popup-img-thumb mb-2" alt="${prop.nombre}">`;
+                }
+
+                popupHtml += `
+                        <span class="badge ${statusBadgeClass} mb-1">${prop.estado_display}</span>
+                        <h6 class="fw-bold mb-1 text-dark">${prop.nombre}</h6>
+                `;
+
+                if (prop.grupo) {
+                    popupHtml += `<small class="text-muted d-block mb-1">🏢 ${prop.grupo}</small>`;
+                }
+
+                popupHtml += `
+                        <p class="mb-2 text-muted small"><i class="bi bi-geo-alt"></i> ${prop.direccion}</p>
+                `;
+
+                if (prop.precio > 0) {
+                    popupHtml += `<h6 class="fw-bold text-success mb-2">$${prop.precio.toLocaleString('en-US', {minimumFractionDigits: 2})} / mes</h6>`;
+                }
+
+                popupHtml += `
+                        <div class="d-grid gap-1 mt-2">
+                            <a href="/propiedad/${prop.id}/" class="btn btn-sm btn-primary fw-bold text-white">🔍 Ver Ficha Completa</a>
+                            <a href="${prop.google_maps_url}" target="_blank" class="btn btn-sm btn-outline-dark fw-bold">📍 Abrir en Google Maps</a>
+                        </div>
+                    </div>
+                `;
+
+                L.marker([markerLat, markerLng]).addTo(map)
+                    .bindPopup(popupHtml);
+            });
+
+            // Ajustar vista para encuadrar todos los marcadores
+            if (bounds.length > 0) {
+                map.fitBounds(bounds, { padding: [40, 40] });
+            }
+        } else {
+            L.popup()
+                .setLatLng([defaultLat, defaultLng])
+                .setContent('<div class="p-2 text-center"><strong>No hay propiedades con coordenadas geolocalizadas aún.</strong><br><small class="text-muted">Ingresa la latitud y longitud al editar tus propiedades para verlas en el mapa.</small></div>')
+                .openOn(map);
+        }
+    });
+</script>
+{% endblock %}
