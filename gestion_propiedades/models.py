@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 import uuid
+from datetime import date
 
 class Portafolio(models.Model):
     nombre = models.CharField(max_length=100, help_text="Ej: Inversiones Familiares o Portafolio Principal")
@@ -147,8 +148,8 @@ class PropietarioInmueble(models.Model):
     direccion = models.TextField(blank=True, null=True)
     
     tipo_comision = models.CharField(max_length=20, choices=TIPO_COMISION_CHOICES, default='PORCENTAJE')
-    porcentaje_comision = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="Ej: 10.00 para 10%")
-    monto_comision_fijo = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Monto fijo si aplica tipo FIJO")
+    porcentaje_comision = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, null=True, blank=True, help_text="Ej: 10.00 para 10%")
+    monto_comision_fijo = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, null=True, blank=True, help_text="Monto fijo si aplica tipo FIJO")
     
     banco_nombre = models.CharField(max_length=100, blank=True, null=True, help_text="Ej: Banco Popular, Banreservas")
     tipo_cuenta = models.CharField(max_length=50, blank=True, null=True, help_text="Ej: Corriente, Ahorros")
@@ -581,6 +582,38 @@ class LiquidacionPropietario(models.Model):
 
     def __str__(self):
         return f"Liquidación {self.propietario_inmueble.nombre} - {self.periodo_mes}/{self.periodo_anio} (${self.monto_neto_pagado})"
+
+
+class LiquidacionDepositoInquilino(models.Model):
+    ESTADO_CHOICES = [
+        ('DEVUELTO', 'Saldo Devuelto al Inquilino'),
+        ('RETENIDO_TOTAL', 'Depósito Retenido Totalmente por Deuda/Daños'),
+        ('SALDO_PENDIENTE_INQUILINO', 'Inquilino Quedó Debiendo Saldo Adicional'),
+    ]
+    METODO_CHOICES = [
+        ('TRANSFERENCIA', 'Transferencia Bancaria'),
+        ('EFECTIVO', 'Efectivo'),
+        ('CHEQUE', 'Cheque'),
+        ('NO_APLICA', 'No Aplica / Retención Total'),
+    ]
+    
+    contrato = models.OneToOneField(Contrato, on_delete=models.CASCADE, related_name='liquidacion_deposito')
+    monto_deposito_original = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Fianza inicial entregada")
+    monto_deduccion_facturas = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Deducción por rentas o moras pendientes")
+    monto_deduccion_danos = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Deducción por reparaciones de daños")
+    monto_neto_devuelto = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Saldo neto devuelto (+) o a cobrar (-)")
+    
+    estado = models.CharField(max_length=30, choices=ESTADO_CHOICES, default='DEVUELTO')
+    fecha_liquidacion = models.DateField(default=date.today)
+    metodo_devolucion = models.CharField(max_length=30, choices=METODO_CHOICES, default='TRANSFERENCIA')
+    referencia_pago = models.CharField(max_length=100, blank=True, null=True, help_text="Número de transferencia o cheque")
+    detalles_danos = models.TextField(blank=True, null=True, help_text="Explicación detallada de los daños o arreglos aplicados")
+    
+    registrado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Finiquito Contrato #{self.contrato.id} - Inquilino {self.contrato.inquilino.nombre} (${self.monto_neto_devuelto})"
 
 
 

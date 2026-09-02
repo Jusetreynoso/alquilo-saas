@@ -1,5 +1,6 @@
+import decimal
 from django import forms
-from .models import Propiedad, Contrato, Portafolio, MantenimientoUnidad, SolicitudAlquiler, Inquilino, Factura, ReciboPago, SuscripcionCliente, PlanSaaS, GastoProgramado, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario
+from .models import Propiedad, Contrato, Portafolio, MantenimientoUnidad, SolicitudAlquiler, Inquilino, Factura, ReciboPago, SuscripcionCliente, PlanSaaS, GastoProgramado, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, LiquidacionDepositoInquilino
 from django.db.models import Q
 
 class PortafolioForm(forms.ModelForm):
@@ -256,6 +257,13 @@ class GastoProgramadoForm(forms.ModelForm):
 
 
 class PropietarioInmuebleForm(forms.ModelForm):
+    propiedades = forms.ModelMultipleChoiceField(
+        queryset=Propiedad.objects.none(),
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'}),
+        required=False,
+        label="Propiedades de este Propietario (Marcar para asignar)"
+    )
+
     class Meta:
         model = PropietarioInmueble
         fields = [
@@ -279,6 +287,7 @@ class PropietarioInmuebleForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        portafolios = kwargs.pop('portafolios', None)
         super().__init__(*args, **kwargs)
         self.fields['porcentaje_comision'].required = False
         self.fields['monto_comision_fijo'].required = False
@@ -289,6 +298,20 @@ class PropietarioInmuebleForm(forms.ModelForm):
         self.fields['banco_nombre'].required = False
         self.fields['tipo_cuenta'].required = False
         self.fields['numero_cuenta'].required = False
+
+        if portafolios is not None:
+            self.fields['propiedades'].queryset = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False).order_by('nombre_o_numero')
+        elif self.instance and self.instance.pk:
+            self.fields['propiedades'].queryset = Propiedad.objects.filter(portafolio=self.instance.portafolio, is_deleted=False).order_by('nombre_o_numero')
+            self.fields['propiedades'].initial = self.instance.propiedades.filter(is_deleted=False)
+
+    def clean_porcentaje_comision(self):
+        val = self.cleaned_data.get('porcentaje_comision')
+        return val if val is not None else decimal.Decimal('0.00')
+
+    def clean_monto_comision_fijo(self):
+        val = self.cleaned_data.get('monto_comision_fijo')
+        return val if val is not None else decimal.Decimal('0.00')
 
 
 class GastoGeneralPropietarioForm(forms.ModelForm):
@@ -327,4 +350,26 @@ class LiquidacionPropietarioForm(forms.ModelForm):
             'referencia_transaccion': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: TXN-987654321'}),
             'notas': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Comentarios opcionales sobre la liquidación'}),
         }
+
+
+class LiquidacionDepositoForm(forms.ModelForm):
+    class Meta:
+        model = LiquidacionDepositoInquilino
+        fields = [
+            'monto_deduccion_facturas', 'monto_deduccion_danos',
+            'fecha_liquidacion', 'metodo_devolucion', 'referencia_pago', 'detalles_danos'
+        ]
+        widgets = {
+            'monto_deduccion_facturas': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'readonly': True}),
+            'monto_deduccion_danos': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00', 'oninput': 'calcularNetoDevolucion()'}),
+            'fecha_liquidacion': forms.DateInput(attrs={'class': 'form-control', 'type': 'date', 'required': True}),
+            'metodo_devolucion': forms.Select(attrs={'class': 'form-select', 'required': True}),
+            'referencia_pago': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: TXN-54321 / No. Cheque'}),
+            'detalles_danos': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Explicación detallada de daños o razones de la retención...'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['referencia_pago'].required = False
+        self.fields['detalles_danos'].required = False
 

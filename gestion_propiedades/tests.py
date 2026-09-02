@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from django.utils import timezone
 from django.core.files.uploadedfile import SimpleUploadedFile
 import os
-from .models import Portafolio, Propiedad, Inquilino, Contrato, HistorialAumentoRenta, AuditLog, PlanSaaS, SuscripcionCliente, PublicacionMarketplace, ImagenPublicacion, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, Factura, ReciboPago, MantenimientoUnidad
+from .models import Portafolio, Propiedad, Inquilino, Contrato, HistorialAumentoRenta, AuditLog, PlanSaaS, SuscripcionCliente, PublicacionMarketplace, ImagenPublicacion, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, Factura, ReciboPago, MantenimientoUnidad, LiquidacionDepositoInquilino
 
 class AlquiloTests(TestCase):
     def setUp(self):
@@ -370,4 +370,39 @@ class AlquiloTests(TestCase):
         liq = LiquidacionPropietario.objects.get(propietario_inmueble=owner, periodo_mes=hoy.month, periodo_anio=hoy.year)
         self.assertEqual(float(liq.monto_neto_pagado), 15000.00)
         self.assertEqual(liq.estado, 'PAGADO')
+
+    def test_finalizar_contrato_y_liquidacion_deposito(self):
+        self.client.login(username='propietario1', password='password123')
+        
+        # Asignamos depósito de 20,000 al contrato 1
+        self.contrato1.monto_deposito = 20000.00
+        self.contrato1.save()
+        
+        url_get = reverse('finalizar_contrato', args=[self.contrato1.id])
+        res_get = self.client.get(url_get)
+        self.assertEqual(res_get.status_code, 200)
+        
+        # Procesamos la finalización con $3,000 de deducción por daños
+        post_data = {
+            'monto_deduccion_facturas': '0.00',
+            'monto_deduccion_danos': '3000.00',
+            'fecha_liquidacion': date.today().strftime('%Y-%m-%d'),
+            'metodo_devolucion': 'TRANSFERENCIA',
+            'referencia_pago': 'TXN-FINIQUITO-999',
+            'detalles_danos': 'Pintura y cambio de cerraduras'
+        }
+        res_post = self.client.post(url_get, post_data)
+        self.assertEqual(res_post.status_code, 302) # Redirige al acta imprimible
+        
+        # Verificamos estado del contrato y propiedad
+        self.contrato1.refresh_from_db()
+        self.assertFalse(self.contrato1.activo)
+        self.assertEqual(self.propiedad1.estado, 'DISPONIBLE')
+        
+        # Verificamos registro de liquidación de depósito
+        liq = LiquidacionDepositoInquilino.objects.get(contrato=self.contrato1)
+        self.assertEqual(float(liq.monto_deposito_original), 20000.00)
+        self.assertEqual(float(liq.monto_deduccion_danos), 3000.00)
+        self.assertEqual(float(liq.monto_neto_devuelto), 17000.00) # 20,000 - 3,000 = 17,000
+        self.assertEqual(liq.estado, 'DEVUELTO')
 

@@ -1,65 +1,333 @@
 {% extends 'gestion_propiedades/base.html' %}
 
-{% block titulo %}Reporte Financiero{% endblock %}
-{% block encabezado %}📊 Reporte de Rentabilidad (P&L){% endblock %}
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+{% block encabezado %}
+    <div class="d-flex justify-content-between align-items-center w-100 flex-wrap gap-2">
+        <span>📊 {{ titulo_pagina }}</span>
+        <button type="button" class="btn btn-outline-secondary fw-bold no-print" onclick="window.print()">
+            🖨️ Imprimir Reporte
+        </button>
+    </div>
+{% endblock %}
 
 {% block contenido %}
-<!-- CHART CONTAINER -->
-<div class="card shadow-sm mb-4">
-    <div class="card-body">
-        <h5 class="card-title text-muted mb-3">Resumen de Ingresos vs Egresos (Mes a Mes)</h5>
-        <canvas id="rentabilidadChart" height="100"></canvas>
-    </div>
-</div>
+<style>
+    @media print {
+        .no-print { display: none !important; }
+        .card { border: none !important; box-shadow: none !important; }
+        body { background-color: white !important; }
+    }
+</style>
 
-<div class="card shadow-sm mb-4">
-    <div class="card-body">
-        <h5 class="card-title text-muted mb-3">Beneficio Neto por Propiedad (Mensual)</h5>
-        
-        <div class="table-responsive">
-            <table class="table table-hover table-bordered align-middle">
-                <thead class="table-dark">
-                    <tr>
-                        <th scope="col">Mes</th>
-                        <th scope="col">Propiedad</th>
-                        <th scope="col" class="text-end">Ingresos (Cobros)</th>
-                        <th scope="col" class="text-end">Egresos (Gastos)</th>
-                        <th scope="col" class="text-end">Beneficio Neto</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in finanzas %}
-                    <tr>
-                        <td><strong>{{ item.mes_formateado }}</strong></td>
-                        <td>{{ item.nombre_propiedad }}</td>
-                        <td class="text-end text-success">+ ${{ item.ingresos|dinero }}</td>
-                        <td class="text-end text-danger">- ${{ item.egresos|dinero }}</td>
-                        <td class="text-end">
-                            {% if item.neto > 0 %}
-                                <span class="badge bg-success fw-bold p-2">${{ item.neto|dinero }}</span>
-                            {% elif item.neto < 0 %}
-                                <span class="badge bg-danger fw-bold p-2">${{ item.neto|dinero }}</span>
-                            {% else %}
-                                <span class="badge bg-secondary fw-bold p-2">$0.00</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="5" class="text-center text-muted py-4">No hay datos de ingresos ni egresos registrados para calcular rentabilidad.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+<div class="container-fluid">
+    <!-- Panel de Filtros -->
+    <div class="card shadow-sm border-0 mb-4 no-print bg-light">
+        <div class="card-body">
+            <form method="GET" action="{% url 'reporte_financiero' %}" id="formFiltroFinanciero">
+                <div class="row g-3 align-items-end">
+                    <!-- Ámbito / Entidad -->
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold text-secondary">🔍 Filtrar Por</label>
+                        <select name="filtro_tipo" id="selectFiltroTipo" class="form-select form-select-lg shadow-sm" onchange="toggleFiltrosEntidad()">
+                            <option value="PORTAFOLIO" {% if filtro_tipo == 'PORTAFOLIO' %}selected{% endif %}>🏢 Portafolio Completo</option>
+                            <option value="PROPIETARIO" {% if filtro_tipo == 'PROPIETARIO' %}selected{% endif %}>👥 Por Propietario</option>
+                            <option value="INQUILINO" {% if filtro_tipo == 'INQUILINO' %}selected{% endif %}>👤 Por Inquilino</option>
+                        </select>
+                    </div>
+
+                    <!-- Selector Propietario (Condicional) -->
+                    <div class="col-md-3" id="divPropietario" style="{% if filtro_tipo != 'PROPIETARIO' %}display: none;{% endif %}">
+                        <label class="form-label fw-bold text-secondary">Seleccionar Propietario</label>
+                        <select name="propietario_id" class="form-select form-select-lg shadow-sm">
+                            <option value="">-- Todos los Propietarios --</option>
+                            {% for p in propietarios_list %}
+                                <option value="{{ p.id }}" {% if propietario_id == p.id|stringformat:"s" %}selected{% endif %}>{{ p.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Selector Inquilino (Condicional) -->
+                    <div class="col-md-3" id="divInquilino" style="{% if filtro_tipo != 'INQUILINO' %}display: none;{% endif %}">
+                        <label class="form-label fw-bold text-secondary">Seleccionar Inquilino</label>
+                        <select name="inquilino_id" class="form-select form-select-lg shadow-sm">
+                            <option value="">-- Todos los Inquilinos --</option>
+                            {% for inq in inquilinos_list %}
+                                <option value="{{ inq.id }}" {% if inquilino_id == inq.id|stringformat:"s" %}selected{% endif %}>{{ inq.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Selector Mes -->
+                    <div class="col-md-2">
+                        <label class="form-label fw-bold text-secondary">📅 Mes</label>
+                        <select name="mes" class="form-select form-select-lg shadow-sm">
+                            <option value="0" {% if mes == '0' %}selected{% endif %}>-- Todo el Año --</option>
+                            <option value="1" {% if mes == '1' %}selected{% endif %}>Enero</option>
+                            <option value="2" {% if mes == '2' %}selected{% endif %}>Febrero</option>
+                            <option value="3" {% if mes == '3' %}selected{% endif %}>Marzo</option>
+                            <option value="4" {% if mes == '4' %}selected{% endif %}>Abril</option>
+                            <option value="5" {% if mes == '5' %}selected{% endif %}>Mayo</option>
+                            <option value="6" {% if mes == '6' %}selected{% endif %}>Junio</option>
+                            <option value="7" {% if mes == '7' %}selected{% endif %}>Julio</option>
+                            <option value="8" {% if mes == '8' %}selected{% endif %}>Agosto</option>
+                            <option value="9" {% if mes == '9' %}selected{% endif %}>Septiembre</option>
+                            <option value="10" {% if mes == '10' %}selected{% endif %}>Octubre</option>
+                            <option value="11" {% if mes == '11' %}selected{% endif %}>Noviembre</option>
+                            <option value="12" {% if mes == '12' %}selected{% endif %}>Diciembre</option>
+                        </select>
+                    </div>
+
+                    <!-- Selector Año -->
+                    <div class="col-md-2">
+                        <label class="form-label fw-bold text-secondary">Año</label>
+                        <select name="anio" class="form-select form-select-lg shadow-sm">
+                            {% for a in anios_disponibles %}
+                                <option value="{{ a }}" {% if anio == a %}selected{% endif %}>{{ a }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-2 text-end">
+                        <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold shadow-sm">
+                            🔍 Consultar
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Subtítulo del Filtro Actual -->
+    <div class="mb-4">
+        <h4 class="fw-bold mb-1">
+            Resumen Financiero: {{ nombre_mes }} {{ anio }}
+        </h4>
+        <p class="text-muted mb-0">
+            Filtro Aplicado: <strong>
+            {% if filtro_tipo == 'PROPIETARIO' %}
+                Propietario de Inmueble
+            {% elif filtro_tipo == 'INQUILINO' %}
+                Inquilino Específico
+            {% else %}
+                Portafolio Completo
+            {% endif %}
+            </strong>
+        </p>
+    </div>
+
+    <!-- KPIs Financieros -->
+    <div class="row mb-4 g-3">
+        <div class="col-md-3">
+            <div class="card bg-success text-white h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-title text-white-50 text-uppercase fw-bold"><i class="bi bi-arrow-down-left-circle"></i> Total Ingresos (Cobros)</h6>
+                    <h2 class="mb-0 fw-bold">${{ total_ingresos|dinero }}</h2>
+                    <small>Recibos de Renta Cobrados</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-title text-dark-50 text-uppercase fw-bold"><i class="bi bi-tools"></i> Gastos Mantenimiento</h6>
+                    <h2 class="mb-0 fw-bold">${{ total_gastos_directos|dinero }}</h2>
+                    <small>Reparaciones e Incidencias</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card bg-danger text-white h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-title text-white-50 text-uppercase fw-bold"><i class="bi bi-receipt"></i> Gastos Generales / Deducciones</h6>
+                    <h2 class="mb-0 fw-bold">${{ total_gastos_generales|dinero }}</h2>
+                    <small>Impuestos, Comisiones, Legales</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card {% if beneficio_neto >= 0 %}bg-primary{% else %}bg-dark{% endif %} text-white h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-title text-white-50 text-uppercase fw-bold"><i class="bi bi-calculator"></i> Balance / Beneficio Neto</h6>
+                    <h2 class="mb-0 fw-bold">${{ beneficio_neto|dinero }}</h2>
+                    <small>Ingresos menos Gastos Totales</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfico Comparativo Chart.js -->
+    <div class="card shadow-sm border-0 mb-4 no-print">
+        <div class="card-body">
+            <h5 class="fw-bold text-secondary mb-3"><i class="bi bi-bar-chart-line"></i> Comparativo de Ingresos vs Gastos</h5>
+            <canvas id="rentabilidadChart" height="90"></canvas>
+        </div>
+    </div>
+
+    <!-- Pestañas de Detalle -->
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+        <div class="card-header bg-white border-bottom pt-3 pb-0">
+            <ul class="nav nav-tabs card-header-tabs border-0" id="tabsFinanzas" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active fw-bold py-2 px-4" id="tab-resumen-tab" data-bs-toggle="tab" data-bs-target="#tab-resumen" type="button" role="tab">
+                        📊 Resumen por Propiedad
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link fw-bold py-2 px-4 text-success" id="tab-ingresos-tab" data-bs-toggle="tab" data-bs-target="#tab-ingresos" type="button" role="tab">
+                        💰 Detalle de Ingresos ({{ recibos_list|length }})
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link fw-bold py-2 px-4 text-danger" id="tab-gastos-tab" data-bs-toggle="tab" data-bs-target="#tab-gastos" type="button" role="tab">
+                        💸 Detalle de Gastos ({{ mantenimientos_list|length|add:gastos_gen_list|length }})
+                    </button>
+                </li>
+            </ul>
+        </div>
+
+        <div class="card-body p-0">
+            <div class="tab-content" id="tabsFinanzasContent">
+                <!-- Pestaña 1: Resumen P&L por Propiedad -->
+                <div class="tab-pane fade show active p-0" id="tab-resumen" role="tabpanel">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="px-4 py-3">Período / Mes</th>
+                                    <th class="py-3">Propiedad</th>
+                                    <th class="py-3 text-end">Ingresos (Cobros)</th>
+                                    <th class="py-3 text-end">Gastos Directos</th>
+                                    <th class="py-3 text-end px-4">Beneficio Neto</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in finanzas %}
+                                <tr>
+                                    <td class="px-4 py-3 fw-bold">{{ item.mes_formateado }}</td>
+                                    <td class="py-3 fw-bold text-primary">{{ item.nombre_propiedad }}</td>
+                                    <td class="py-3 text-end text-success fw-bold">+ ${{ item.ingresos|dinero }}</td>
+                                    <td class="py-3 text-end text-danger fw-bold">- ${{ item.egresos|dinero }}</td>
+                                    <td class="py-3 text-end px-4">
+                                        {% if item.neto > 0 %}
+                                            <span class="badge bg-success fs-6 px-3 py-2">${{ item.neto|dinero }}</span>
+                                        {% elif item.neto < 0 %}
+                                            <span class="badge bg-danger fs-6 px-3 py-2">${{ item.neto|dinero }}</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary fs-6 px-3 py-2">$0.00</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center py-5 text-muted">
+                                        No hay registros de ingresos o gastos para las opciones de filtro seleccionadas.
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Pestaña 2: Detalle de Ingresos -->
+                <div class="tab-pane fade p-0" id="tab-ingresos" role="tabpanel">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="px-4 py-3">Fecha Pago</th>
+                                    <th class="py-3">Propiedad</th>
+                                    <th class="py-3">Inquilino</th>
+                                    <th class="py-3">Propietario Inmueble</th>
+                                    <th class="py-3">Método Pago</th>
+                                    <th class="py-3 text-end px-4">Monto Cobrado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for r in recibos_list %}
+                                <tr>
+                                    <td class="px-4 py-3 text-muted">{{ r.fecha_pago|date:"d/m/Y" }}</td>
+                                    <td class="py-3 fw-bold text-dark">{{ r.factura.contrato.propiedad.nombre_o_numero }}</td>
+                                    <td class="py-3 text-muted">{{ r.factura.contrato.inquilino.nombre }}</td>
+                                    <td class="py-3 text-muted">
+                                        {{ r.factura.contrato.propiedad.propietario_inmueble.nombre|default:"Genérico" }}
+                                    </td>
+                                    <td class="py-3"><span class="badge bg-light text-dark border">{{ r.metodo_pago }}</span></td>
+                                    <td class="py-3 text-end px-4 text-success fw-bold fs-6">+ ${{ r.monto_pagado|dinero }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center py-5 text-muted">No se registraron cobros de ingresos en este período.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Pestaña 3: Detalle de Gastos -->
+                <div class="tab-pane fade p-0" id="tab-gastos" role="tabpanel">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="px-4 py-3">Fecha</th>
+                                    <th class="py-3">Concepto / Descripción</th>
+                                    <th class="py-3">Tipo / Categoría</th>
+                                    <th class="py-3">Propiedad</th>
+                                    <th class="py-3">Propietario Inmueble</th>
+                                    <th class="py-3 text-end px-4">Monto Gasto</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for m in mantenimientos_list %}
+                                <tr>
+                                    <td class="px-4 py-3 text-muted">{{ m.fecha_reporte|date:"d/m/Y" }}</td>
+                                    <td class="py-3 fw-bold text-dark">{{ m.descripcion }}</td>
+                                    <td class="py-3"><span class="badge bg-secondary">Mantenimiento</span></td>
+                                    <td class="py-3 text-muted">{{ m.propiedad.nombre_o_numero }}</td>
+                                    <td class="py-3 text-muted">{{ m.propiedad.propietario_inmueble.nombre|default:"Genérico" }}</td>
+                                    <td class="py-3 text-end px-4 text-danger fw-bold fs-6">- ${{ m.costo|dinero }}</td>
+                                </tr>
+                                {% endfor %}
+
+                                {% for g in gastos_gen_list %}
+                                <tr>
+                                    <td class="px-4 py-3 text-muted">{{ g.fecha|date:"d/m/Y" }}</td>
+                                    <td class="py-3 fw-bold text-dark">{{ g.concepto }}</td>
+                                    <td class="py-3"><span class="badge bg-warning text-dark">{{ g.get_categoria_display }}</span></td>
+                                    <td class="py-3 text-muted">{{ g.propiedad.nombre_o_numero|default:"General" }}</td>
+                                    <td class="py-3 text-muted">{{ g.propietario_inmueble.nombre|default:"General" }}</td>
+                                    <td class="py-3 text-end px-4 text-danger fw-bold fs-6">- ${{ g.monto|dinero }}</td>
+                                </tr>
+                                {% endfor %}
+
+                                {% if not mantenimientos_list and not gastos_gen_list %}
+                                <tr>
+                                    <td colspan="6" class="text-center py-5 text-muted">No se registraron gastos o egresos en este período.</td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- SCRIPTS DE CHART.JS -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+    function toggleFiltrosEntidad() {
+        let tipo = document.getElementById("selectFiltroTipo").value;
+        document.getElementById("divPropietario").style.display = (tipo === "PROPIETARIO") ? "block" : "none";
+        document.getElementById("divInquilino").style.display = (tipo === "INQUILINO") ? "block" : "none";
+    }
+
     document.addEventListener("DOMContentLoaded", function() {
-        // 1. Obtener y estructurar los datos desde Django
         const rawData = [
             {% for item in finanzas %}
             {
@@ -70,7 +338,6 @@
             {% endfor %}
         ];
 
-        // 2. Agrupar totales por mes (por si hay múltiples propiedades en un mismo mes)
         const groupedData = {};
         rawData.forEach(row => {
             if (!groupedData[row.mes]) {
@@ -80,13 +347,10 @@
             groupedData[row.mes].egresos += row.egresos;
         });
 
-        // 3. Extraer meses ordenados cronológicamente
-        const labels = Object.keys(groupedData).sort();
-        
+        const labels = Object.keys(groupedData).reverse();
         const ingresosData = labels.map(mes => groupedData[mes].ingresos);
         const egresosData = labels.map(mes => groupedData[mes].egresos);
 
-        // 4. Configurar y renderizar la gráfica (Chart.js)
         const ctx = document.getElementById('rentabilidadChart').getContext('2d');
         new Chart(ctx, {
             type: 'bar',
@@ -94,51 +358,28 @@
                 labels: labels,
                 datasets: [
                     {
-                        label: 'Ingresos',
+                        label: 'Ingresos (RD$)',
                         data: ingresosData,
-                        backgroundColor: 'rgba(25, 135, 84, 0.8)', // Bootstrap Success
+                        backgroundColor: 'rgba(25, 135, 84, 0.85)',
                         borderColor: '#198754',
-                        borderWidth: 1,
-                        borderRadius: 4
+                        borderWidth: 1
                     },
                     {
-                        label: 'Egresos',
+                        label: 'Gastos / Egresos (RD$)',
                         data: egresosData,
-                        backgroundColor: 'rgba(220, 53, 69, 0.8)', // Bootstrap Danger
+                        backgroundColor: 'rgba(220, 53, 69, 0.85)',
                         borderColor: '#dc3545',
-                        borderWidth: 1,
-                        borderRadius: 4
+                        borderWidth: 1
                     }
                 ]
             },
             options: {
                 responsive: true,
-                plugins: {
-                    legend: {
-                        position: 'top',
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                let label = context.dataset.label || '';
-                                if (label) {
-                                    label += ': ';
-                                }
-                                if (context.parsed.y !== null) {
-                                    label += new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(context.parsed.y);
-                                }
-                                return label;
-                            }
-                        }
-                    }
-                },
                 scales: {
                     y: {
                         beginAtZero: true,
                         ticks: {
-                            callback: function(value) {
-                                return '$' + value;
-                            }
+                            callback: function(value) { return 'RD$' + value.toLocaleString(); }
                         }
                     }
                 }

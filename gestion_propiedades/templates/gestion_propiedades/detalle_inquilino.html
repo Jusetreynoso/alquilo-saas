@@ -71,6 +71,11 @@
                                         </div>
                                     {% else %}
                                         <span class="badge bg-secondary">Finalizado</span>
+                                        {% if contrato.liquidacion_deposito %}
+                                            <a href="{% url 'imprimir_liquidacion_deposito' contrato.id %}" target="_blank" class="btn btn-sm btn-outline-dark mt-1 w-100" style="font-size: 0.75rem;">
+                                                📄 Ver Finiquito
+                                            </a>
+                                        {% endif %}
                                     {% endif %}
                                 </td>
                             </tr>

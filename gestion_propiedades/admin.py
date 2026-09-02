@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Portafolio, Propiedad, Contrato, Factura, CargoMora, ReciboPago, MantenimientoUnidad, SuscripcionCliente, PlanSaaS, AvisoSistema, Inquilino, HistorialAumentoRenta
+from .models import Portafolio, Propiedad, Contrato, Factura, CargoMora, ReciboPago, MantenimientoUnidad, SuscripcionCliente, PlanSaaS, AvisoSistema, Inquilino, HistorialAumentoRenta, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, LiquidacionDepositoInquilino
 
 # Personalizando los títulos del panel de Django para "Alquilo"
 admin.site.site_header = "Administración Alquilo"
@@ -95,6 +95,12 @@ class LiquidacionPropietarioAdmin(admin.ModelAdmin):
     list_display = ('propietario_inmueble', 'periodo_mes', 'periodo_anio', 'monto_rentas_cobradas', 'monto_neto_pagado', 'estado', 'fecha_pago')
     list_filter = ('estado', 'periodo_anio', 'periodo_mes')
     search_fields = ('propietario_inmueble__nombre', 'referencia_transaccion')
+
+@admin.register(LiquidacionDepositoInquilino)
+class LiquidacionDepositoInquilinoAdmin(admin.ModelAdmin):
+    list_display = ('contrato', 'monto_deposito_original', 'monto_deduccion_facturas', 'monto_deduccion_danos', 'monto_neto_devuelto', 'estado', 'fecha_liquidacion')
+    list_filter = ('estado', 'metodo_devolucion', 'fecha_liquidacion')
+    search_fields = ('contrato__inquilino__nombre', 'contrato__propiedad__nombre_o_numero', 'referencia_pago')
 
 @admin.register(PublicacionMarketplace)
 class PublicacionMarketplaceAdmin(admin.ModelAdmin):

@@ -65,10 +65,9 @@
                     <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#modalAumentoRenta">
                         📈 Aumento
                     </button>
-                    <form method="POST" action="{% url 'finalizar_contrato' contrato_activo.id %}" onsubmit="return confirm('¿Estás seguro de finalizar este contrato? La propiedad quedará DISPONIBLE y dejará de generar facturas para este inquilino.');" class="m-0 p-0">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-sm btn-outline-danger">🚪 Finalizar</button>
-                    </form>
+                    <a href="{% url 'finalizar_contrato' contrato_activo.id %}" class="btn btn-sm btn-outline-danger">
+                        🚪 Finalizar y Liquidar Depósito
+                    </a>
                 </div>
                 {% endif %}
             </div>

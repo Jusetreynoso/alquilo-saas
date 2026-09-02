@@ -41,6 +41,16 @@
                                     {% endif %}
                                 </div>
                             </div>
+                        {% elif field.name == 'propiedades' %}
+                            <div class="col-12 mb-3">
+                                <label class="form-label fw-bold text-primary"><i class="bi bi-building"></i> {{ field.label }}</label>
+                                <div class="border rounded p-3 bg-light shadow-sm" style="max-height: 220px; overflow-y: auto;">
+                                    {{ field }}
+                                </div>
+                                {% if field.help_text %}
+                                    <div class="form-text small">{{ field.help_text }}</div>
+                                {% endif %}
+                            </div>
                         {% else %}
                             <div class="col-12 mb-3">
                                 <label class="form-label fw-bold">{{ field.label }}</label>

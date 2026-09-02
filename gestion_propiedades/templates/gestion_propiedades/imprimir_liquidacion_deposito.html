@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Acta de Finiquito y Liquidación de Depósito - {{ contrato.inquilino.nombre }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #333;
+            background-color: #f8f9fa;
+        }
+        .invoice-box {
+            max-width: 850px;
+            margin: 20px auto;
+            padding: 30px;
+            background: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+            border-radius: 8px;
+        }
+        .header-title {
+            color: #1e293b;
+            font-weight: 700;
+        }
+        .summary-card {
+            background-color: #f1f5f9;
+            border-radius: 6px;
+            padding: 15px;
+        }
+        @media print {
+            body { background-color: #fff; }
+            .invoice-box { box-shadow: none; padding: 0; max-width: 100%; margin: 0; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container no-print text-center my-3">
+    <button onclick="window.print()" class="btn btn-primary btn-lg shadow-sm fw-bold">🖨️ Imprimir / Guardar en PDF</button>
+    <a href="{% url 'detalle_propiedad' contrato.propiedad.id %}" class="btn btn-outline-secondary btn-lg ms-2">Volver a Propiedad</a>
+</div>
+
+<div class="invoice-box">
+    <!-- Encabezado -->
+    <div class="row align-items-center mb-4 pb-3 border-bottom">
+        <div class="col-8">
+            <h2 class="header-title mb-1">ACTA DE FINIQUITO Y LIQUIDACIÓN DE DEPÓSITO</h2>
+            <p class="text-muted mb-0">Recepción Conforme de Inmueble y Devolución de Garantía</p>
+            <p class="text-secondary small">Contrato ID: <strong>#{{ contrato.id }}</strong> | Fecha: <strong>{{ liquidacion.fecha_liquidacion|date:"d/m/Y" }}</strong></p>
+        </div>
+        <div class="col-4 text-end">
+            <h4 class="fw-bold text-primary mb-0">ALQUILO</h4>
+            <span class="badge bg-dark">Estado: {{ liquidacion.get_estado_display }}</span>
+        </div>
+    </div>
+
+    <!-- Partes Involucradas -->
+    <div class="row mb-4">
+        <div class="col-6">
+            <div class="summary-card h-100">
+                <h6 class="fw-bold text-uppercase text-secondary small mb-2">Inquilino Saliente</h6>
+                <h5 class="fw-bold text-dark mb-1">{{ contrato.inquilino.nombre }}</h5>
+                <p class="mb-1 small"><strong>Cédula / Pasaporte:</strong> {{ contrato.inquilino.cedula_o_pasaporte|default:"---" }}</p>
+                <p class="mb-0 small"><strong>Teléfono:</strong> {{ contrato.inquilino.telefono|default:"---" }}</p>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="summary-card h-100">
+                <h6 class="fw-bold text-uppercase text-secondary small mb-2">Propiedad Arrendada</h6>
+                <h5 class="fw-bold text-primary mb-1">{{ contrato.propiedad.nombre_o_numero }}</h5>
+                <p class="mb-1 small"><strong>Período Ocupado:</strong> {{ contrato.fecha_inicio|date:"d/m/Y" }} al {{ liquidacion.fecha_liquidacion|date:"d/m/Y" }}</p>
+                <p class="mb-0 small"><strong>Propietario:</strong> {{ contrato.propiedad.propietario_inmueble.nombre|default:"Genérico" }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla Desglose de Liquidación -->
+    <h5 class="fw-bold text-secondary mb-2">Desglose de Liquidación del Depósito</h5>
+    <table class="table table-bordered align-middle mb-4">
+        <thead class="table-light">
+            <tr>
+                <th>Concepto / Detalle</th>
+                <th class="text-end">Monto</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>(+) Depósito en Garantía Retenido Inicialmente</strong></td>
+                <td class="text-end fw-bold text-success">${{ liquidacion.monto_deposito_original|dinero }}</td>
+            </tr>
+            <tr>
+                <td>
+                    <strong>(-) Deducción por Facturas / Rentas Pendientes</strong>
+                    {% if liquidacion.monto_deduccion_facturas > 0 %}
+                        <br><small class="text-muted">Balance atrasado abonado del depósito</small>
+                    {% endif %}
+                </td>
+                <td class="text-end text-danger">-${{ liquidacion.monto_deduccion_facturas|dinero }}</td>
+            </tr>
+            <tr>
+                <td>
+                    <strong>(-) Deducción por Reparaciones / Daños de la Propiedad</strong>
+                    {% if liquidacion.detalles_danos %}
+                        <br><small class="text-muted">Detalles: {{ liquidacion.detalles_danos }}</small>
+                    {% endif %}
+                </td>
+                <td class="text-end text-danger">-${{ liquidacion.monto_deduccion_danos|dinero }}</td>
+            </tr>
+        </tbody>
+        <tfoot class="table-light">
+            <tr>
+                <th class="text-end fs-6">SALDO NETO A DEVOLVER AL INQUILINO:</th>
+                <th class="text-end text-primary fs-5">${{ liquidacion.monto_neto_devuelto|dinero }}</th>
+            </tr>
+        </tfoot>
+    </table>
+
+    <!-- Detalles del Pago de Devolución -->
+    <div class="summary-card mb-4">
+        <div class="row">
+            <div class="col-6">
+                <p class="mb-1 small"><strong>Método de Entregas/Pago:</strong> {{ liquidacion.get_metodo_devolucion_display }}</p>
+                <p class="mb-0 small"><strong>No. Referencia / Cheque:</strong> {{ liquidacion.referencia_pago|default:"N/A" }}</p>
+            </div>
+            <div class="col-6 text-end">
+                <p class="mb-0 small text-muted">Documento generado el {{ fecha_emision|date:"d/m/Y, h:i A" }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Declaración Conforme -->
+    <p class="small text-muted mb-5">
+        Mediante la firma del presente documento, las partes declaran haber recibido a entera satisfacción el inmueble y los saldos resultantes de la devolución de depósito descritos, otorgándose mutuo finiquito legal y declarando extinguida la relación contractual del arrendamiento.
+    </p>
+
+    <!-- Firmas -->
+    <div class="row mt-5 pt-4 text-center">
+        <div class="col-6">
+            <div class="border-top pt-2 mx-4">
+                <strong>Administración / Arrendador</strong>
+                <p class="text-muted small">Firma Autorizada</p>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="border-top pt-2 mx-4">
+                <strong>Inquilino Saliente</strong>
+                <p class="text-muted small">{{ contrato.inquilino.nombre }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

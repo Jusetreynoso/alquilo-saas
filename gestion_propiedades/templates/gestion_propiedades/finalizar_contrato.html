@@ -1,0 +1,182 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+
+{% block encabezado %}
+    <div class="d-flex justify-content-between align-items-center w-100 flex-wrap gap-2">
+        <div>
+            <a href="{% url 'detalle_propiedad' contrato.propiedad.id %}" class="btn btn-sm btn-outline-secondary me-2">⬅ Cancelar</a>
+            <span>📑 Finalizar Contrato y Liquidar Depósito</span>
+        </div>
+    </div>
+{% endblock %}
+
+{% block contenido %}
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <!-- Tarjeta Informativa del Contrato -->
+            <div class="card shadow-sm border-0 mb-4 bg-light">
+                <div class="card-body p-4">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <h4 class="fw-bold text-primary mb-1">🏠 {{ contrato.propiedad.nombre_o_numero }}</h4>
+                            <p class="mb-1 text-muted"><strong>Inquilino:</strong> {{ contrato.inquilino.nombre }} ({{ contrato.inquilino.telefono|default:"Sin tel" }})</p>
+                            <p class="mb-0 text-muted"><strong>Fecha Inicio Contrato:</strong> {{ contrato.fecha_inicio|date:"d/m/Y" }} | Renta Base: ${{ contrato.monto_renta|dinero }}</p>
+                        </div>
+                        <div class="col-md-6 text-md-end mt-3 mt-md-0">
+                            <span class="text-muted small d-block uppercase fw-bold">Fianza / Depósito Retenido</span>
+                            <h2 class="fw-bold text-success mb-0">${{ contrato.monto_deposito|dinero }}</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Formulario de Liquidación -->
+            <form method="POST" action="{% url 'finalizar_contrato' contrato.id %}">
+                {% csrf_token %}
+
+                <!-- Cuadros Resumen Financiero Dinámico -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-3">
+                        <div class="card bg-success text-white border-0 shadow-sm h-100">
+                            <div class="card-body py-3">
+                                <span class="text-white-50 small uppercase fw-bold">1. Depósito Inicial</span>
+                                <h3 class="fw-bold mb-0">${{ contrato.monto_deposito|dinero }}</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-danger text-white border-0 shadow-sm h-100">
+                            <div class="card-body py-3">
+                                <span class="text-white-50 small uppercase fw-bold">2. Rentas/Moras Pendientes</span>
+                                <h3 class="fw-bold mb-0">-${{ total_deuda_facturas|dinero }}</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-warning text-dark border-0 shadow-sm h-100">
+                            <div class="card-body py-3">
+                                <span class="text-dark-50 small uppercase fw-bold">3. Deducción por Daños</span>
+                                <h3 class="fw-bold mb-0" id="labelMontoDanos">-$0.00</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-primary text-white border-0 shadow-sm h-100">
+                            <div class="card-body py-3">
+                                <span class="text-white-50 small uppercase fw-bold">4. Saldo Neto Devuelto</span>
+                                <h3 class="fw-bold mb-0" id="labelNetoDevolver">${{ neto_estimado|dinero }}</h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Facturas / Deudas Pendientes del Inquilino -->
+                {% if facturas_pendientes %}
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-header bg-danger-subtle text-danger border-bottom py-3">
+                        <h5 class="fw-bold mb-0">🚨 Facturas y Rentas Pendientes de Cobro</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="px-4 py-2">Concepto</th>
+                                        <th class="py-2">Vencimiento</th>
+                                        <th class="py-2">Monto Base</th>
+                                        <th class="py-2">Mora Acumulada</th>
+                                        <th class="py-2 text-end px-4">Deuda Pendiente</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for f in facturas_pendientes %}
+                                    <tr>
+                                        <td class="px-4 py-2 fw-bold">{{ f.concepto }}</td>
+                                        <td class="py-2 text-muted">{{ f.fecha_vencimiento|date:"d/m/Y" }}</td>
+                                        <td class="py-2">${{ f.monto_base|dinero }}</td>
+                                        <td class="py-2 text-warning">${{ f.mora_acumulada|default:"0.00"|dinero }}</td>
+                                        <td class="py-2 text-end px-4 text-danger fw-bold">${{ f.monto_base|dinero }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Detalles de la Liquidación y Daños -->
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="fw-bold mb-0 text-secondary">🔧 Deducciones por Reparación y Método de Devolución</h5>
+                    </div>
+                    <div class="card-body p-4">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Monto Deducción por Daños o Arreglos ($)</label>
+                                {{ form.monto_deduccion_danos }}
+                                <div class="form-text">Si la propiedad presentó daños (pintura, llaves, cerraduras), ingresa el costo de reparación a deducir del depósito.</div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Fecha Oficial de Finiquito</label>
+                                {{ form.fecha_liquidacion }}
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Método de Devolución del Saldo</label>
+                                {{ form.metodo_devolucion }}
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Número de Referencia o Cheque</label>
+                                {{ form.referencia_pago }}
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label fw-bold">Detalle o Justificación de los Daños (Opcional)</label>
+                                {{ form.detalles_danos }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Botón Confirmar -->
+                <div class="card border-0 bg-transparent mb-5">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <a href="{% url 'detalle_propiedad' contrato.propiedad.id %}" class="btn btn-outline-secondary btn-lg">Cancelar</a>
+                        <button type="submit" class="btn btn-danger btn-lg fw-bold px-5 shadow-sm" onclick="return confirm('¿Confirma finalizar este contrato y procesar la liquidación de depósito?');">
+                            ✅ Finalizar Contrato y Generar Finiquito
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    const depositoOriginal = parseFloat("{{ contrato.monto_deposito }}") || 0;
+    const deudaFacturas = parseFloat("{{ total_deuda_facturas }}") || 0;
+
+    function calcularNetoDevolucion() {
+        const inputDanos = document.getElementById("id_monto_deduccion_danos");
+        const montoDanos = parseFloat(inputDanos.value) || 0;
+        
+        document.getElementById("labelMontoDanos").innerText = "-$" + montoDanos.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        
+        const neto = depositoOriginal - deudaFacturas - montoDanos;
+        const labelNeto = document.getElementById("labelNetoDevolver");
+        
+        if (neto >= 0) {
+            labelNeto.innerText = "$" + neto.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            labelNeto.className = "fw-bold mb-0 text-white";
+        } else {
+            labelNeto.innerText = "-$" + Math.abs(neto).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + " (Cobrar a Inquilino)";
+            labelNeto.className = "fw-bold mb-0 text-warning fs-6";
+        }
+    }
+</script>
+{% endblock %}
