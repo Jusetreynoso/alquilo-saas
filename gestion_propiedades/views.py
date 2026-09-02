@@ -370,7 +370,7 @@ def crear_propiedad(request):
     from .forms import PropiedadForm 
 
     if request.method == 'POST':
-        form = PropiedadForm(request.POST)
+        form = PropiedadForm(request.POST, request.FILES)
         if form.is_valid():
             nueva_propiedad = form.save(commit=False)
             # Buscamos el portafolio principal del usuario
@@ -715,7 +715,7 @@ def editar_propiedad(request, propiedad_id):
 
     if request.method == 'POST':
         # instance=propiedad le dice a Django "actualiza este registro, no crees uno nuevo"
-        form = PropiedadForm(request.POST, instance=propiedad)
+        form = PropiedadForm(request.POST, request.FILES, instance=propiedad)
         if form.is_valid():
             form.save()
             messages.success(request, 'Propiedad actualizada correctamente.')
