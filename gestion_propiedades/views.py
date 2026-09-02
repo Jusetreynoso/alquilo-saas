@@ -2334,6 +2334,8 @@ def registrar_gasto_general(request):
         Q(propietario=request.user) | Q(accesos__usuario=request.user)
     ).distinct()
     
+    next_url = request.POST.get('next') or request.GET.get('next')
+    
     if request.method == 'POST':
         form = GastoGeneralPropietarioForm(request.POST, request.FILES)
         if form.is_valid():
@@ -2341,10 +2343,20 @@ def registrar_gasto_general(request):
             gasto.portafolio = portafolios.first()
             gasto.creado_por = request.user
             gasto.save()
-            messages.success(request, f'Gasto general "{gasto.concepto}" registrado correctamente.')
+            messages.success(request, f'Gasto general "{gasto.concepto}" de RD${gasto.monto:,.2f} registrado correctamente.')
+            
+            if next_url == 'reporte_propietario':
+                prop_id = request.POST.get('propietario_inmueble') or (gasto.propietario_inmueble.id if gasto.propietario_inmueble else '')
+                mes = request.POST.get('mes') or ''
+                anio = request.POST.get('anio') or ''
+                return redirect(f"{reverse('reporte_propietario')}?propietario_id={prop_id}&mes={mes}&anio={anio}")
+                
             return redirect('lista_gastos_generales')
     else:
-        form = GastoGeneralPropietarioForm()
+        initial_dict = {}
+        if request.GET.get('propietario_id'):
+            initial_dict['propietario_inmueble'] = request.GET.get('propietario_id')
+        form = GastoGeneralPropietarioForm(initial=initial_dict)
         form.fields['propietario_inmueble'].queryset = PropietarioInmueble.objects.filter(portafolio__in=portafolios, activo=True)
         form.fields['propiedad'].queryset = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False)
         
@@ -2456,7 +2468,8 @@ def reporte_propietario(request):
                 factor = propietario_seleccionado.porcentaje_comision / decimal.Decimal('100.0')
                 monto_comision = round(total_ingresos * factor, 2)
             else:
-                monto_comision = propietario_seleccionado.monto_comision_fijo
+                num_props = propiedades.count()
+                monto_comision = propietario_seleccionado.monto_comision_fijo * num_props
                 
         # Morosidad general
         facturas_vencidas = Factura.objects.filter(
@@ -2549,7 +2562,8 @@ def procesar_liquidacion_propietario(request, propietario_id):
             factor = propietario.porcentaje_comision / decimal.Decimal('100.0')
             monto_comision = round(total_ingresos * factor, 2)
         else:
-            monto_comision = propietario.monto_comision_fijo
+            num_props = propiedades.count()
+            monto_comision = propietario.monto_comision_fijo * num_props
             
         gastos_prop = MantenimientoUnidad.objects.filter(
             propiedad__in=propiedades,
@@ -2617,7 +2631,8 @@ def imprimir_liquidacion_propietario(request, propietario_id):
     if propietario.tipo_comision == 'PORCENTAJE':
         monto_comision = round(total_ingresos * (propietario.porcentaje_comision / decimal.Decimal('100.0')), 2)
     else:
-        monto_comision = propietario.monto_comision_fijo
+        num_props = propiedades.count()
+        monto_comision = propietario.monto_comision_fijo * num_props
         
     gastos_propiedades = MantenimientoUnidad.objects.filter(
         propiedad__in=propiedades,
