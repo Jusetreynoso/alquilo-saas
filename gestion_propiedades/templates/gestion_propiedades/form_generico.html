@@ -42,15 +42,122 @@
                                 </div>
                             </div>
                         {% elif field.name == 'propiedades' %}
-                            <div class="col-12 mb-3">
-                                <label class="form-label fw-bold text-primary"><i class="bi bi-building"></i> {{ field.label }}</label>
-                                <div class="border rounded p-3 bg-light shadow-sm" style="max-height: 220px; overflow-y: auto;">
-                                    {{ field }}
+                            <div class="col-12 mb-4">
+                                <div class="card border-0 shadow-sm rounded-3 bg-light">
+                                    <div class="card-body p-3 p-md-4">
+                                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                                            <div>
+                                                <h6 class="fw-bold text-primary mb-1">🏢 Propiedades de este Propietario</h6>
+                                                <small class="text-muted">Marca las propiedades que pertenecen a este propietario para incluirlas en sus reportes y liquidaciones.</small>
+                                            </div>
+                                            <div class="d-flex gap-2">
+                                                <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="marcarTodasPropiedades(true)">
+                                                    ☑️ Marcar Todas
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary fw-bold" onclick="marcarTodasPropiedades(false)">
+                                                    🔳 Desmarcar Todas
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Buscador en vivo -->
+                                        <div class="mb-3">
+                                            <input type="text" id="buscarPropiedadInput" class="form-control bg-white shadow-sm" placeholder="🔍 Buscar propiedad por nombre..." onkeyup="filtrarPropiedadesEnVivo()">
+                                        </div>
+
+                                        <!-- Grid de tarjetas interactivas -->
+                                        <div class="row g-2 overflow-auto" style="max-height: 280px; padding: 2px;" id="gridPropiedadesContainer">
+                                            {% for check in field %}
+                                                <div class="col-md-6 item-propiedad-card">
+                                                    <label class="card h-100 border p-3 cursor-pointer property-select-card shadow-sm transition-all text-start" style="cursor: pointer;">
+                                                        <div class="d-flex align-items-center gap-3">
+                                                            <div class="form-check m-0">
+                                                                {{ check.tag }}
+                                                            </div>
+                                                            <div class="flex-grow-1 text-truncate">
+                                                                <span class="fw-bold d-block text-dark text-truncate prop-title">{{ check.choice_label }}</span>
+                                                            </div>
+                                                        </div>
+                                                    </label>
+                                                </div>
+                                            {% empty %}
+                                                <div class="col-12 text-center py-4 text-muted">
+                                                    No hay propiedades disponibles en este portafolio para asignar.
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
                                 </div>
-                                {% if field.help_text %}
-                                    <div class="form-text small">{{ field.help_text }}</div>
+                                {% if field.errors %}
+                                    <div class="text-danger small mt-1">{{ field.errors }}</div>
                                 {% endif %}
                             </div>
+
+                            <style>
+                                .property-select-card {
+                                    transition: all 0.2s ease-in-out;
+                                }
+                                .property-select-card:hover {
+                                    border-color: #0d6efd !important;
+                                    transform: translateY(-2px);
+                                    box-shadow: 0 4px 10px rgba(13, 110, 253, 0.15) !important;
+                                }
+                                .item-propiedad-card input[type="checkbox"] {
+                                    width: 1.25em;
+                                    height: 1.25em;
+                                    cursor: pointer;
+                                }
+                            </style>
+
+                            <script>
+                                function marcarTodasPropiedades(check) {
+                                    const container = document.getElementById("gridPropiedadesContainer");
+                                    if (!container) return;
+                                    const checkboxes = container.querySelectorAll("input[type='checkbox']");
+                                    checkboxes.forEach(cb => {
+                                        cb.checked = check;
+                                        actualizarEstiloTarjetaPropiedad(cb);
+                                    });
+                                }
+
+                                function filtrarPropiedadesEnVivo() {
+                                    const query = document.getElementById("buscarPropiedadInput").value.toLowerCase();
+                                    const items = document.querySelectorAll(".item-propiedad-card");
+                                    items.forEach(item => {
+                                        const title = item.querySelector(".prop-title") ? item.querySelector(".prop-title").innerText.toLowerCase() : "";
+                                        if (title.includes(query)) {
+                                            item.style.display = "block";
+                                        } else {
+                                            item.style.display = "none";
+                                        }
+                                    });
+                                }
+
+                                function actualizarEstiloTarjetaPropiedad(cb) {
+                                    const card = cb.closest(".property-select-card");
+                                    if (!card) return;
+                                    if (cb.checked) {
+                                        card.classList.add("border-primary", "bg-primary-subtle");
+                                        card.classList.remove("bg-white");
+                                    } else {
+                                        card.classList.remove("border-primary", "bg-primary-subtle");
+                                        card.classList.add("bg-white");
+                                    }
+                                }
+
+                                document.addEventListener("DOMContentLoaded", function() {
+                                    const container = document.getElementById("gridPropiedadesContainer");
+                                    if (container) {
+                                        const checkboxes = container.querySelectorAll("input[type='checkbox']");
+                                        checkboxes.forEach(cb => {
+                                            actualizarEstiloTarjetaPropiedad(cb);
+                                            cb.addEventListener("change", function() {
+                                                actualizarEstiloTarjetaPropiedad(this);
+                                            });
+                                        });
+                                    }
+                                });
+                            </script>
                         {% else %}
                             <div class="col-12 mb-3">
                                 <label class="form-label fw-bold">{{ field.label }}</label>

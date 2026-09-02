@@ -5,10 +5,12 @@
 {% block encabezado %}
     <div class="d-flex justify-content-between align-items-center w-100">
         <span>{{ titulo_pagina }}</span>
+        {% if request.user.is_superuser %}
         <!-- Botón para correr la facturación masiva si es necesario -->
         <a href="{% url 'generar_facturas_masivas' %}" class="btn btn-warning fw-bold text-dark">
             ⚡ Correr Facturación Masiva
         </a>
+        {% endif %}
     </div>
 {% endblock %}
 

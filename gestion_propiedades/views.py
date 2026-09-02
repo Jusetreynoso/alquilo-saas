@@ -417,6 +417,10 @@ def crear_contrato(request):
 @login_required(login_url='/login/')
 @propietario_requerido
 def generar_facturas_masivas(request):
+    if not request.user.is_superuser:
+        messages.error(request, "Acceso restringido. La generación manual de facturas masivas solo está permitida para el Superadministrador.")
+        return redirect('dashboard')
+
     # 1. Buscamos los portafolios del usuario
     portafolios = Portafolio.objects.filter(
         Q(propietario=request.user) | Q(accesos__usuario=request.user)
