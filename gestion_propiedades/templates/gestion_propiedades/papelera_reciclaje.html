@@ -1,0 +1,70 @@
+{% extends 'gestion_propiedades/base.html' %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+
+{% block encabezado %}
+    <div class="d-flex justify-content-between align-items-center w-100">
+        <span>🗑️ Papelera de Reciclaje y Centro de Recuperación</span>
+        <a href="{% url 'respaldos_exportacion' %}" class="btn btn-outline-primary fw-bold">
+            💾 Ir a Respaldos y Exportación
+        </a>
+    </div>
+{% endblock %}
+
+{% block contenido %}
+<div class="container-fluid">
+    
+    <div class="alert alert-warning border-0 shadow-sm mb-4">
+        <h5 class="alert-heading fw-bold mb-1"><i class="bi bi-arrow-counterclockwise"></i> Protección contra Borrados Accidentales (Soft Delete)</h5>
+        <p class="mb-0 small">
+            Las propiedades eliminadas por los usuarios no se borran físicamente de la base de datos de inmediato. Se conservan en esta papelera de reciclaje para que el Administrador pueda <strong>restaurarlas con un solo clic</strong> sin perder su historial financiero.
+        </p>
+    </div>
+
+    <!-- Lista de Propiedades Eliminadas -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white py-3 fw-bold text-secondary d-flex justify-content-between align-items-center">
+            <span>🏠 Inmuebles Eliminados Lógicamente ({{ total_eliminadas }})</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4 py-3">Unidad / Nombre</th>
+                            <th class="py-3">Residencial / Grupo</th>
+                            <th class="py-3">Propietario Asignado</th>
+                            <th class="py-3 text-end pe-4">Acción de Recuperación</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in propiedades_eliminadas %}
+                        <tr>
+                            <td class="ps-4 py-3 fw-bold text-dark">{{ p.nombre_o_numero }}</td>
+                            <td class="py-3 text-muted">{{ p.grupo_o_residencial|default:"---" }}</td>
+                            <td class="py-3 text-muted">{{ p.propietario_inmueble.nombre|default:"Sin asignar" }}</td>
+                            <td class="py-3 text-end pe-4">
+                                <form method="POST" action="{% url 'restaurar_propiedad' p.id %}" class="d-inline" onsubmit="return confirm('¿Deseas restaurar la propiedad {{ p.nombre_o_numero }} para que vuelva a estar visible en la lista activa?');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-success fw-bold shadow-sm">
+                                        🔄 Restaurar Propiedad
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center py-5 text-muted">
+                                <i class="bi bi-check-circle text-success fs-3 d-block mb-2"></i>
+                                No hay propiedades eliminadas en la papelera de reciclaje.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

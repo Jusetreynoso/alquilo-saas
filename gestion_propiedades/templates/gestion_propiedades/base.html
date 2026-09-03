@@ -220,6 +220,12 @@
                     <li class="nav-item mb-2">
                         <a class="nav-link {% if request.resolver_match.url_name == 'auditoria' %}text-white fw-bold{% else %}text-white-50{% endif %}" href="{% url 'auditoria' %}">🕵️ Auditoría</a>
                     </li>
+                    <li class="nav-item mb-2">
+                        <a class="nav-link {% if 'respaldos' in request.resolver_match.url_name %}text-white fw-bold{% else %}text-white-50{% endif %}" href="{% url 'respaldos_exportacion' %}">💾 Resguardo y Backup</a>
+                    </li>
+                    <li class="nav-item mb-2">
+                        <a class="nav-link {% if 'papelera' in request.resolver_match.url_name %}text-white fw-bold{% else %}text-white-50{% endif %}" href="{% url 'papelera_reciclaje' %}">🗑️ Papelera y Recuperación</a>
+                    </li>
                     {% endif %}
                     
                     <li class="nav-item mt-4 pt-4 border-top border-secondary">

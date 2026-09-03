@@ -140,4 +140,11 @@ urlpatterns = [
     path('propiedad/<int:propiedad_id>/marketplace/republicar/', views.republicar_publicacion_marketplace, name='republicar_publicacion_marketplace'),
     path('propiedad/<int:propiedad_id>/marketplace/borrar/', views.borrar_publicacion_marketplace, name='borrar_publicacion_marketplace'),
     path('marketplace/imagen/<int:imagen_id>/eliminar/', views.eliminar_imagen_publicacion, name='eliminar_imagen_publicacion'),
+
+    # --- RESPALDOS, EXPORTACIÓN Y PAPELERA DE RECICLAJE ---
+    path('respaldos/', views.respaldos_exportacion, name='respaldos_exportacion'),
+    path('respaldos/exportar-datos/', views.exportar_datos_csv_zip, name='exportar_datos_csv_zip'),
+    path('respaldos/exportar-archivos/', views.exportar_archivos_adjuntos_zip, name='exportar_archivos_adjuntos_zip'),
+    path('papelera/', views.papelera_reciclaje, name='papelera_reciclaje'),
+    path('papelera/restaurar-propiedad/<int:propiedad_id>/', views.restaurar_propiedad, name='restaurar_propiedad'),
 ]

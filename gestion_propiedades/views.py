@@ -3077,3 +3077,197 @@ def borrar_publicacion_marketplace(request, propiedad_id):
 
     messages.success(request, "Anuncio eliminado por completo. Las imágenes han sido removidas del disco del servidor para optimizar espacio.")
     return redirect('detalle_propiedad', propiedad_id=propiedad.id)
+
+
+# --- MÓDULOS DE SEGURIDAD, RESPALDOS Y PAPELERA DE RECICLAJE ---
+import csv
+import io
+import zipfile
+
+@login_required(login_url='/login/')
+def respaldos_exportacion(request):
+    """
+    Panel de Copias de Seguridad y Exportación Masiva de Datos para el Usuario/Cliente.
+    """
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+    
+    total_propiedades = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False).count()
+    total_propietarios = PropietarioInmueble.objects.filter(portafolio__in=portafolios, activo=True).count()
+    total_inquilinos = Inquilino.objects.filter(creado_por=request.user).count()
+    total_contratos = Contrato.objects.filter(propiedad__portafolio__in=portafolios, activo=True).count()
+    
+    context = {
+        'titulo_pagina': 'Copias de Seguridad y Exportación de Datos',
+        'total_propiedades': total_propiedades,
+        'total_propietarios': total_propietarios,
+        'total_inquilinos': total_inquilinos,
+        'total_contratos': total_contratos,
+    }
+    return render(request, 'gestion_propiedades/respaldos_exportacion.html', context)
+
+
+@login_required(login_url='/login/')
+def exportar_datos_csv_zip(request):
+    """
+    Genera un archivo ZIP conteniendo archivos CSV estructurados con la información del portafolio.
+    """
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+    
+    zip_buffer = io.BytesIO()
+    
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        # 1. Propietarios
+        propietarios_qs = PropietarioInmueble.objects.filter(portafolio__in=portafolios)
+        output_prop = io.StringIO()
+        writer = csv.writer(output_prop)
+        writer.writerow(['ID', 'Nombre', 'Cédula/RNC', 'Teléfono', 'Correo', 'Tipo Comisión', 'Porcentaje', 'Monto Fijo', 'Banco', 'Tipo Cuenta', 'Número Cuenta', 'Activo'])
+        for p in propietarios_qs:
+            writer.writerow([p.id, p.nombre, p.cedula_o_rnc or '', p.telefono or '', p.correo or '', p.tipo_comision, p.porcentaje_comision, p.monto_comision_fijo, p.banco_nombre or '', p.tipo_cuenta or '', p.numero_cuenta or '', 'Sí' if p.activo else 'No'])
+        zip_file.writestr('1_Propietarios.csv', output_prop.getvalue().encode('utf-8-sig'))
+        
+        # 2. Inmuebles / Propiedades
+        propiedades_qs = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False)
+        output_inm = io.StringIO()
+        writer = csv.writer(output_inm)
+        writer.writerow(['ID', 'Nombre/Unidad', 'Residencial/Grupo', 'Propietario', 'Dirección', 'Precio Sugerido', 'Latitud', 'Longitud', 'Estado', 'Detalles'])
+        for pr in propiedades_qs:
+            prop_nombre = pr.propietario_inmueble.nombre if pr.propietario_inmueble else 'N/A'
+            writer.writerow([pr.id, pr.nombre_o_numero, pr.grupo_o_residencial or '', prop_nombre, pr.direccion_completa or '', pr.precio_alquiler_sugerido or 0.00, pr.latitud or '', pr.longitud or '', pr.get_estado_display(), pr.detalles or ''])
+        zip_file.writestr('2_Propiedades_Inmuebles.csv', output_inm.getvalue().encode('utf-8-sig'))
+
+        # 3. Inquilinos
+        inquilinos_qs = Inquilino.objects.filter(creado_por=request.user)
+        output_inq = io.StringIO()
+        writer = csv.writer(output_inq)
+        writer.writerow(['ID', 'Nombre', 'Teléfono', 'Cédula/Pasaporte', 'Correo', 'Alertas Correo'])
+        for i in inquilinos_qs:
+            writer.writerow([i.id, i.nombre, i.telefono, i.cedula_o_pasaporte or '', i.correo or '', 'Sí' if i.recibir_alertas_correo else 'No'])
+        zip_file.writestr('3_Inquilinos.csv', output_inq.getvalue().encode('utf-8-sig'))
+
+        # 4. Contratos
+        contratos_qs = Contrato.objects.filter(propiedad__portafolio__in=portafolios)
+        output_con = io.StringIO()
+        writer = csv.writer(output_con)
+        writer.writerow(['ID Contrato', 'Propiedad', 'Inquilino', 'Fecha Inicio', 'Fecha Fin', 'Monto Renta', 'Monto Depósito', 'Monto Adelanto', 'Día de Pago', 'Estado Activo'])
+        for c in contratos_qs:
+            writer.writerow([c.id, c.propiedad.nombre_o_numero, c.inquilino.nombre, c.fecha_inicio, c.fecha_fin or 'Indefinido', c.monto_renta, c.monto_deposito, c.monto_adelanto, c.dia_de_pago, 'Sí' if c.activo else 'No'])
+        zip_file.writestr('4_Contratos.csv', output_con.getvalue().encode('utf-8-sig'))
+
+        # 5. Facturas y Cobros
+        facturas_qs = Factura.objects.filter(contrato__propiedad__portafolio__in=portafolios).select_related('contrato__propiedad', 'contrato__inquilino')
+        output_fac = io.StringIO()
+        writer = csv.writer(output_fac)
+        writer.writerow(['No. Factura', 'Propiedad', 'Inquilino', 'Concepto', 'Monto Base', 'Estado', 'Fecha Emisión', 'Fecha Vencimiento'])
+        for f in facturas_qs:
+            writer.writerow([f.id, f.contrato.propiedad.nombre_o_numero, f.contrato.inquilino.nombre, f.concepto, f.monto_base, f.get_estado_display(), f.fecha_emision, f.fecha_vencimiento])
+        zip_file.writestr('5_Facturas_y_Cobros.csv', output_fac.getvalue().encode('utf-8-sig'))
+
+        # 6. Gastos y Mantenimientos
+        mantenimientos_qs = MantenimientoUnidad.objects.filter(propiedad__portafolio__in=portafolios)
+        output_gas = io.StringIO()
+        writer = csv.writer(output_gas)
+        writer.writerow(['ID', 'Propiedad', 'Concepto/Trabajo', 'Categoría', 'Costo', 'Estado', 'Fecha Reporte'])
+        for m in mantenimientos_qs:
+            writer.writerow([m.id, m.propiedad.nombre_o_numero, m.titulo_trabajo, m.categoria, m.costo, m.estado, m.fecha_reporte])
+        zip_file.writestr('6_Gastos_y_Mantenimientos.csv', output_gas.getvalue().encode('utf-8-sig'))
+
+        # 7. Liquidaciones a Propietarios
+        liq_qs = LiquidacionPropietario.objects.filter(propietario_inmueble__portafolio__in=portafolios)
+        output_liq = io.StringIO()
+        writer = csv.writer(output_liq)
+        writer.writerow(['ID', 'Propietario', 'Período', 'Rentas Cobradas', 'Comisión Admin', 'Gastos Propiedades', 'Gastos Generales', 'Neto Pagado', 'Fecha Pago', 'Método'])
+        for l in liq_qs:
+            writer.writerow([l.id, l.propietario_inmueble.nombre, f"{l.periodo_mes}/{l.periodo_anio}", l.monto_rentas_cobradas, l.monto_comision, l.monto_gastos_propiedades, l.monto_gastos_generales, l.monto_neto_pagado, l.fecha_pago, l.metodo_pago])
+        zip_file.writestr('7_Liquidaciones_Propietarios.csv', output_liq.getvalue().encode('utf-8-sig'))
+
+    zip_buffer.seek(0)
+    fecha_str = date.today().strftime('%Y%m%d')
+    response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
+    response['Content-Disposition'] = f'attachment; filename="Alquilo_Backup_Datos_{fecha_str}.zip"'
+    return response
+
+
+@login_required(login_url='/login/')
+def exportar_archivos_adjuntos_zip(request):
+    """
+    Empaqueta y descarga todos los documentos PDF e imágenes subidas en el servidor.
+    """
+    import os
+    
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+    
+    zip_buffer = io.BytesIO()
+    count_files = 0
+    
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        # Documentos de contratos
+        contratos_qs = Contrato.objects.filter(propiedad__portafolio__in=portafolios)
+        for c in contratos_qs:
+            if c.documento_contrato and os.path.exists(c.documento_contrato.path):
+                arcname = f"Contratos/Contrato_{c.id}_{c.propiedad.nombre_o_numero}_{os.path.basename(c.documento_contrato.name)}"
+                zip_file.write(c.documento_contrato.path, arcname=arcname)
+                count_files += 1
+                
+        # Imágenes de propiedades
+        propiedades_qs = Propiedad.objects.filter(portafolio__in=portafolios)
+        for pr in propiedades_qs:
+            if pr.imagen_principal and os.path.exists(pr.imagen_principal.path):
+                arcname = f"Propiedades/Foto_{pr.id}_{pr.nombre_o_numero}_{os.path.basename(pr.imagen_principal.name)}"
+                zip_file.write(pr.imagen_principal.path, arcname=arcname)
+                count_files += 1
+
+    if count_files == 0:
+        messages.warning(request, 'No se encontraron archivos físicos adjuntos cargados en el servidor para exportar.')
+        return redirect('respaldos_exportacion')
+
+    zip_buffer.seek(0)
+    fecha_str = date.today().strftime('%Y%m%d')
+    response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
+    response['Content-Disposition'] = f'attachment; filename="Alquilo_Archivos_Adjuntos_{fecha_str}.zip"'
+    return response
+
+
+@login_required(login_url='/login/')
+def papelera_reciclaje(request):
+    """
+    Centro de Recuperación / Papelera de Reciclaje para propiedades eliminadas lógicamente.
+    """
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+    
+    propiedades_eliminadas = Propiedad.objects.filter(
+        portafolio__in=portafolios,
+        is_deleted=True
+    ).select_related('portafolio', 'propietario_inmueble')
+    
+    context = {
+        'titulo_pagina': 'Papelera de Reciclaje y Restauración',
+        'propiedades_eliminadas': propiedades_eliminadas,
+        'total_eliminadas': propiedades_eliminadas.count()
+    }
+    return render(request, 'gestion_propiedades/papelera_reciclaje.html', context)
+
+
+@login_required(login_url='/login/')
+def restaurar_propiedad(request, propiedad_id):
+    """
+    Restaura una propiedad que fue borrada lógicamente (Soft Delete).
+    """
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+    propiedad = get_object_or_404(Propiedad, id=propiedad_id, portafolio__in=portafolios, is_deleted=True)
+    
+    if request.method == 'POST':
+        propiedad.is_deleted = False
+        propiedad.save()
+        messages.success(request, f'La propiedad "{propiedad.nombre_o_numero}" ha sido restaurada con éxito. Ya está visible de nuevo en la lista activa.')
+        return redirect('papelera_reciclaje')
+    return redirect('papelera_reciclaje')

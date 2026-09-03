@@ -439,3 +439,31 @@ class AlquiloTests(TestCase):
         self.assertEqual(res_mapa.status_code, 200)
         self.assertIn('Apto 1A', res_mapa.content.decode('utf-8'))
 
+    def test_respaldos_y_papelera_reciclaje(self):
+        self.client.login(username='propietario1', password='password123')
+        
+        # 1. Probar vista panel respaldos
+        res_respaldos = self.client.get(reverse('respaldos_exportacion'))
+        self.assertEqual(res_respaldos.status_code, 200)
+        
+        # 2. Probar exportar datos en ZIP/CSV
+        res_export_datos = self.client.get(reverse('exportar_datos_csv_zip'))
+        self.assertEqual(res_export_datos.status_code, 200)
+        self.assertEqual(res_export_datos['Content-Type'], 'application/zip')
+        
+        # 3. Probar eliminar propiedad y recuperarla desde papelera
+        self.propiedad1.is_deleted = True
+        self.propiedad1.save()
+        
+        res_papelera = self.client.get(reverse('papelera_reciclaje'))
+        self.assertEqual(res_papelera.status_code, 200)
+        self.assertIn('Apto 1A', res_papelera.content.decode('utf-8'))
+        
+        # Restaurar
+        url_restaurar = reverse('restaurar_propiedad', args=[self.propiedad1.id])
+        res_restaurar = self.client.post(url_restaurar)
+        self.assertEqual(res_restaurar.status_code, 302)
+        
+        self.propiedad1.refresh_from_db()
+        self.assertFalse(self.propiedad1.is_deleted)
+
