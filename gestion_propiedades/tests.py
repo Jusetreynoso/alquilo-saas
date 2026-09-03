@@ -471,10 +471,10 @@ class AlquiloTests(TestCase):
         from .models import SolicitudAlquiler
         
         # 1. Probar custodia de depósito en contrato
-        self.contrato1.custodia_deposito = 'BANCO_CERTIFICADO'
-        self.contrato1.detalles_custodia_deposito = 'Certificado #998877 Banco Popular'
+        self.contrato1.custodia_deposito = 'BANCO_CONSIGNACION'
+        self.contrato1.detalles_custodia_deposito = 'Consignación No. 998877 Banco Agrícola'
         self.contrato1.save()
-        self.assertEqual(self.contrato1.custodia_deposito, 'BANCO_CERTIFICADO')
+        self.assertEqual(self.contrato1.custodia_deposito, 'BANCO_CONSIGNACION')
 
         # 2. Crear solicitud con fiador y devolverla para corrección
         solicitud = SolicitudAlquiler.objects.create(

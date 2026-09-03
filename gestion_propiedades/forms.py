@@ -66,7 +66,7 @@ class ContratoForm(forms.ModelForm):
             'monto_renta': forms.NumberInput(attrs={'class': 'form-control'}),
             'monto_deposito': forms.NumberInput(attrs={'class': 'form-control'}),
             'custodia_deposito': forms.Select(attrs={'class': 'form-select'}),
-            'detalles_custodia_deposito': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Certificado #987654 Banco Popular o Entregado al propietario'}),
+            'detalles_custodia_deposito': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Consignación No. 987654 Banco Agrícola/Popular o Entregado al propietario'}),
             'monto_adelanto': forms.NumberInput(attrs={'class': 'form-control'}),
             'dia_de_pago': forms.NumberInput(attrs={'class': 'form-control'}),
             'dias_gracia': forms.NumberInput(attrs={'class': 'form-control'}),

@@ -269,7 +269,7 @@ class Contrato(models.Model):
 
     CUSTODIA_DEPOSITO_CHOICES = [
         ('ADMINISTRADORA_CUENTA', 'Retenido en Cuenta de Administradora'),
-        ('BANCO_CERTIFICADO', 'En Banco (Certificado de Depósito)'),
+        ('BANCO_CONSIGNACION', 'En Banco (Consignación)'),
         ('ENTREGADO_PROPIETARIO', 'Entregado al Propietario del Inmueble'),
     ]
     custodia_deposito = models.CharField(
@@ -282,7 +282,7 @@ class Contrato(models.Model):
         max_length=255,
         blank=True,
         null=True,
-        help_text="Ej: Certificado #987654 Banco Popular o Entregado al propietario según recibo X"
+        help_text="Ej: Consignación No. 987654 Banco Agrícola/Popular o Entregado al propietario según recibo X"
     )
 
     dia_de_pago = models.IntegerField(help_text="Día del mes en que se genera la factura (1-31)")
