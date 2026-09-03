@@ -643,4 +643,34 @@
     });
 </script>
 {% endif %}
+
+<!-- Modal Subir Foto a la Galería -->
+<div class="modal fade" id="modalSubirFotoGaleria" tabindex="-1" aria-labelledby="modalSubirFotoGaleriaLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content text-black">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold" id="modalSubirFotoGaleriaLabel">📸 Agregar Foto a la Galería</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="{% url 'subir_imagen_galeria' propiedad.id %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Seleccionar Foto</label>
+                        <input type="file" name="imagen" class="form-control" accept="image/*" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Título o Etiqueta (Opcional)</label>
+                        <input type="text" name="titulo_o_descripcion" class="form-control" placeholder="Ej: Habitación Principal, Cocina, Vista al Mar">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary fw-bold">Subir a Galería</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 {% endblock %}

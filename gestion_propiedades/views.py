@@ -2892,6 +2892,102 @@ def imprimir_liquidacion_propietario(request, propietario_id):
     return render(request, 'gestion_propiedades/imprimir_liquidacion_propietario.html', context)
 
 
+@login_required(login_url='/login/')
+def imprimir_estado_situacion_propietario(request, propietario_id):
+    """
+    Genera la vista imprimible en formato Estado de Situación de Inmuebles para compartir con el Propietario.
+    """
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+    propietario = get_object_or_404(PropietarioInmueble, id=propietario_id, portafolio__in=portafolios)
+    
+    mes = int(request.GET.get('mes', date.today().month))
+    anio = int(request.GET.get('anio', date.today().year))
+    
+    propiedades = propietario.propiedades.filter(is_deleted=False).order_by('nombre_o_numero')
+    
+    situacion_propiedades = []
+    total_facturado = decimal.Decimal('0.00')
+    total_cobrado = decimal.Decimal('0.00')
+    total_deuda = decimal.Decimal('0.00')
+    total_depositos = decimal.Decimal('0.00')
+    propiedades_ocupadas = 0
+
+    for prop in propiedades:
+        contrato_act = prop.contratos.filter(activo=True).select_related('inquilino').first()
+        facturas_prop = Factura.objects.filter(
+            contrato__propiedad=prop,
+            fecha_emision__month=mes,
+            fecha_emision__year=anio
+        )
+        facturado_prop = facturas_prop.aggregate(total=Sum('monto_base'))['total'] or decimal.Decimal('0.00')
+        
+        recibos_prop = ReciboPago.objects.filter(
+            factura__contrato__propiedad=prop,
+            fecha_pago__month=mes,
+            fecha_pago__year=anio
+        )
+        cobrado_prop = recibos_prop.aggregate(total=Sum('monto_pagado'))['total'] or decimal.Decimal('0.00')
+        
+        facturas_vencidas_prop = Factura.objects.filter(
+            contrato__propiedad=prop,
+            estado='ATRASADA'
+        ).annotate(mora=Sum('moras__monto'))
+        
+        deuda_prop = decimal.Decimal('0.00')
+        for f in facturas_vencidas_prop:
+            mora_val = f.mora or decimal.Decimal('0.00')
+            deuda_prop += f.monto_base + mora_val
+            
+        if prop.estado == 'DISPONIBLE':
+            estado_pago = 'VACANTE'
+        elif deuda_prop > decimal.Decimal('0.00'):
+            estado_pago = 'ATRASADO'
+        else:
+            estado_pago = 'AL_DIA'
+            
+        if prop.estado == 'OCUPADO':
+            propiedades_ocupadas += 1
+
+        dep_monto = contrato_act.monto_deposito if contrato_act else decimal.Decimal('0.00')
+        total_facturado += facturado_prop
+        total_cobrado += cobrado_prop
+        total_deuda += deuda_prop
+        total_depositos += dep_monto
+            
+        situacion_propiedades.append({
+            'propiedad': prop,
+            'contrato': contrato_act,
+            'inquilino': contrato_act.inquilino if contrato_act else None,
+            'estado_pago': estado_pago,
+            'facturado': facturado_prop,
+            'cobrado': cobrado_prop,
+            'deuda': deuda_prop,
+            'deposito': dep_monto,
+            'custodia_deposito': contrato_act.get_custodia_deposito_display() if contrato_act else 'N/A',
+            'detalles_custodia': contrato_act.detalles_custodia_deposito if contrato_act else ''
+        })
+
+    context = {
+        'propietario': propietario,
+        'mes': mes,
+        'nombre_mes': obtener_nombre_mes(mes),
+        'anio': anio,
+        'propiedades': propiedades,
+        'situacion_propiedades': situacion_propiedades,
+        'total_propiedades': propiedades.count(),
+        'propiedades_ocupadas': propiedades_ocupadas,
+        'propiedades_vacantes': propiedades.count() - propiedades_ocupadas,
+        'total_facturado': total_facturado,
+        'total_cobrado': total_cobrado,
+        'total_deuda': total_deuda,
+        'total_depositos': total_depositos,
+        'fecha_emision': timezone.now()
+    }
+    return render(request, 'gestion_propiedades/imprimir_estado_situacion_propietario.html', context)
+
+
 # --- MARKETPLACE VIEWS ---
 
 from django.core.exceptions import PermissionDenied

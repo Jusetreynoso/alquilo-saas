@@ -86,15 +86,18 @@
             <p class="text-muted mb-0">Período: {{ nombre_mes }} {{ anio }} | Propiedades asociadas: {{ total_propiedades }}</p>
         </div>
         {% if propietario_seleccionado %}
-            <div class="d-flex gap-2">
+            <div class="d-flex gap-2 flex-wrap">
                 <button type="button" class="btn btn-outline-warning text-dark fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalGastoGeneral">
-                    💸 + Registrar Gasto General / Deducción
+                    💸 + Gasto General
                 </button>
+                <a href="{% url 'imprimir_estado_situacion_propietario' propietario_seleccionado.id %}?mes={{ mes }}&anio={{ anio }}" target="_blank" class="btn btn-outline-primary fw-bold shadow-sm">
+                    📄 Estado de Situación PDF
+                </a>
                 <a href="{% url 'imprimir_liquidacion_propietario' propietario_seleccionado.id %}?mes={{ mes }}&anio={{ anio }}" target="_blank" class="btn btn-outline-dark fw-bold">
-                    🖨️ Imprimir Liquidación PDF
+                    🖨️ Liquidación PDF
                 </a>
                 <button type="button" class="btn btn-success fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalLiquidar">
-                    💰 Registrar Liquidación / Pago
+                    💰 Registrar Liquidación
                 </button>
             </div>
         {% endif %}

@@ -495,3 +495,17 @@ class AlquiloTests(TestCase):
         self.assertEqual(solicitud.estado, 'DEVUELTA_PARA_CORRECCION')
         self.assertEqual(solicitud.motivo_devolucion, 'Fiador no califica, favor cambiar.')
 
+        # 3. Probar impresión de Estado de Situación de Propiedades
+        prop_owner = PropietarioInmueble.objects.create(
+            portafolio=self.portafolio1,
+            nombre='Propietario Test',
+            cedula_o_rnc='402-1234567-8'
+        )
+        self.propiedad1.propietario_inmueble = prop_owner
+        self.propiedad1.save()
+        
+        url_situacion_pdf = reverse('imprimir_estado_situacion_propietario', args=[prop_owner.id])
+        res_situacion_pdf = self.client.get(url_situacion_pdf)
+        self.assertEqual(res_situacion_pdf.status_code, 200)
+        self.assertIn('ESTADO DE SITUACIÓN DE INMUEBLES', res_situacion_pdf.content.decode('utf-8'))
+
