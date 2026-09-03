@@ -882,18 +882,17 @@ def solicitud_publica(request, codigo_secreto):
     # Buscamos la solicitud usando el código secreto largo (UUID)
     solicitud = get_object_or_404(SolicitudAlquiler, codigo_secreto=codigo_secreto)
 
-    # Si ya la llenó antes, no le dejamos llenarla de nuevo
+    # Si ya la llenó antes y está aprobada/rechazada o en evaluación previa, no le dejamos llenarla salvo que esté devuelta para corrección
     if solicitud.estado in ['RECIBIDA', 'APROBADA', 'RECHAZADA']:
         return HttpResponse("<h2 style='text-align:center; padding:50px; font-family:sans-serif;'>Esta solicitud ya fue completada y enviada. ¡Gracias!</h2>")
 
     if request.method == 'POST':
-        form = SolicitudPublicaForm(request.POST, instance=solicitud)
+        form = SolicitudPublicaForm(request.POST, request.FILES, instance=solicitud)
         if form.is_valid():
             solicitud_guardada = form.save(commit=False)
-            solicitud_guardada.estado = 'RECIBIDA' # ¡Cambia el estado para avisarte!
+            solicitud_guardada.estado = 'RECIBIDA' # Cambia el estado a RECIBIDA tras corregir o enviar
             solicitud_guardada.save()
-            # Mensaje de éxito gigante para el celular del prospecto
-            return HttpResponse("<h2 style='text-align:center; padding:50px; color:green; font-family:sans-serif;'>✅ ¡Solicitud enviada con éxito! El propietario se pondrá en contacto contigo.</h2>")
+            return HttpResponse("<h2 style='text-align:center; padding:50px; color:green; font-family:sans-serif;'>✅ ¡Solicitud enviada con éxito! El administrador evaluará tu expediente.</h2>")
     else:
         form = SolicitudPublicaForm(instance=solicitud)
 
@@ -917,6 +916,48 @@ def ver_solicitud(request, solicitud_id):
         'solicitud': solicitud
     }
     return render(request, 'gestion_propiedades/ver_solicitud.html', context)
+
+@login_required(login_url='/login/')
+def devolver_solicitud_alquiler(request, solicitud_id):
+    portafolios = Portafolio.objects.filter(Q(propietario=request.user) | Q(accesos__usuario=request.user))
+    solicitud = get_object_or_404(SolicitudAlquiler, id=solicitud_id, propiedad__portafolio__in=portafolios)
+    
+    if request.method == 'POST':
+        motivo = request.POST.get('motivo_devolucion', '')
+        solicitud.estado = 'DEVUELTA_PARA_CORRECCION'
+        solicitud.motivo_devolucion = motivo
+        solicitud.save()
+        messages.success(request, f'La solicitud ha sido devuelta al prospecto. Se le notificó el motivo: "{motivo}"')
+    return redirect('ver_solicitud', solicitud_id=solicitud.id)
+
+@login_required(login_url='/login/')
+def subir_imagen_galeria(request, propiedad_id):
+    portafolios = Portafolio.objects.filter(Q(propietario=request.user) | Q(accesos__usuario=request.user))
+    propiedad = get_object_or_404(Propiedad, id=propiedad_id, portafolio__in=portafolios)
+    
+    if request.method == 'POST' and request.FILES.get('imagen'):
+        imagen_file = request.FILES.get('imagen')
+        titulo = request.POST.get('titulo_o_descripcion', '')
+        ImagenPropiedad.objects.create(
+            propiedad=propiedad,
+            imagen=imagen_file,
+            titulo_o_descripcion=titulo
+        )
+        messages.success(request, 'Imagen agregada exitosamente a la galería de la propiedad.')
+    return redirect('detalle_propiedad', propiedad_id=propiedad.id)
+
+@login_required(login_url='/login/')
+def eliminar_imagen_galeria(request, imagen_id):
+    portafolios = Portafolio.objects.filter(Q(propietario=request.user) | Q(accesos__usuario=request.user))
+    imagen_obj = get_object_or_404(ImagenPropiedad, id=imagen_id, propiedad__portafolio__in=portafolios)
+    propiedad_id = imagen_obj.propiedad.id
+    
+    if request.method == 'POST':
+        if imagen_obj.imagen:
+            imagen_obj.imagen.delete(save=False)
+        imagen_obj.delete()
+        messages.success(request, 'Imagen eliminada de la galería.')
+    return redirect('detalle_propiedad', propiedad_id=propiedad_id)
 
 @login_required(login_url='/login/')
 def reporte_financiero(request):
@@ -2571,11 +2612,103 @@ def reporte_propietario(request):
             
         propiedades_ocupadas = propiedades.filter(estado='OCUPADO').count()
         
+        # --- SITUACIÓN DETALLADA INDIVIDUAL POR PROPIEDAD ---
+        situacion_propiedades = []
+        for prop in propiedades:
+            contrato_act = prop.contratos.filter(activo=True).select_related('inquilino').first()
+            facturas_prop = Factura.objects.filter(
+                contrato__propiedad=prop,
+                fecha_emision__month=mes,
+                fecha_emision__year=anio
+            )
+            facturado_prop = facturas_prop.aggregate(total=Sum('monto_base'))['total'] or decimal.Decimal('0.00')
+            
+            recibos_prop = ReciboPago.objects.filter(
+                factura__contrato__propiedad=prop,
+                fecha_pago__month=mes,
+                fecha_pago__year=anio
+            )
+            cobrado_prop = recibos_prop.aggregate(total=Sum('monto_pagado'))['total'] or decimal.Decimal('0.00')
+            
+            facturas_vencidas_prop = Factura.objects.filter(
+                contrato__propiedad=prop,
+                estado='ATRASADA'
+            ).annotate(mora=Sum('moras__monto'))
+            
+            deuda_prop = decimal.Decimal('0.00')
+            for f in facturas_vencidas_prop:
+                mora_val = f.mora or decimal.Decimal('0.00')
+                deuda_prop += f.monto_base + mora_val
+                
+            if prop.estado == 'DISPONIBLE':
+                estado_pago = 'VACANTE'
+            elif deuda_prop > decimal.Decimal('0.00'):
+                estado_pago = 'ATRASADO'
+            else:
+                estado_pago = 'AL_DIA'
+                
+            situacion_propiedades.append({
+                'propiedad': prop,
+                'contrato': contrato_act,
+                'inquilino': contrato_act.inquilino if contrato_act else None,
+                'estado_pago': estado_pago,
+                'facturado': facturado_prop,
+                'cobrado': cobrado_prop,
+                'deuda': deuda_prop,
+                'deposito': contrato_act.monto_deposito if contrato_act else decimal.Decimal('0.00'),
+                'custodia_deposito': contrato_act.get_custodia_deposito_display() if contrato_act else 'N/A',
+                'detalles_custodia': contrato_act.detalles_custodia_deposito if contrato_act else ''
+            })
+
+        # --- CÁLCULO DE SALDO ACUMULADO MULTIMES NO LIQUIDADO ---
+        saldo_acumulado_anterior = decimal.Decimal('0.00')
+        if propietario_seleccionado:
+            recibos_pasados = ReciboPago.objects.filter(
+                factura__contrato__propiedad__propietario_inmueble=propietario_seleccionado
+            ).exclude(
+                fecha_pago__month=mes,
+                fecha_pago__year=anio
+            )
+            periodos_pasados = recibos_pasados.values_list('fecha_pago__month', 'fecha_pago__year').distinct()
+            for p_mes, p_anio in periodos_pasados:
+                ya_liquidado = LiquidacionPropietario.objects.filter(
+                    propietario_inmueble=propietario_seleccionado,
+                    periodo_mes=p_mes,
+                    periodo_anio=p_anio
+                ).exists()
+                if not ya_liquidado:
+                    ing_pasado = ReciboPago.objects.filter(
+                        factura__contrato__propiedad__propietario_inmueble=propietario_seleccionado,
+                        fecha_pago__month=p_mes,
+                        fecha_pago__year=p_anio
+                    ).aggregate(total=Sum('monto_pagado'))['total'] or decimal.Decimal('0.00')
+                    
+                    if propietario_seleccionado.tipo_comision == 'PORCENTAJE':
+                        comision_pasada = round(ing_pasado * (propietario_seleccionado.porcentaje_comision / decimal.Decimal('100.0')), 2)
+                    else:
+                        comision_pasada = propietario_seleccionado.monto_comision_fijo * propiedades.count()
+                        
+                    gastos_pasados = MantenimientoUnidad.objects.filter(
+                        propiedad__propietario_inmueble=propietario_seleccionado,
+                        fecha_reporte__month=p_mes,
+                        fecha_reporte__year=p_anio
+                    ).aggregate(total=Sum('costo'))['total'] or decimal.Decimal('0.00')
+                    
+                    gastos_gen_pasados = GastoGeneralPropietario.objects.filter(
+                        propietario_inmueble=propietario_seleccionado,
+                        fecha__month=p_mes,
+                        fecha__year=p_anio
+                    ).aggregate(total=Sum('monto'))['total'] or decimal.Decimal('0.00')
+                    
+                    neto_pasado = max(decimal.Decimal('0.00'), ing_pasado - (comision_pasada + gastos_pasados + gastos_gen_pasados))
+                    saldo_acumulado_anterior += neto_pasado
+
     total_propiedades = propiedades.count()
     porcentaje_ocupacion = (propiedades_ocupadas / total_propiedades * 100) if total_propiedades > 0 else 0
     
     total_deducciones = monto_comision + total_gastos_propiedades + total_gastos_generales
-    neto_a_liquidar = max(decimal.Decimal('0.00'), total_ingresos - total_deducciones)
+    neto_a_liquidar_mes = max(decimal.Decimal('0.00'), total_ingresos - total_deducciones)
+    neto_a_liquidar = neto_a_liquidar_mes + saldo_acumulado_anterior
     
     # Verificar si ya existe liquidación registrada para este propietario y periodo
     liquidacion_existente = None
@@ -2600,16 +2733,19 @@ def reporte_propietario(request):
         'total_gastos_propiedades': total_gastos_propiedades,
         'total_gastos_generales': total_gastos_generales,
         'total_deducciones': total_deducciones,
-        'neto_a_liquidar': neto_a_liquidar,
         'total_morosidad': total_morosidad,
         'total_depositos': total_depositos,
-        'porcentaje_ocupacion': round(porcentaje_ocupacion, 1),
         'propiedades_ocupadas': propiedades_ocupadas,
         'total_propiedades': total_propiedades,
-        'contratos_activos': contratos_activos,
+        'porcentaje_ocupacion': round(porcentaje_ocupacion, 1),
         'recibos_cobrados': recibos_cobrados,
         'gastos_directos_list': gastos_directos_list,
         'gastos_generales_list': gastos_generales_list,
+        'contratos_activos': contratos_activos,
+        'situacion_propiedades': situacion_propiedades if 'situacion_propiedades' in locals() else [],
+        'saldo_acumulado_anterior': saldo_acumulado_anterior if 'saldo_acumulado_anterior' in locals() else decimal.Decimal('0.00'),
+        'neto_a_liquidar_mes': neto_a_liquidar_mes if 'neto_a_liquidar_mes' in locals() else decimal.Decimal('0.00'),
+        'neto_a_liquidar': neto_a_liquidar,
         'liquidacion_existente': liquidacion_existente,
         'fecha_generacion': timezone.now()
     }

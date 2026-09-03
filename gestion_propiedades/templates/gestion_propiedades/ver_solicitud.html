@@ -8,13 +8,24 @@
             <a href="{% url 'detalle_propiedad' solicitud.propiedad.id %}" class="btn btn-sm btn-outline-secondary me-3">⬅ Volver a Propiedad</a>
             {{ titulo_pagina }}
         </div>
-        <span class="badge bg-success fs-6">{{ solicitud.get_estado_display }}</span>
+        <span class="badge {% if solicitud.estado == 'DEVUELTA_PARA_CORRECCION' %}bg-warning text-dark{% else %}bg-success{% endif %} fs-6">
+            {{ solicitud.get_estado_display }}
+        </span>
     </div>
 {% endblock %}
 
 {% block contenido %}
 <div class="row justify-content-center">
-    <div class="col-md-8">
+    <div class="col-md-9">
+        
+        {% if solicitud.estado == 'DEVUELTA_PARA_CORRECCION' %}
+        <div class="alert alert-warning border-warning shadow-sm mb-4">
+            <h6 class="fw-bold mb-1"><i class="bi bi-arrow-return-left"></i> Solicitud Devuelta al Inquilino</h6>
+            <p class="mb-1 small">Indicación enviada para la corrección o cambio de garante:</p>
+            <blockquote class="bg-white p-2 rounded border mb-0 text-dark fw-bold">"{{ solicitud.motivo_devolucion }}"</blockquote>
+        </div>
+        {% endif %}
+
         <div class="card shadow-sm border-0 mb-4">
             <div class="card-header bg-white fw-bold text-secondary py-3">
                 🏢 Solicitud para: {{ solicitud.propiedad.nombre_o_numero }}
@@ -22,7 +33,7 @@
             </div>
             
             <div class="card-body">
-                <h5 class="fw-bold text-primary mb-3 border-bottom pb-2">1. Datos Personales</h5>
+                <h5 class="fw-bold text-primary mb-3 border-bottom pb-2">1. Datos Personales del Solicitante</h5>
                 <div class="row mb-4">
                     <div class="col-md-6 mb-2">
                         <small class="text-muted d-block">Nombre Completo</small>
@@ -73,26 +84,105 @@
                         <small class="text-muted d-block">Ingresos Mensuales Declarados</small>
                         <span class="fw-bold fs-4 text-success">${{ solicitud.ingresos_mensuales|dinero }}</span>
                     </div>
-                    
-                    <div class="col-12 mt-3 pt-2 border-top">
-                        <small class="text-muted d-block mb-1">Análisis Rápido:</small>
-                        {% if solicitud.ingresos_mensuales and solicitud.propiedad.precio_renta_estimado %}
-                            {% if solicitud.ingresos_mensuales >= solicitud.propiedad.precio_renta_estimado|add:solicitud.propiedad.precio_renta_estimado %}
-                                <span class="text-success fw-bold">✅ Sus ingresos superan ampliamente el costo de la renta.</span>
+                </div>
+
+                <!-- SECCIÓN FIADOR / GARANTE -->
+                <h5 class="fw-bold text-dark mb-3 border-bottom pb-2">3. Información del Fiador / Garante Solidario</h5>
+                {% if solicitud.tiene_fiador %}
+                <div class="row mb-4 p-3 bg-light rounded border border-info-subtle">
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Nombre del Garante</small>
+                        <span class="fw-bold text-primary fs-5">{{ solicitud.fiador_nombre }}</span>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Cédula / Pasaporte</small>
+                        <span class="fw-bold">{{ solicitud.fiador_cedula }}</span>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Teléfono</small>
+                        <span>{{ solicitud.fiador_telefono|default:"---" }}</span>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Correo Electrónico</small>
+                        <span>{{ solicitud.fiador_correo|default:"---" }}</span>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Empresa y Puesto</small>
+                        <span>{{ solicitud.fiador_empresa_trabajo|default:"---" }} ({{ solicitud.fiador_puesto|default:"N/A" }})</span>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <small class="text-muted d-block">Ingresos Declarados del Garante</small>
+                        <span class="fw-bold text-success fs-5">${{ solicitud.fiador_ingresos_mensuales|dinero }}</span>
+                    </div>
+                    <div class="col-12 mt-2">
+                        <small class="text-muted d-block">Dirección Residencial</small>
+                        <span>{{ solicitud.fiador_direccion|default:"---" }}</span>
+                    </div>
+                </div>
+                {% else %}
+                <div class="alert alert-secondary mb-4 small py-2">
+                    ℹ️ Esta solicitud fue presentada sin fiador o garante solidario.
+                </div>
+                {% endif %}
+
+                <!-- SECCIÓN ARCHIVOS ADJUNTOS -->
+                <h5 class="fw-bold text-secondary mb-3 border-bottom pb-2">4. Documentos Físicos y Comprobantes Adjuntos</h5>
+                <div class="row mb-4 g-2">
+                    <div class="col-md-6">
+                        <div class="p-3 border rounded bg-white">
+                            <small class="text-muted d-block fw-bold mb-1">📷 Cédula Solicitante:</small>
+                            {% if solicitud.adjunto_cedula_solicitante %}
+                                <a href="{{ solicitud.adjunto_cedula_solicitante.url }}" target="_blank" class="btn btn-sm btn-outline-primary fw-bold">
+                                    📥 Ver Documento
+                                </a>
                             {% else %}
-                                <span class="text-warning fw-bold">⚠️ Sus ingresos podrían ser ajustados para esta renta. Evaluar capacidad de pago.</span>
+                                <span class="text-muted small">No adjuntado</span>
                             {% endif %}
-                        {% else %}
-                            <span class="text-muted">Asegúrate de tener un 'Precio de renta estimado' configurado en la propiedad para ver el análisis.</span>
-                        {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-3 border rounded bg-white">
+                            <small class="text-muted d-block fw-bold mb-1">📄 Carta Ingresos Solicitante:</small>
+                            {% if solicitud.adjunto_ingresos_solicitante %}
+                                <a href="{{ solicitud.adjunto_ingresos_solicitante.url }}" target="_blank" class="btn btn-sm btn-outline-primary fw-bold">
+                                    📥 Ver Documento
+                                </a>
+                            {% else %}
+                                <span class="text-muted small">No adjuntado</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-3 border rounded bg-white">
+                            <small class="text-muted d-block fw-bold mb-1">📷 Cédula Garante:</small>
+                            {% if solicitud.adjunto_cedula_fiador %}
+                                <a href="{{ solicitud.adjunto_cedula_fiador.url }}" target="_blank" class="btn btn-sm btn-outline-info fw-bold">
+                                    📥 Ver Documento
+                                </a>
+                            {% else %}
+                                <span class="text-muted small">No adjuntado</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-3 border rounded bg-white">
+                            <small class="text-muted d-block fw-bold mb-1">📄 Carta Ingresos Garante:</small>
+                            {% if solicitud.adjunto_ingresos_fiador %}
+                                <a href="{{ solicitud.adjunto_ingresos_fiador.url }}" target="_blank" class="btn btn-sm btn-outline-info fw-bold">
+                                    📥 Ver Documento
+                                </a>
+                            {% else %}
+                                <span class="text-muted small">No adjuntado</span>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
 
                 {% if solicitud.preguntas_extra %}
-                <h5 class="fw-bold text-info mb-3 border-bottom pb-2">3. Respuestas Personalizadas</h5>
+                <h5 class="fw-bold text-info mb-3 border-bottom pb-2">5. Respuestas Personalizadas</h5>
                 <div class="mb-4">
                     <div class="bg-light p-3 rounded mb-3">
-                        <small class="text-muted d-block fw-bold mb-1">Tus Preguntas:</small>
+                        <small class="text-muted d-block fw-bold mb-1">Preguntas:</small>
                         <p class="mb-0">{{ solicitud.preguntas_extra|linebreaksbr }}</p>
                     </div>
                     <div class="p-3 border rounded">
@@ -102,12 +192,46 @@
                 </div>
                 {% endif %}
                 
-                <div class="d-flex justify-content-end gap-2 mt-5">
-                    <button class="btn btn-outline-danger" onclick="alert('Esta función rechazará al candidato en el futuro.')">❌ Rechazar</button>
-                    <a href="{% url 'crear_contrato' %}" class="btn btn-primary fw-bold">✅ Aprobar y Crear Contrato</a>
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-5 pt-3 border-top">
+                    <button type="button" class="btn btn-warning fw-bold text-dark" data-bs-toggle="modal" data-bs-target="#modalDevolverSolicitud">
+                        ↩️ Devolver para Corrección / Nuevo Garante
+                    </button>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-outline-danger" onclick="alert('Esta función rechazará al candidato.')">❌ Rechazar</button>
+                        <a href="{% url 'crear_contrato' %}" class="btn btn-primary fw-bold">✅ Aprobar y Crear Contrato</a>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Modal Devolver Solicitud para Corrección -->
+<div class="modal fade" id="modalDevolverSolicitud" tabindex="-1" aria-labelledby="modalDevolverSolicitudLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content text-black">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title fw-bold" id="modalDevolverSolicitudLabel">↩️ Devolver Solicitud al Prospecto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="{% url 'devolver_solicitud_alquiler' solicitud.id %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <p class="small text-muted">
+                        Indica la razón por la que estás devolviendo esta solicitud (por ejemplo, si el garante no califica o falta alguna documentación). El prospecto podrá abrir de nuevo su enlace y corregir solo esa información sin llenar todo de cero.
+                    </p>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Motivo o Instrucciones para el Prospecto</label>
+                        <textarea name="motivo_devolucion" class="form-control" rows="4" placeholder="Ej: El garante presentado no cumple con la capacidad de pago requerida. Favor ingresar un nuevo garante e identificaciones." required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-warning fw-bold text-dark">Devolver Formulario</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 {% endblock %}

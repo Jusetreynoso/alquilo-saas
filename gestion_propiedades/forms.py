@@ -52,7 +52,7 @@ class ContratoForm(forms.ModelForm):
         model = Contrato
         fields = [
             'propiedad', 'inquilino', 'plantilla',
-            'fecha_inicio', 'fecha_fin', 'monto_renta', 'monto_deposito', 'monto_adelanto', 'dia_de_pago',
+            'fecha_inicio', 'fecha_fin', 'monto_renta', 'monto_deposito', 'custodia_deposito', 'detalles_custodia_deposito', 'monto_adelanto', 'dia_de_pago',
             'dias_gracia', 'porcentaje_mora', 'deuda_renta_migrada', 'deuda_mora_migrada',
             'documento_contrato', 'fotos_entrega', 'foto_entrega_2', 'foto_entrega_3',
             'foto_entrega_4', 'foto_entrega_5'
@@ -65,6 +65,8 @@ class ContratoForm(forms.ModelForm):
             'fecha_fin': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'monto_renta': forms.NumberInput(attrs={'class': 'form-control'}),
             'monto_deposito': forms.NumberInput(attrs={'class': 'form-control'}),
+            'custodia_deposito': forms.Select(attrs={'class': 'form-select'}),
+            'detalles_custodia_deposito': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Certificado #987654 Banco Popular o Entregado al propietario'}),
             'monto_adelanto': forms.NumberInput(attrs={'class': 'form-control'}),
             'dia_de_pago': forms.NumberInput(attrs={'class': 'form-control'}),
             'dias_gracia': forms.NumberInput(attrs={'class': 'form-control'}),
@@ -158,11 +160,14 @@ class SolicitudAdminForm(forms.ModelForm):
 class SolicitudPublicaForm(forms.ModelForm):
     class Meta:
         model = SolicitudAlquiler
-        # Estos son los campos que llenará el prospecto
         fields = [
             'nombre_completo', 'cedula', 'telefono', 'estado_civil', 
             'cantidad_personas', 'tiene_mascotas', 'detalles_mascotas', 
-            'profesion', 'empresa_trabajo', 'telefono_empresa','ingresos_mensuales', 
+            'profesion', 'empresa_trabajo', 'telefono_empresa', 'ingresos_mensuales', 
+            'tiene_fiador', 'fiador_nombre', 'fiador_cedula', 'fiador_telefono', 'fiador_correo',
+            'fiador_direccion', 'fiador_empresa_trabajo', 'fiador_puesto', 'fiador_ingresos_mensuales',
+            'adjunto_cedula_solicitante', 'adjunto_ingresos_solicitante',
+            'adjunto_cedula_fiador', 'adjunto_ingresos_fiador',
             'respuestas_extra'
         ]
         widgets = {
@@ -177,9 +182,39 @@ class SolicitudPublicaForm(forms.ModelForm):
             'empresa_trabajo': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Banco Popular, Claro, etc.'}),
             'telefono_empresa': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: 809-000-0000'}),
             'ingresos_mensuales': forms.NumberInput(attrs={'class': 'form-control', 'required': True, 'placeholder': '0.00'}),
-            # Aquí es donde responderá a tus preguntas configuradas:
+
+            'tiene_fiador': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_tiene_fiador', 'onchange': 'toggleFiadorSection()'}),
+            'fiador_nombre': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Nombre completo del fiador'}),
+            'fiador_cedula': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Cédula o pasaporte'}),
+            'fiador_telefono': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Teléfono de contacto'}),
+            'fiador_correo': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'Correo del fiador'}),
+            'fiador_direccion': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Dirección residencial del fiador'}),
+            'fiador_empresa_trabajo': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Empresa donde labora'}),
+            'fiador_puesto': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Cargo o puesto laboral'}),
+            'fiador_ingresos_mensuales': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+
+            'adjunto_cedula_solicitante': forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/*,application/pdf'}),
+            'adjunto_ingresos_solicitante': forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/*,application/pdf'}),
+            'adjunto_cedula_fiador': forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/*,application/pdf'}),
+            'adjunto_ingresos_fiador': forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/*,application/pdf'}),
+
             'respuestas_extra': forms.Textarea(attrs={'class': 'form-control', 'rows': 4, 'placeholder': 'Escribe aquí tus respuestas...'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['fiador_nombre'].required = False
+        self.fields['fiador_cedula'].required = False
+        self.fields['fiador_telefono'].required = False
+        self.fields['fiador_correo'].required = False
+        self.fields['fiador_direccion'].required = False
+        self.fields['fiador_empresa_trabajo'].required = False
+        self.fields['fiador_puesto'].required = False
+        self.fields['fiador_ingresos_mensuales'].required = False
+        self.fields['adjunto_cedula_solicitante'].required = False
+        self.fields['adjunto_ingresos_solicitante'].required = False
+        self.fields['adjunto_cedula_fiador'].required = False
+        self.fields['adjunto_ingresos_fiador'].required = False
 
 # --- FORMULARIOS B2B SAAS ---
 

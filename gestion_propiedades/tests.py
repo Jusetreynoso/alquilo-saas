@@ -467,3 +467,31 @@ class AlquiloTests(TestCase):
         self.propiedad1.refresh_from_db()
         self.assertFalse(self.propiedad1.is_deleted)
 
+    def test_nuevas_funcionalidades_garante_y_custodia(self):
+        from .models import SolicitudAlquiler
+        
+        # 1. Probar custodia de depósito en contrato
+        self.contrato1.custodia_deposito = 'BANCO_CERTIFICADO'
+        self.contrato1.detalles_custodia_deposito = 'Certificado #998877 Banco Popular'
+        self.contrato1.save()
+        self.assertEqual(self.contrato1.custodia_deposito, 'BANCO_CERTIFICADO')
+
+        # 2. Crear solicitud con fiador y devolverla para corrección
+        solicitud = SolicitudAlquiler.objects.create(
+            propiedad=self.propiedad1,
+            nombre_completo='Prospecto Prueba',
+            cedula='402-0000000-1',
+            tiene_fiador=True,
+            fiador_nombre='Garante Prueba',
+            fiador_cedula='001-0000000-2'
+        )
+        self.client.login(username='propietario1', password='password123')
+        
+        url_devolver = reverse('devolver_solicitud_alquiler', args=[solicitud.id])
+        res_devolver = self.client.post(url_devolver, {'motivo_devolucion': 'Fiador no califica, favor cambiar.'})
+        self.assertEqual(res_devolver.status_code, 302)
+        
+        solicitud.refresh_from_db()
+        self.assertEqual(solicitud.estado, 'DEVUELTA_PARA_CORRECCION')
+        self.assertEqual(solicitud.motivo_devolucion, 'Fiador no califica, favor cambiar.')
+

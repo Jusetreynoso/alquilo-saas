@@ -7,8 +7,8 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { background-color: #f8f9fa; }
-        .form-container { max-width: 600px; margin: 40px auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .brand-header { text-align: center; margin-bottom: 30px; }
+        .form-container { max-width: 680px; margin: 30px auto; background: white; padding: 35px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .brand-header { text-align: center; margin-bottom: 25px; }
     </style>
 </head>
 <body>
@@ -20,12 +20,21 @@
             <p class="text-muted">Propiedad: <strong>{{ solicitud.propiedad.nombre_o_numero }}</strong></p>
         </div>
 
+        {% if solicitud.estado == 'DEVUELTA_PARA_CORRECCION' and solicitud.motivo_devolucion %}
+        <div class="alert alert-warning border-warning shadow-sm mb-4">
+            <h6 class="fw-bold mb-1">⚠️ Solicitud Devuelta para Ajuste o Cambio de Garante</h6>
+            <p class="mb-0 small">El evaluador ha devuelto tu solicitud con la siguiente indicación:</p>
+            <blockquote class="bg-white p-2 rounded border mt-2 mb-0 small text-dark fw-bold">"{{ solicitud.motivo_devolucion }}"</blockquote>
+            <small class="text-muted d-block mt-2">Por favor actualiza los datos señalados y vuelve a enviar el formulario.</small>
+        </div>
+        {% endif %}
+
         <p class="small text-muted mb-4">Por favor, completa este formulario con información verídica para evaluar tu perfil como prospecto de inquilino.</p>
 
-        <form method="POST">
+        <form method="POST" enctype="multipart/form-data">
             {% csrf_token %}
             
-            <h5 class="fw-bold mb-3 border-bottom pb-2">1. Datos Personales</h5>
+            <h5 class="fw-bold mb-3 border-bottom pb-2 text-primary">1. Datos Personales del Solicitante</h5>
             <div class="mb-3">
                 <label class="form-label fw-bold small">Nombre Completo *</label>
                 {{ form.nombre_completo }}
@@ -60,7 +69,7 @@
                 {{ form.detalles_mascotas }}
             </div>
 
-            <h5 class="fw-bold mb-3 border-bottom pb-2">2. Perfil Financiero</h5>
+            <h5 class="fw-bold mb-3 border-bottom pb-2 text-primary">2. Perfil Laboral y Financiero</h5>
             <div class="mb-3">
                 <label class="form-label fw-bold small">Profesión / Ocupación</label>
                 {{ form.profesion }}
@@ -78,12 +87,87 @@
             </div>
 
             <div class="mb-4">
-                <label class="form-label fw-bold small">Ingresos Mensuales Estimados *</label>
+                <label class="form-label fw-bold small">Ingresos Mensuales Estimados ($) *</label>
                 {{ form.ingresos_mensuales }}
             </div>
 
+            <!-- SECCIÓN GARANTE / FIADOR -->
+            <h5 class="fw-bold mb-3 border-bottom pb-2 text-primary">3. Información del Fiador / Garante Solidario</h5>
+            <div class="form-check mb-3 bg-light p-3 rounded border">
+                {{ form.tiene_fiador }}
+                <label class="form-check-label fw-bold text-dark" for="id_tiene_fiador">
+                    🤝 Incluir un Fiador o Garante Solidario en esta Solicitud
+                </label>
+            </div>
+
+            <div id="seccionFiador" style="display: none;" class="p-3 bg-light rounded border mb-4">
+                <div class="mb-3">
+                    <label class="form-label fw-bold small">Nombre Completo del Fiador</label>
+                    {{ form.fiador_nombre }}
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold small">Cédula / Pasaporte del Fiador</label>
+                        {{ form.fiador_cedula }}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold small">Teléfono del Fiador</label>
+                        {{ form.fiador_telefono }}
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold small">Correo Electrónico del Fiador</label>
+                        {{ form.fiador_correo }}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold small">Ingresos Mensuales del Fiador ($)</label>
+                        {{ form.fiador_ingresos_mensuales }}
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold small">Dirección Residencial del Fiador</label>
+                    {{ form.fiador_direccion }}
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold small">Empresa donde labora el Fiador</label>
+                        {{ form.fiador_empresa_trabajo }}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold small">Puesto / Cargo del Fiador</label>
+                        {{ form.fiador_puesto }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECCIÓN DOCUMENTOS Y ADJUNTOS -->
+            <h5 class="fw-bold mb-3 border-bottom pb-2 text-primary">4. Documentos e Identificaciones (Adjuntos)</h5>
+            <div class="p-3 bg-light rounded border mb-4">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold small">📷 Cédula Solicitante (Imagen/PDF)</label>
+                        {{ form.adjunto_cedula_solicitante }}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold small">📄 Carta de Trabajo / Ingresos Solicitante</label>
+                        {{ form.adjunto_ingresos_solicitante }}
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold small">📷 Cédula Fiador (Si aplica)</label>
+                        {{ form.adjunto_cedula_fiador }}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold small">📄 Carta de Trabajo / Ingresos Fiador</label>
+                        {{ form.adjunto_ingresos_fiador }}
+                    </div>
+                </div>
+            </div>
+
             {% if solicitud.preguntas_extra %}
-            <h5 class="fw-bold mb-3 border-bottom pb-2">3. Preguntas del Propietario</h5>
+            <h5 class="fw-bold mb-3 border-bottom pb-2 text-primary">5. Preguntas Adicionales</h5>
             <div class="alert alert-light border mb-3 small">
                 <strong>Responde a lo siguiente:</strong><br>
                 {{ solicitud.preguntas_extra|linebreaksbr }}
@@ -94,11 +178,23 @@
             {% endif %}
 
             <div class="d-grid mt-4">
-                <button type="submit" class="btn btn-primary btn-lg fw-bold">Enviar Solicitud</button>
+                <button type="submit" class="btn btn-primary btn-lg fw-bold">Enviar Solicitud de Alquiler</button>
             </div>
         </form>
     </div>
 </div>
 
+<script>
+    function toggleFiadorSection() {
+        const checkbox = document.getElementById('id_tiene_fiador');
+        const section = document.getElementById('seccionFiador');
+        if (checkbox && section) {
+            section.style.display = checkbox.checked ? 'block' : 'none';
+        }
+    }
+    document.addEventListener('DOMContentLoaded', function() {
+        toggleFiadorSection();
+    });
+</script>
 </body>
 </html>

@@ -84,6 +84,36 @@
             </div>
         </div>
 
+        <!-- Tarjeta de Galería de Fotos Opcionales de la Propiedad -->
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white fw-bold text-secondary py-3 d-flex justify-content-between align-items-center">
+                <span>🖼️ Galería de Fotos ({{ propiedad.imagenes_galeria.count }})</span>
+                <button type="button" class="btn btn-sm btn-primary fw-bold" data-bs-toggle="modal" data-bs-target="#modalSubirFotoGaleria">
+                    📸 + Agregar Foto
+                </button>
+            </div>
+            <div class="card-body p-3">
+                {% if propiedad.imagenes_galeria.exists %}
+                    <div class="row g-2">
+                        {% for img_g in propiedad.imagenes_galeria.all %}
+                        <div class="col-6 position-relative">
+                            <img src="{{ img_g.imagen.url }}" class="img-fluid rounded border shadow-sm w-100" style="height: 110px; object-fit: cover;" alt="Foto propiedad">
+                            {% if img_g.titulo_o_descripcion %}
+                                <span class="badge bg-dark bg-opacity-75 position-absolute bottom-0 start-0 m-1 text-truncate" style="max-width: 90%;">{{ img_g.titulo_o_descripcion }}</span>
+                            {% endif %}
+                            <form method="POST" action="{% url 'eliminar_imagen_galeria' img_g.id %}" class="position-absolute top-0 end-0 m-1" onsubmit="return confirm('¿Eliminar esta foto de la galería?');">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-danger py-0 px-1 shadow-sm" title="Eliminar foto">&times;</button>
+                            </form>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted small text-center mb-0 py-2">No hay imágenes opcionales agregadas en la galería.</p>
+                {% endif %}
+            </div>
+        </div>
+
         <div class="card shadow-sm border-0 mb-4">
             <div class="card-header bg-white fw-bold text-secondary py-3 d-flex justify-content-between align-items-center">
                 <span>👤 Inquilino Actual</span>
@@ -112,6 +142,13 @@
                     <p class="mb-1"><strong>Teléfono:</strong> {{ contrato_activo.inquilino.telefono }}</p>
                     <p class="mb-1"><strong>Renta:</strong> ${{ contrato_activo.monto_renta|dinero }}</p>
                     <p class="mb-1 text-primary"><strong>Fianza Retenida:</strong> ${{ contrato_activo.monto_deposito|dinero }} <small class="text-muted">(Adelanto: ${{ contrato_activo.monto_adelanto|dinero }})</small></p>
+                    <div class="mb-2 p-2 bg-light rounded border border-warning-subtle">
+                        <small class="fw-bold text-dark d-block">🏦 Ubicación / Custodia del Depósito:</small>
+                        <span class="badge bg-warning text-dark me-1">{{ contrato_activo.get_custodia_deposito_display }}</span>
+                        {% if contrato_activo.detalles_custodia_deposito %}
+                            <small class="text-muted d-block mt-1">{{ contrato_activo.detalles_custodia_deposito }}</small>
+                        {% endif %}
+                    </div>
                     <p class="mb-1"><strong>Día de Pago:</strong> Los días {{ contrato_activo.dia_de_pago }} de cada mes</p>
                     <p class="mb-0 text-muted small">Días de gracia: {{ contrato_activo.dias_gracia }}</p>
                     

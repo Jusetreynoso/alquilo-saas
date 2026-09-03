@@ -197,6 +197,16 @@ class Propiedad(models.Model):
         return self.nombre_o_numero
 
 
+class ImagenPropiedad(models.Model):
+    propiedad = models.ForeignKey(Propiedad, on_delete=models.CASCADE, related_name='imagenes_galeria')
+    imagen = models.ImageField(upload_to='propiedades_galeria/')
+    titulo_o_descripcion = models.CharField(max_length=150, blank=True, null=True, help_text="Ej: Habitación Principal, Balcón, Cocina")
+    subida_en = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Imagen #{self.id} de {self.propiedad.nombre_o_numero}"
+
+
 class HistorialPrecioPropiedad(models.Model):
     MOTIVO_CHOICES = [
         ('AJUSTE_MERCADO', 'Ajuste de Precio de Lista / Mercado'),
@@ -256,6 +266,24 @@ class Contrato(models.Model):
     # Tracking de Depósitos y Adelantos retenidos al momento de firmar
     monto_deposito = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Monto retenido como depósito (Fianza)")
     monto_adelanto = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Monto cobrado por alquiler adelantado")
+
+    CUSTODIA_DEPOSITO_CHOICES = [
+        ('ADMINISTRADORA_CUENTA', 'Retenido en Cuenta de Administradora'),
+        ('BANCO_CERTIFICADO', 'En Banco (Certificado de Depósito)'),
+        ('ENTREGADO_PROPIETARIO', 'Entregado al Propietario del Inmueble'),
+    ]
+    custodia_deposito = models.CharField(
+        max_length=30,
+        choices=CUSTODIA_DEPOSITO_CHOICES,
+        default='ADMINISTRADORA_CUENTA',
+        help_text="Ubicación física del depósito de fianza"
+    )
+    detalles_custodia_deposito = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Ej: Certificado #987654 Banco Popular o Entregado al propietario según recibo X"
+    )
 
     dia_de_pago = models.IntegerField(help_text="Día del mes en que se genera la factura (1-31)")
     
@@ -402,13 +430,14 @@ class SolicitudAlquiler(models.Model):
         ('ENVIADA', 'Link enviado al prospecto'),
         ('RECIBIDA', 'Formulario Completado (Lista para evaluar)'),
         ('APROBADA', 'Aprobada (Lista para contrato)'),
+        ('DEVUELTA_PARA_CORRECCION', 'Devuelta para Corrección / Cambiar Garante'),
         ('RECHAZADA', 'Rechazada'),
     ]
 
     propiedad = models.ForeignKey(Propiedad, on_delete=models.CASCADE, related_name='solicitudes')
-    # Esto genera un código único (ej: 550e8400-e29b-41d4-a716-446655440000) para que nadie adivine el link
     codigo_secreto = models.UUIDField(default=uuid.uuid4, editable=False, unique=True) 
-    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='BORRADOR')
+    estado = models.CharField(max_length=30, choices=ESTADO_CHOICES, default='BORRADOR')
+    motivo_devolucion = models.TextField(blank=True, null=True, help_text="Nota explicativa enviada al prospecto al devolver el formulario")
 
     # --- DATOS BÁSICOS (Los llena el prospecto) ---
     nombre_completo = models.CharField(max_length=150, blank=True, null=True)
@@ -422,6 +451,23 @@ class SolicitudAlquiler(models.Model):
     empresa_trabajo = models.CharField(max_length=150, blank=True, null=True, help_text="Empresa donde labora actualmente")
     telefono_empresa = models.CharField(max_length=20, blank=True, null=True, help_text="Teléfono de la empresa")
     ingresos_mensuales = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+
+    # --- DATOS DEL FIADOR / GARANTE ---
+    tiene_fiador = models.BooleanField(default=False)
+    fiador_nombre = models.CharField(max_length=150, blank=True, null=True)
+    fiador_cedula = models.CharField(max_length=50, blank=True, null=True)
+    fiador_telefono = models.CharField(max_length=20, blank=True, null=True)
+    fiador_correo = models.EmailField(blank=True, null=True)
+    fiador_direccion = models.TextField(blank=True, null=True)
+    fiador_empresa_trabajo = models.CharField(max_length=150, blank=True, null=True)
+    fiador_puesto = models.CharField(max_length=100, blank=True, null=True)
+    fiador_ingresos_mensuales = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+
+    # --- DOCUMENTOS Y ARCHIVOS ADJUNTOS ---
+    adjunto_cedula_solicitante = models.FileField(upload_to='solicitudes_adjuntos/', blank=True, null=True)
+    adjunto_ingresos_solicitante = models.FileField(upload_to='solicitudes_adjuntos/', blank=True, null=True)
+    adjunto_cedula_fiador = models.FileField(upload_to='solicitudes_adjuntos/', blank=True, null=True)
+    adjunto_ingresos_fiador = models.FileField(upload_to='solicitudes_adjuntos/', blank=True, null=True)
 
     # --- LA MAGIA CONFIGURABLE ---
     # Aquí tú escribes lo que quieras preguntarle antes de enviarle el link

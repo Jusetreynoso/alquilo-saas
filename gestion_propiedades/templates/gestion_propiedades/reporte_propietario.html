@@ -150,6 +150,22 @@
 
     <!-- Estado de Pago de la Liquidación del Mes -->
     {% if propietario_seleccionado %}
+        {% if saldo_acumulado_anterior > 0 %}
+        <div class="alert alert-info border-0 shadow-sm mb-4">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <h5 class="fw-bold mb-1">💼 Balance Acumulado Multimes Pendiente de Liquidación</h5>
+                    <p class="mb-0 small text-dark">Este propietario conserva pagos de meses anteriores no liquidados previamente:</p>
+                </div>
+                <div class="text-end">
+                    <span class="d-block text-muted small">Mes Actual: <strong>RD${{ neto_a_liquidar_mes|dinero }}</strong></span>
+                    <span class="d-block text-muted small">+ Saldo Meses Anteriores: <strong>RD${{ saldo_acumulado_anterior|dinero }}</strong></span>
+                    <span class="fw-bold fs-4 text-primary">Total Acumulado a Transferir: RD${{ neto_a_liquidar|dinero }}</span>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <div class="mb-4">
             {% if liquidacion_existente %}
                 <div class="alert alert-success border-0 shadow-sm d-flex align-items-center justify-content-between p-3">
@@ -172,6 +188,79 @@
             {% endif %}
         </div>
     {% endif %}
+
+    <!-- TABLA DE SITUACIÓN INDIVIDUAL POR PROPIEDAD -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white py-3 fw-bold text-secondary d-flex justify-content-between align-items-center">
+            <span>🏠 Situación Individual por Propiedad ({{ situacion_propiedades|length }})</span>
+            <span class="badge bg-light text-dark border">Período {{ nombre_mes }} {{ anio }}</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">Propiedad</th>
+                            <th>Inquilino Actual</th>
+                            <th>Estado de Renta</th>
+                            <th>Facturado</th>
+                            <th>Cobrado</th>
+                            <th>Deuda Pendiente</th>
+                            <th class="pe-4">Ubicación / Custodia Depósito</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sp in situacion_propiedades %}
+                        <tr>
+                            <td class="ps-4 fw-bold">
+                                <a href="{% url 'detalle_propiedad' sp.propiedad.id %}" class="text-decoration-none text-dark">
+                                    {{ sp.propiedad.nombre_o_numero }}
+                                </a>
+                            </td>
+                            <td>
+                                {% if sp.inquilino %}
+                                    {{ sp.inquilino.nombre }}
+                                {% else %}
+                                    <span class="text-muted small">Sin inquilino</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if sp.estado_pago == 'AL_DIA' %}
+                                    <span class="badge bg-success">🟢 Al Día</span>
+                                {% elif sp.estado_pago == 'ATRASADO' %}
+                                    <span class="badge bg-danger">🔴 En Atraso</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">⚪ Vacante</span>
+                                {% endif %}
+                            </td>
+                            <td>RD${{ sp.facturado|dinero }}</td>
+                            <td class="text-success fw-bold">RD${{ sp.cobrado|dinero }}</td>
+                            <td>
+                                {% if sp.deuda > 0 %}
+                                    <span class="text-danger fw-bold">RD${{ sp.deuda|dinero }}</span>
+                                {% else %}
+                                    <span class="text-muted">RD$0.00</span>
+                                {% endif %}
+                            </td>
+                            <td class="pe-4">
+                                {% if sp.deposito > 0 %}
+                                    <span class="badge bg-warning text-dark me-1">{{ sp.custodia_deposito }}</span>
+                                    <small class="text-muted d-block">(RD${{ sp.deposito|dinero }}) {{ sp.detalles_custodia }}</small>
+                                {% else %}
+                                    <span class="text-muted small">Sin depósito</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-4 text-muted">No se encontraron propiedades asociadas a esta consulta.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 
     <!-- Desglose de Gastos y Recibos Cobrados -->
     <div class="row g-4 mb-4">

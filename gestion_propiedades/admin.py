@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Portafolio, Propiedad, Contrato, Factura, CargoMora, ReciboPago, MantenimientoUnidad, SuscripcionCliente, PlanSaaS, AvisoSistema, Inquilino, HistorialAumentoRenta, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, LiquidacionDepositoInquilino, HistorialPrecioPropiedad
+from .models import Portafolio, Propiedad, Contrato, Factura, CargoMora, ReciboPago, MantenimientoUnidad, SuscripcionCliente, PlanSaaS, AvisoSistema, Inquilino, HistorialAumentoRenta, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, LiquidacionDepositoInquilino, HistorialPrecioPropiedad, ImagenPropiedad, SolicitudAlquiler
 
 # Personalizando los títulos del panel de Django para "Alquilo"
 admin.site.site_header = "Administración Alquilo"
@@ -17,11 +17,21 @@ class PropiedadAdmin(admin.ModelAdmin):
     list_filter = ('estado', 'portafolio', 'grupo_o_residencial')
     search_fields = ('nombre_o_numero', 'grupo_o_residencial', 'direccion_completa')
 
+@admin.register(ImagenPropiedad)
+class ImagenPropiedadAdmin(admin.ModelAdmin):
+    list_display = ('propiedad', 'titulo_o_descripcion', 'subida_en')
+
 @admin.register(HistorialPrecioPropiedad)
 class HistorialPrecioPropiedadAdmin(admin.ModelAdmin):
     list_display = ('propiedad', 'precio_anterior', 'nuevo_precio', 'motivo', 'fecha_cambio', 'registrado_por')
     list_filter = ('motivo', 'fecha_cambio')
     search_fields = ('propiedad__nombre_o_numero', 'notas')
+
+@admin.register(SolicitudAlquiler)
+class SolicitudAlquilerAdmin(admin.ModelAdmin):
+    list_display = ('nombre_completo', 'propiedad', 'estado', 'tiene_fiador', 'fiador_nombre', 'creada_en')
+    list_filter = ('estado', 'tiene_fiador')
+    search_fields = ('nombre_completo', 'cedula', 'fiador_nombre', 'fiador_cedula')
 
 @admin.register(Contrato)
 class ContratoAdmin(admin.ModelAdmin):

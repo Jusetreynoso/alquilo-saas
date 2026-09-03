@@ -147,4 +147,9 @@ urlpatterns = [
     path('respaldos/exportar-archivos/', views.exportar_archivos_adjuntos_zip, name='exportar_archivos_adjuntos_zip'),
     path('papelera/', views.papelera_reciclaje, name='papelera_reciclaje'),
     path('papelera/restaurar-propiedad/<int:propiedad_id>/', views.restaurar_propiedad, name='restaurar_propiedad'),
+
+    # --- NUEVAS FUNCIONALIDADES OPERATIVAS ---
+    path('propiedad/<int:propiedad_id>/galeria/subir/', views.subir_imagen_galeria, name='subir_imagen_galeria'),
+    path('galeria/imagen/<int:imagen_id>/eliminar/', views.eliminar_imagen_galeria, name='eliminar_imagen_galeria'),
+    path('solicitud/<int:solicitud_id>/devolver/', views.devolver_solicitud_alquiler, name='devolver_solicitud_alquiler'),
 ]
