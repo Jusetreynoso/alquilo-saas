@@ -107,8 +107,11 @@
                             {{ cliente.fecha_proximo_pago|date:"d M Y"|default:"Sin definir" }}
                         </td>
                         <td class="text-center">
-                            <a href="{% url 'editar_suscripcion_saas' cliente.id %}" class="btn btn-sm btn-outline-primary fw-bold px-3">
+                            <a href="{% url 'editar_suscripcion_saas' cliente.id %}" class="btn btn-sm btn-outline-primary fw-bold px-2">
                                 ⚙️ Configurar
+                            </a>
+                            <a href="{% url 'cambiar_password' cliente.id %}" class="btn btn-sm btn-outline-warning fw-bold px-2 ms-1" title="Cambiar Contraseña">
+                                🔑 Clave
                             </a>
                         </td>
                     </tr>

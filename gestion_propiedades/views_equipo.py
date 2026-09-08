@@ -96,10 +96,11 @@ def cambiar_password(request, usuario_id):
     es_propietario = False
     
     if request.user.id != TargetUser.id:
-        acceso = AccesoPortafolio.objects.filter(usuario=TargetUser, portafolio__propietario=request.user).first()
-        if not acceso:
-            messages.error(request, "Acción denegada. No tienes permisos para cambiar la clave de este usuario.")
-            return redirect('dashboard')
+        if not request.user.is_superuser:
+            acceso = AccesoPortafolio.objects.filter(usuario=TargetUser, portafolio__propietario=request.user).first()
+            if not acceso:
+                messages.error(request, "Acción denegada. No tienes permisos para cambiar la clave de este usuario.")
+                return redirect('dashboard')
         es_propietario = True
     else:
         if Portafolio.objects.filter(propietario=request.user).exists():
@@ -116,8 +117,13 @@ def cambiar_password(request, usuario_id):
                 update_session_auth_hash(request, TargetUser)
                 messages.success(request, "Tu contraseña ha sido actualizada con éxito.")
                 return redirect('dashboard')
+            elif request.user.is_superuser:
+                messages.success(request, f"La contraseña de {TargetUser.first_name or TargetUser.username} ha sido actualizada con éxito.")
+                if AccesoPortafolio.objects.filter(usuario=TargetUser, portafolio__propietario=request.user).exists():
+                    return redirect('mi_equipo')
+                return redirect('saas_master_control')
             else:
-                messages.success(request, f"La contraseña del asistente {TargetUser.first_name} ha sido actualizada.")
+                messages.success(request, f"La contraseña del asistente {TargetUser.first_name or TargetUser.username} ha sido actualizada.")
                 return redirect('mi_equipo')
         else:
             messages.error(request, "La contraseña no es válida o es muy corta (mínimo 8 caracteres).")

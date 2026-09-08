@@ -509,3 +509,28 @@ class AlquiloTests(TestCase):
         self.assertEqual(res_situacion_pdf.status_code, 200)
         self.assertIn('ESTADO DE SITUACIÓN DE INMUEBLES', res_situacion_pdf.content.decode('utf-8'))
 
+    def test_superuser_cambiar_password(self):
+        # 1. Non-superuser cannot change user2 password
+        self.client.login(username='propietario1', password='password123')
+        url = reverse('cambiar_password', args=[self.user2.id])
+        res_denied = self.client.get(url)
+        self.assertEqual(res_denied.status_code, 302)
+
+        # 2. Superuser can access and change user2 password
+        superuser = User.objects.create_superuser(username='superadmin', password='adminpassword', email='admin@test.com')
+        SuscripcionCliente.objects.create(usuario=superuser, plan_saas=self.plan, estado='ACTIVA')
+        
+        self.client.login(username='superadmin', password='adminpassword')
+        res_get = self.client.get(url)
+        self.assertEqual(res_get.status_code, 200)
+
+        res_post = self.client.post(url, {'password': 'newpassword123'})
+        self.assertEqual(res_post.status_code, 302)
+        self.assertRedirects(res_post, reverse('saas_master_control'))
+
+        # Check password changed
+        self.client.logout()
+        login_success = self.client.login(username='propietario2', password='newpassword123')
+        self.assertTrue(login_success)
+
+
