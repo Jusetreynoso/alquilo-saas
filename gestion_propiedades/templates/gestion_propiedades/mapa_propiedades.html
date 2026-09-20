@@ -80,11 +80,20 @@
         // Inicializar mapa Leaflet
         const map = L.map('mapaGlobalContainer').setView([defaultLat, defaultLng], 12);
 
-        // Capa OpenStreetMap
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
+        // Capa de Mapa Optimizado (CartoDB Voyager - Servidor comercial sin bloqueos)
+        const tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            maxZoom: 20,
+            subdomains: 'abcd',
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+        });
+
+        tileLayer.on('tileerror', function() {
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri'
+            }).addTo(map);
+        });
+
+        tileLayer.addTo(map);
 
         if (rawPropiedades.length > 0) {
             const bounds = [];

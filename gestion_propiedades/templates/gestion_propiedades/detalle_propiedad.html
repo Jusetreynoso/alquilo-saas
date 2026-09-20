@@ -628,9 +628,21 @@
         const lng = parseFloat("{{ propiedad.longitud }}");
         if (lat && lng) {
             const mapPropDetail = L.map('mapaPropiedadDetail').setView([lat, lng], 15);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap'
-            }).addTo(mapPropDetail);
+            
+            // Servidor de mapas optimizado sin restricciones de bloqueo (CartoDB Voyager)
+            const tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                maxZoom: 20,
+                subdomains: 'abcd',
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+            });
+
+            tileLayer.on('tileerror', function() {
+                L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+                    attribution: 'Tiles &copy; Esri'
+                }).addTo(mapPropDetail);
+            });
+
+            tileLayer.addTo(mapPropDetail);
 
             let popupText = `<strong>{{ propiedad.nombre_o_numero|escapejs }}</strong>`;
             {% if propiedad.precio_alquiler_sugerido %}
