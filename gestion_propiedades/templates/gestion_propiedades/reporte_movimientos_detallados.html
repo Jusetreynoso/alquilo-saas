@@ -10,9 +10,6 @@
             <a href="{% url 'exportar_movimientos_excel' %}?{{ request.GET.urlencode }}" class="btn btn-success shadow-sm fw-bold">
                 <i class="fa-solid fa-file-excel me-1"></i> Exportar a Excel (.xlsx)
             </a>
-            <button type="button" class="btn btn-outline-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalEnviarCorreo">
-                <i class="fa-solid fa-paper-plane me-1"></i> Enviar por Correo
-            </button>
             <a href="{% url 'reporte_financiero' %}" class="btn btn-outline-secondary fw-bold">
                 ← Volver a Reportes
             </a>
@@ -188,32 +185,4 @@
     </div>
 
 </div>
-
-<!-- Modal Enviar por Correo -->
-<div class="modal fade" id="modalEnviarCorreo" tabindex="-1" aria-labelledby="modalEnviarCorreoLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content text-black">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title fw-bold" id="modalEnviarCorreoLabel">✉️ Enviar Reporte Excel por Correo</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <form method="POST" action="{% url 'enviar_movimientos_correo' %}?{{ request.GET.urlencode }}">
-                {% csrf_token %}
-                <div class="modal-body">
-                    <p class="text-muted small">Se generará el archivo <strong>.xlsx (Excel)</strong> con los filtros actuales y se enviará como documento adjunto a la dirección que especifiques a continuación.</p>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Correo Electrónico de Destino</label>
-                        <input type="email" name="email_destino" class="form-control" placeholder="ejemplo@contabilidad.com" required value="{{ request.user.email }}">
-                        <small class="form-text text-muted">Puedes ingresar el correo del contador, propietario o administrador.</small>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary fw-bold">🚀 Enviar Reporte Excel</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
 {% endblock %}
