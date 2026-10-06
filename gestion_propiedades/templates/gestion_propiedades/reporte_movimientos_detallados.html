@@ -1,0 +1,219 @@
+{% extends 'gestion_propiedades/base.html' %}
+{% load filtros_dinero %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+
+{% block encabezado %}
+    <div class="d-flex justify-content-between align-items-center w-100 flex-wrap gap-2">
+        <span>📋 Reporte Detallado de Ingresos y Gastos</span>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'exportar_movimientos_excel' %}?{{ request.GET.urlencode }}" class="btn btn-success shadow-sm fw-bold">
+                <i class="fa-solid fa-file-excel me-1"></i> Exportar a Excel (.xlsx)
+            </a>
+            <button type="button" class="btn btn-outline-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalEnviarCorreo">
+                <i class="fa-solid fa-paper-plane me-1"></i> Enviar por Correo
+            </button>
+            <a href="{% url 'reporte_financiero' %}" class="btn btn-outline-secondary fw-bold">
+                ← Volver a Reportes
+            </a>
+        </div>
+    </div>
+{% endblock %}
+
+{% block contenido %}
+<div class="container-fluid p-0">
+
+    <!-- Tarjeta de Filtros -->
+    <div class="card shadow-sm border-0 mb-4 bg-light">
+        <div class="card-body py-3">
+            <form method="GET" action="{% url 'reporte_movimientos_detallados' %}" class="row g-2 align-items-end">
+                
+                <div class="col-md-2 col-6">
+                    <label class="form-label fw-bold text-muted small mb-1">📅 Desde</label>
+                    <input type="date" name="fecha_inicio" class="form-control form-control-sm bg-white" value="{{ fecha_inicio|date:'Y-m-d' }}">
+                </div>
+
+                <div class="col-md-2 col-6">
+                    <label class="form-label fw-bold text-muted small mb-1">📅 Hasta</label>
+                    <input type="date" name="fecha_fin" class="form-control form-control-sm bg-white" value="{{ fecha_fin|date:'Y-m-d' }}">
+                </div>
+
+                <div class="col-md-2 col-6">
+                    <label class="form-label fw-bold text-muted small mb-1">🏢 Portafolio</label>
+                    <select name="portafolio_id" class="form-select form-select-sm bg-white">
+                        <option value="TODOS" {% if portafolio_sel == 'TODOS' %}selected{% endif %}>Portafolio Completo</option>
+                        {% for p in portafolios %}
+                            <option value="{{ p.id }}" {% if portafolio_sel == p.id|stringformat:"s" %}selected{% endif %}>{{ p.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-2 col-6">
+                    <label class="form-label fw-bold text-muted small mb-1">👤 Propietario</label>
+                    <select name="propietario_id" class="form-select form-select-sm bg-white">
+                        <option value="TODOS" {% if propietario_sel == 'TODOS' %}selected{% endif %}>Todos los Propietarios</option>
+                        {% for prop in lista_propietarios %}
+                            <option value="{{ prop.id }}" {% if propietario_sel == prop.id|stringformat:"s" %}selected{% endif %}>{{ prop.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-2 col-6">
+                    <label class="form-label fw-bold text-muted small mb-1">👥 Inquilino</label>
+                    <select name="inquilino_id" class="form-select form-select-sm bg-white">
+                        <option value="TODOS" {% if inquilino_sel == 'TODOS' %}selected{% endif %}>Todos los Inquilinos</option>
+                        {% for inq in lista_inquilinos %}
+                            <option value="{{ inq.id }}" {% if inquilino_sel == inq.id|stringformat:"s" %}selected{% endif %}>{{ inq.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-2 col-6">
+                    <label class="form-label fw-bold text-muted small mb-1">🔄 Tipo Movimiento</label>
+                    <div class="d-flex gap-1">
+                        <select name="tipo_movimiento" class="form-select form-select-sm bg-white">
+                            <option value="TODOS" {% if tipo_sel == 'TODOS' %}selected{% endif %}>Todos (Ingresos/Gastos)</option>
+                            <option value="INGRESO" {% if tipo_sel == 'INGRESO' %}selected{% endif %}>🟢 Solo Ingresos</option>
+                            <option value="GASTO" {% if tipo_sel == 'GASTO' %}selected{% endif %}>🔴 Solo Gastos</option>
+                        </select>
+                        <button type="submit" class="btn btn-sm btn-primary fw-bold shadow-sm px-3" title="Aplicar Filtros">
+                            🔍
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Resumen de Tarjetas de Totales -->
+    <div class="row mb-4 g-3">
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 border-start border-success border-4 h-100">
+                <div class="card-body">
+                    <h6 class="text-muted fw-bold text-uppercase small mb-1">Total Ingresos Cobrados</h6>
+                    <h3 class="mb-0 fw-bold text-success">$ {{ total_ingresos|dinero }}</h3>
+                    <small class="text-muted">En el período seleccionado</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 border-start border-danger border-4 h-100">
+                <div class="card-body">
+                    <h6 class="text-muted fw-bold text-uppercase small mb-1">Total Gastos Registrados</h6>
+                    <h3 class="mb-0 fw-bold text-danger">$ {{ total_gastos|dinero }}</h3>
+                    <small class="text-muted">Mantenimientos y gastos generales</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 border-start border-primary border-4 h-100">
+                <div class="card-body">
+                    <h6 class="text-muted fw-bold text-uppercase small mb-1">Balance Neto Proyectado</h6>
+                    <h3 class="mb-0 fw-bold {% if balance_neto >= 0 %}text-primary{% else %}text-danger{% endif %}">
+                        $ {{ balance_neto|dinero }}
+                    </h3>
+                    <small class="text-muted">Ingresos menos Gastos</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla Detallada de Movimientos -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 fw-bold text-secondary">
+                📋 Registro de Movimientos ({{ movimientos|length }})
+            </h5>
+            <span class="badge bg-secondary">Período: {{ fecha_inicio|date:"d/m/Y" }} al {{ fecha_fin|date:"d/m/Y" }}</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="px-3 py-3">Fecha</th>
+                            <th class="py-3">Propiedad</th>
+                            <th class="py-3">Propietario</th>
+                            <th class="py-3">Inquilino / Referencia</th>
+                            <th class="py-3 text-center">Tipo</th>
+                            <th class="py-3">Concepto / Descripción</th>
+                            <th class="py-3 text-end px-4">Monto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for m in movimientos %}
+                        <tr>
+                            <td class="px-3 py-3 fw-bold text-nowrap">
+                                {{ m.fecha|date:"d/m/Y" }}
+                            </td>
+                            <td class="py-3 fw-bold">
+                                {{ m.propiedad }}
+                                {% if m.grupo_o_residencial %}
+                                    <small class="text-muted d-block fw-normal">{{ m.grupo_o_residencial }}</small>
+                                {% endif %}
+                            </td>
+                            <td class="py-3 text-secondary small">
+                                {{ m.propietario }}
+                            </td>
+                            <td class="py-3 small">
+                                {{ m.persona }}
+                            </td>
+                            <td class="py-3 text-center">
+                                {% if m.tipo == 'INGRESO' %}
+                                    <span class="badge bg-success px-2 py-1">🟢 INGRESO</span>
+                                {% else %}
+                                    <span class="badge bg-danger px-2 py-1">🔴 GASTO</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-3 small">
+                                {{ m.concepto }}
+                            </td>
+                            <td class="py-3 text-end px-4 fw-bold {% if m.tipo == 'INGRESO' %}text-success{% else %}text-danger{% endif %} text-nowrap">
+                                {% if m.tipo == 'INGRESO' %}+{% else %}-{% endif %}$ {{ m.monto|dinero }}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-muted">
+                                🔍 No se encontraron movimientos de ingresos o gastos en el rango de fechas seleccionado.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Modal Enviar por Correo -->
+<div class="modal fade" id="modalEnviarCorreo" tabindex="-1" aria-labelledby="modalEnviarCorreoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content text-black">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold" id="modalEnviarCorreoLabel">✉️ Enviar Reporte Excel por Correo</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="{% url 'enviar_movimientos_correo' %}?{{ request.GET.urlencode }}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <p class="text-muted small">Se generará el archivo <strong>.xlsx (Excel)</strong> con los filtros actuales y se enviará como documento adjunto a la dirección que especifiques a continuación.</p>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Correo Electrónico de Destino</label>
+                        <input type="email" name="email_destino" class="form-control" placeholder="ejemplo@contabilidad.com" required value="{{ request.user.email }}">
+                        <small class="form-text text-muted">Puedes ingresar el correo del contador, propietario o administrador.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary fw-bold">🚀 Enviar Reporte Excel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

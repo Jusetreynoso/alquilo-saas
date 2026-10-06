@@ -74,6 +74,60 @@ def _enviar_correo_seguro(asunto, correo_destino, html_content):
         logger.error(f"Error enviando correo a {correo_destino} por Web API: {e}")
         return False
 
+def enviar_correo_con_adjunto(asunto, correo_destino, html_content, archivo_bytes, nombre_archivo, mime_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"):
+    if not correo_destino:
+        return False
+        
+    try:
+        from django.conf import settings
+        import requests
+        import json
+        import base64
+        
+        encoded_file = base64.b64encode(archivo_bytes).decode('utf-8')
+        
+        url = "https://api.sendgrid.com/v3/mail/send"
+        headers = {
+            "Authorization": f"Bearer {settings.EMAIL_HOST_PASSWORD}",
+            "Content-Type": "application/json"
+        }
+        
+        em_from = settings.DEFAULT_FROM_EMAIL
+        origen = {"email": em_from.split('<')[1].replace('>','').strip(), "name": em_from.split('<')[0].strip()} if '<' in em_from else {"email": em_from}
+            
+        payload = {
+            "personalizations": [{"to": [{"email": correo_destino}]}],
+            "from": origen,
+            "subject": asunto,
+            "content": [{"type": "text/html", "value": html_content}],
+            "attachments": [
+                {
+                    "content": encoded_file,
+                    "filename": nombre_archivo,
+                    "type": mime_type,
+                    "disposition": "attachment"
+                }
+            ]
+        }
+        
+        resp = requests.post(url, headers=headers, data=json.dumps(payload), timeout=15)
+        resp.raise_for_status()
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error enviando correo con adjunto a {correo_destino} por Web API: {e}")
+        try:
+            from django.core.mail import EmailMessage
+            from django.conf import settings
+            msg = EmailMessage(asunto, html_content, settings.DEFAULT_FROM_EMAIL, [correo_destino])
+            msg.content_subtype = "html"
+            msg.attach(nombre_archivo, archivo_bytes, mime_type)
+            msg.send()
+            return True
+        except Exception as e2:
+            logger.error(f"Error fallback EmailMessage: {e2}")
+            return False
+
 # --- CASOS DE USO (B2C: RENTAS Y MORAS) ---
 
 def enviar_aviso_factura_generada(factura):

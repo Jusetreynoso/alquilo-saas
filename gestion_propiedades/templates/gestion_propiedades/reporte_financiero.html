@@ -4,9 +4,14 @@
 {% block encabezado %}
     <div class="d-flex justify-content-between align-items-center w-100 flex-wrap gap-2">
         <span>📊 {{ titulo_pagina }}</span>
-        <button type="button" class="btn btn-outline-secondary fw-bold no-print" onclick="window.print()">
-            🖨️ Imprimir Reporte
-        </button>
+        <div class="d-flex gap-2">
+            <a href="{% url 'reporte_movimientos_detallados' %}" class="btn btn-primary fw-bold shadow-sm no-print">
+                📋 Reporte Detallado (Rango de Fechas & Excel)
+            </a>
+            <button type="button" class="btn btn-outline-secondary fw-bold no-print" onclick="window.print()">
+                🖨️ Imprimir
+            </button>
+        </div>
     </div>
 {% endblock %}
 

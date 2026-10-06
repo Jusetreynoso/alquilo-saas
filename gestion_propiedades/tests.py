@@ -565,4 +565,24 @@ class AlquiloTests(TestCase):
         self.assertIn('Recordatorio de Vencimiento de Contratos', res_dashboard.content.decode('utf-8'))
         self.assertIn('Vence en 20 días', res_dashboard.content.decode('utf-8'))
 
+    def test_reporte_movimientos_detallados_excel_y_correo(self):
+        self.client.login(username='propietario1', password='password123')
+        
+        # 1. Probar carga HTML de reporte movimientos detallados
+        url_reporte = reverse('reporte_movimientos_detallados')
+        res_rep = self.client.get(url_reporte)
+        self.assertEqual(res_rep.status_code, 200)
+        self.assertIn('Reporte Detallado de Ingresos y Gastos', res_rep.content.decode('utf-8'))
+
+        # 2. Probar descarga de Excel (.xlsx)
+        url_excel = reverse('exportar_movimientos_excel')
+        res_excel = self.client.get(url_excel)
+        self.assertEqual(res_excel.status_code, 200)
+        self.assertEqual(res_excel['Content-Type'], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+        # 3. Probar envío de reporte por correo
+        url_email = reverse('enviar_movimientos_correo')
+        res_email = self.client.post(url_email, {'email_destino': 'contador@test.com'})
+        self.assertEqual(res_email.status_code, 302)
+
 

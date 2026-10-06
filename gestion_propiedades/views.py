@@ -1131,6 +1131,239 @@ def reporte_financiero(request):
     return render(request, 'gestion_propiedades/reporte_financiero.html', context)
 
 
+# --- REPORTE DETALLADO DE MOVIMIENTOS (INGRESOS Y GASTOS CON RANGO DE FECHAS Y EXCEL) ---
+
+def _obtener_datos_movimientos_detallados(request):
+    from datetime import date, datetime
+    import decimal
+
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+
+    lista_propietarios = PropietarioInmueble.objects.filter(portafolio__in=portafolios).order_by('nombre')
+    lista_inquilinos = Inquilino.objects.filter(contratos__propiedad__portafolio__in=portafolios).distinct().order_by('nombre')
+
+    hoy = date.today()
+    fecha_inicio_str = request.GET.get('fecha_inicio', '').strip()
+    fecha_fin_str = request.GET.get('fecha_fin', '').strip()
+
+    try:
+        fecha_inicio = datetime.strptime(fecha_inicio_str, '%Y-%m-%d').date() if fecha_inicio_str else date(hoy.year, hoy.month, 1)
+    except Exception:
+        fecha_inicio = date(hoy.year, hoy.month, 1)
+
+    try:
+        fecha_fin = datetime.strptime(fecha_fin_str, '%Y-%m-%d').date() if fecha_fin_str else hoy
+    except Exception:
+        fecha_fin = hoy
+
+    portafolio_id = request.GET.get('portafolio_id', 'TODOS')
+    propietario_id = request.GET.get('propietario_id', 'TODOS')
+    inquilino_id = request.GET.get('inquilino_id', 'TODOS')
+    tipo_movimiento = request.GET.get('tipo_movimiento', 'TODOS')
+
+    propiedades_qs = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False)
+    if portafolio_id != 'TODOS' and portafolio_id.isdigit():
+        propiedades_qs = propiedades_qs.filter(portafolio_id=int(portafolio_id))
+
+    if propietario_id != 'TODOS' and propietario_id.isdigit():
+        propiedades_qs = propiedades_qs.filter(propietario_inmueble_id=int(propietario_id))
+
+    movimientos = []
+
+    # 1. INGRESOS (Recibos de Pago)
+    if tipo_movimiento in ['TODOS', 'INGRESO']:
+        recibos_qs = ReciboPago.objects.filter(
+            factura__contrato__propiedad__in=propiedades_qs,
+            fecha_pago__range=[fecha_inicio, fecha_fin]
+        ).select_related(
+            'factura', 'factura__contrato', 'factura__contrato__propiedad',
+            'factura__contrato__propiedad__portafolio',
+            'factura__contrato__propiedad__propietario_inmueble',
+            'factura__contrato__inquilino'
+        )
+
+        if inquilino_id != 'TODOS' and inquilino_id.isdigit():
+            recibos_qs = recibos_qs.filter(factura__contrato__inquilino_id=int(inquilino_id))
+
+        for r in recibos_qs:
+            p = r.factura.contrato.propiedad
+            propietario_nom = p.propietario_inmueble.nombre if p.propietario_inmueble else (p.portafolio.propietario.get_full_name() or p.portafolio.propietario.username)
+            movimientos.append({
+                'fecha': r.fecha_pago,
+                'propiedad': p.nombre_o_numero,
+                'grupo_o_residencial': p.grupo_o_residencial or '',
+                'propietario': propietario_nom,
+                'persona': r.factura.contrato.inquilino.nombre,
+                'tipo': 'INGRESO',
+                'concepto': f"Cobro Renta (Recibo #{r.id}) - {r.factura.concepto}",
+                'monto': r.monto_pagado,
+                'referencia_id': f"REC-{r.id}"
+            })
+
+    # 2. GASTOS DE MANTENIMIENTO DE UNIDAD
+    if tipo_movimiento in ['TODOS', 'GASTO'] and (inquilino_id == 'TODOS'):
+        mantenimientos_qs = MantenimientoUnidad.objects.filter(
+            propiedad__in=propiedades_qs,
+            fecha_reporte__range=[fecha_inicio, fecha_fin]
+        ).select_related(
+            'propiedad', 'propiedad__portafolio', 'propiedad__propietario_inmueble'
+        ).prefetch_related('propiedad__contratos')
+
+        for m in mantenimientos_qs:
+            p = m.propiedad
+            propietario_nom = p.propietario_inmueble.nombre if p.propietario_inmueble else (p.portafolio.propietario.get_full_name() or p.portafolio.propietario.username)
+            contrato_act = p.contratos.filter(activo=True).first()
+            persona_nom = contrato_act.inquilino.nombre if contrato_act else 'Mantenimiento General'
+            movimientos.append({
+                'fecha': m.fecha_reporte,
+                'propiedad': p.nombre_o_numero,
+                'grupo_o_residencial': p.grupo_o_residencial or '',
+                'propietario': propietario_nom,
+                'persona': persona_nom,
+                'tipo': 'GASTO',
+                'concepto': f"Mantenimiento ({m.get_categoria_display()}): {m.descripcion}",
+                'monto': m.costo,
+                'referencia_id': f"MAN-{m.id}"
+            })
+
+    # 3. GASTOS GENERALES DE PROPIETARIOS
+    if tipo_movimiento in ['TODOS', 'GASTO'] and (inquilino_id == 'TODOS'):
+        gastos_gen_qs = GastoGeneralPropietario.objects.filter(
+            fecha__range=[fecha_inicio, fecha_fin]
+        ).select_related('propietario_inmueble', 'propiedad', 'portafolio')
+
+        if propietario_id != 'TODOS' and propietario_id.isdigit():
+            gastos_gen_qs = gastos_gen_qs.filter(propietario_inmueble_id=int(propietario_id))
+        else:
+            gastos_gen_qs = gastos_gen_qs.filter(portafolio__in=portafolios)
+
+        if portafolio_id != 'TODOS' and portafolio_id.isdigit():
+            gastos_gen_qs = gastos_gen_qs.filter(portafolio_id=int(portafolio_id))
+
+        for g in gastos_gen_qs:
+            prop_nom = g.propiedad.nombre_o_numero if g.propiedad else 'General Propietario'
+            grupo_nom = g.propiedad.grupo_o_residencial if (g.propiedad and g.propiedad.grupo_o_residencial) else ''
+            propietario_nom = g.propietario_inmueble.nombre if g.propietario_inmueble else (g.portafolio.propietario.get_full_name() or g.portafolio.propietario.username)
+            movimientos.append({
+                'fecha': g.fecha,
+                'propiedad': prop_nom,
+                'grupo_o_residencial': grupo_nom,
+                'propietario': propietario_nom,
+                'persona': 'Gasto Operativo',
+                'tipo': 'GASTO',
+                'concepto': f"Gasto Propietario: {g.concepto}",
+                'monto': g.monto,
+                'referencia_id': f"GGP-{g.id}"
+            })
+
+    # Ordenar por fecha descendente
+    movimientos.sort(key=lambda x: x['fecha'], reverse=True)
+
+    total_ingresos = sum((m['monto'] for m in movimientos if m['tipo'] == 'INGRESO'), decimal.Decimal('0.00'))
+    total_gastos = sum((m['monto'] for m in movimientos if m['tipo'] == 'GASTO'), decimal.Decimal('0.00'))
+    balance_neto = total_ingresos - total_gastos
+
+    return {
+        'movimientos': movimientos,
+        'total_ingresos': total_ingresos,
+        'total_gastos': total_gastos,
+        'balance_neto': balance_neto,
+        'fecha_inicio': fecha_inicio,
+        'fecha_fin': fecha_fin,
+        'portafolios': portafolios,
+        'lista_propietarios': lista_propietarios,
+        'lista_inquilinos': lista_inquilinos,
+        'portafolio_sel': str(portafolio_id),
+        'propietario_sel': str(propietario_id),
+        'inquilino_sel': str(inquilino_id),
+        'tipo_sel': tipo_movimiento,
+    }
+
+
+@login_required(login_url='/login/')
+def reporte_movimientos_detallados(request):
+    data = _obtener_datos_movimientos_detallados(request)
+    data['titulo_pagina'] = 'Reporte Detallado de Ingresos y Gastos'
+    return render(request, 'gestion_propiedades/reporte_movimientos_detallados.html', data)
+
+
+@login_required(login_url='/login/')
+def exportar_movimientos_excel(request):
+    from django.http import HttpResponse
+    from .utils_excel import generar_excel_movimientos_detallados
+
+    data = _obtener_datos_movimientos_detallados(request)
+    excel_bytes = generar_excel_movimientos_detallados(
+        data['movimientos'],
+        data['total_ingresos'],
+        data['total_gastos'],
+        data['balance_neto'],
+        data['fecha_inicio'],
+        data['fecha_fin']
+    )
+
+    filename = f"Reporte_Movimientos_{data['fecha_inicio'].strftime('%Y%m%d')}_a_{data['fecha_fin'].strftime('%Y%m%d')}.xlsx"
+    response = HttpResponse(
+        excel_bytes,
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required(login_url='/login/')
+def enviar_movimientos_correo(request):
+    if request.method == 'POST':
+        email_destino = request.POST.get('email_destino', '').strip()
+        if not email_destino:
+            messages.error(request, "Por favor indica un correo de destino válido.")
+            return redirect('reporte_movimientos_detallados')
+
+        data = _obtener_datos_movimientos_detallados(request)
+        from .utils_excel import generar_excel_movimientos_detallados
+        excel_bytes = generar_excel_movimientos_detallados(
+            data['movimientos'],
+            data['total_ingresos'],
+            data['total_gastos'],
+            data['balance_neto'],
+            data['fecha_inicio'],
+            data['fecha_fin']
+        )
+
+        nombre_archivo = f"Reporte_Movimientos_{data['fecha_inicio'].strftime('%Y%m%d')}_a_{data['fecha_fin'].strftime('%Y%m%d')}.xlsx"
+        asunto = f"📊 Reporte Detallado de Ingresos y Gastos ({data['fecha_inicio'].strftime('%d/%m/%Y')} - {data['fecha_fin'].strftime('%d/%m/%Y')})"
+
+        cuerpo_html = f"""
+            <p>Hola,</p>
+            <p>Adjunto a este correo encontrarás el <strong>Reporte Detallado de Ingresos y Gastos</strong> correspondiente al período del <strong>{data['fecha_inicio'].strftime('%d/%m/%Y')}</strong> al <strong>{data['fecha_fin'].strftime('%d/%m/%Y')}</strong>.</p>
+            <ul style="list-style: none; padding: 0;">
+                <li>🟢 <strong>Total Ingresos:</strong> RD$ {data['total_ingresos']:,.2f}</li>
+                <li>🔴 <strong>Total Gastos:</strong> RD$ {data['total_gastos']:,.2f}</li>
+                <li>💼 <strong>Balance Neto:</strong> RD$ {data['balance_neto']:,.2f}</li>
+                <li>📋 <strong>Total Movimientos:</strong> {len(data['movimientos'])} registros</li>
+            </ul>
+            <p>El archivo adjunto viene formateado en hojas de cálculo Excel (.xlsx) listo para su revisión contable.</p>
+        """
+
+        from .utils_correo import _generar_plantilla_html, enviar_correo_con_adjunto
+        html_final = _generar_plantilla_html("Reporte Contable Detallado", cuerpo_html)
+
+        exito = enviar_correo_con_adjunto(asunto, email_destino, html_final, excel_bytes, nombre_archivo)
+        if exito:
+            messages.success(request, f"🚀 ¡Reporte enviado exitosamente en formato Excel a {email_destino}!")
+        else:
+            messages.error(request, f"❌ Ocurrió un inconveniente al enviar el correo a {email_destino}. Por favor verifica la dirección.")
+
+    query_params = request.GET.urlencode()
+    from django.urls import reverse
+    redirect_url = reverse('reporte_movimientos_detallados')
+    if query_params:
+        redirect_url += f"?{query_params}"
+    return redirect(redirect_url)
+
+
 # --- MÓDULO DE REPORTES AVANZADOS ---
 
 @login_required(login_url='/login/')
