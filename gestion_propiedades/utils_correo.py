@@ -47,31 +47,47 @@ def _enviar_correo_seguro(asunto, correo_destino, html_content):
         import requests
         import json
         
-        # Modo antibloqueo: SendGrid API v3 sobre puerto seguro 443 (HTTPS)
-        url = "https://api.sendgrid.com/v3/mail/send"
-        headers = {
-            "Authorization": f"Bearer {settings.EMAIL_HOST_PASSWORD}",
-            "Content-Type": "application/json"
-        }
-        
-        # Desglosar el DEFAULT_FROM_EMAIL (Ej: "Alquilo Software <noreply@asd.com>")
-        em_from = settings.DEFAULT_FROM_EMAIL
-        origen = {"email": em_from.split('<')[1].replace('>','').strip(), "name": em_from.split('<')[0].strip()} if '<' in em_from else {"email": em_from}
+        api_key = getattr(settings, 'EMAIL_HOST_PASSWORD', None) or os.environ.get('SENDGRID_API_KEY', '')
+        if api_key:
+            url = "https://api.sendgrid.com/v3/mail/send"
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
             
-        payload = {
-            "personalizations": [{"to": [{"email": correo_destino}]}],
-            "from": origen,
-            "subject": asunto,
-            "content": [{"type": "text/html", "value": html_content}]
-        }
-        
-        # Timeout de 10s para peticiones web HTTP
-        resp = requests.post(url, headers=headers, data=json.dumps(payload), timeout=10)
-        resp.raise_for_status()
-        return True
-        
+            em_from = getattr(settings, 'DEFAULT_FROM_EMAIL', 'Alquilo Software <noreply@alquilosoftware.com>')
+            origen = {"email": em_from.split('<')[1].replace('>','').strip(), "name": em_from.split('<')[0].strip()} if '<' in em_from else {"email": em_from}
+                
+            payload = {
+                "personalizations": [{"to": [{"email": correo_destino}]}],
+                "from": origen,
+                "subject": asunto,
+                "content": [{"type": "text/html", "value": html_content}]
+            }
+            
+            resp = requests.post(url, headers=headers, data=json.dumps(payload), timeout=8)
+            if resp.status_code in (200, 202):
+                return True
+            logger.warning(f"SendGrid API devolvió status {resp.status_code}: {resp.text}")
     except Exception as e:
         logger.error(f"Error enviando correo a {correo_destino} por Web API: {e}")
+
+    # Fallback si SendGrid falla o no está configurado
+    try:
+        from django.core.mail import send_mail
+        from django.conf import settings
+        em_from = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@alquilosoftware.com')
+        send_mail(
+            asunto,
+            strip_tags(html_content),
+            em_from,
+            [correo_destino],
+            html_message=html_content,
+            fail_silently=True
+        )
+        return True
+    except Exception as e2:
+        logger.error(f"Error fallback send_mail: {e2}")
         return False
 
 def enviar_correo_con_adjunto(asunto, correo_destino, html_content, archivo_bytes, nombre_archivo, mime_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"):
@@ -85,48 +101,53 @@ def enviar_correo_con_adjunto(asunto, correo_destino, html_content, archivo_byte
         import base64
         
         encoded_file = base64.b64encode(archivo_bytes).decode('utf-8')
+        api_key = getattr(settings, 'EMAIL_HOST_PASSWORD', None) or os.environ.get('SENDGRID_API_KEY', '')
         
-        url = "https://api.sendgrid.com/v3/mail/send"
-        headers = {
-            "Authorization": f"Bearer {settings.EMAIL_HOST_PASSWORD}",
-            "Content-Type": "application/json"
-        }
-        
-        em_from = settings.DEFAULT_FROM_EMAIL
-        origen = {"email": em_from.split('<')[1].replace('>','').strip(), "name": em_from.split('<')[0].strip()} if '<' in em_from else {"email": em_from}
+        if api_key:
+            url = "https://api.sendgrid.com/v3/mail/send"
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
             
-        payload = {
-            "personalizations": [{"to": [{"email": correo_destino}]}],
-            "from": origen,
-            "subject": asunto,
-            "content": [{"type": "text/html", "value": html_content}],
-            "attachments": [
-                {
-                    "content": encoded_file,
-                    "filename": nombre_archivo,
-                    "type": mime_type,
-                    "disposition": "attachment"
-                }
-            ]
-        }
-        
-        resp = requests.post(url, headers=headers, data=json.dumps(payload), timeout=15)
-        resp.raise_for_status()
-        return True
-        
+            em_from = getattr(settings, 'DEFAULT_FROM_EMAIL', 'Alquilo Software <noreply@alquilosoftware.com>')
+            origen = {"email": em_from.split('<')[1].replace('>','').strip(), "name": em_from.split('<')[0].strip()} if '<' in em_from else {"email": em_from}
+                
+            payload = {
+                "personalizations": [{"to": [{"email": correo_destino}]}],
+                "from": origen,
+                "subject": asunto,
+                "content": [{"type": "text/html", "value": html_content}],
+                "attachments": [
+                    {
+                        "content": encoded_file,
+                        "filename": nombre_archivo,
+                        "type": mime_type,
+                        "disposition": "attachment"
+                    }
+                ]
+            }
+            
+            resp = requests.post(url, headers=headers, data=json.dumps(payload), timeout=8)
+            if resp.status_code in (200, 202):
+                return True
+            logger.warning(f"SendGrid API con adjunto devolvió status {resp.status_code}: {resp.text}")
+            
     except Exception as e:
         logger.error(f"Error enviando correo con adjunto a {correo_destino} por Web API: {e}")
-        try:
-            from django.core.mail import EmailMessage
-            from django.conf import settings
-            msg = EmailMessage(asunto, html_content, settings.DEFAULT_FROM_EMAIL, [correo_destino])
-            msg.content_subtype = "html"
-            msg.attach(nombre_archivo, archivo_bytes, mime_type)
-            msg.send()
-            return True
-        except Exception as e2:
-            logger.error(f"Error fallback EmailMessage: {e2}")
-            return False
+        
+    try:
+        from django.core.mail import EmailMessage
+        from django.conf import settings
+        em_from = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@alquilosoftware.com')
+        msg = EmailMessage(asunto, html_content, em_from, [correo_destino])
+        msg.content_subtype = "html"
+        msg.attach(nombre_archivo, archivo_bytes, mime_type)
+        msg.send(fail_silently=False)
+        return True
+    except Exception as e2:
+        logger.error(f"Error fallback EmailMessage con adjunto: {e2}")
+        return False
 
 # --- CASOS DE USO (B2C: RENTAS Y MORAS) ---
 

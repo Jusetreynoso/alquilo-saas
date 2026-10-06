@@ -1321,40 +1321,44 @@ def enviar_movimientos_correo(request):
             messages.error(request, "Por favor indica un correo de destino válido.")
             return redirect('reporte_movimientos_detallados')
 
-        data = _obtener_datos_movimientos_detallados(request)
-        from .utils_excel import generar_excel_movimientos_detallados
-        excel_bytes = generar_excel_movimientos_detallados(
-            data['movimientos'],
-            data['total_ingresos'],
-            data['total_gastos'],
-            data['balance_neto'],
-            data['fecha_inicio'],
-            data['fecha_fin']
-        )
+        try:
+            data = _obtener_datos_movimientos_detallados(request)
+            from .utils_excel import generar_excel_movimientos_detallados
+            excel_bytes = generar_excel_movimientos_detallados(
+                data['movimientos'],
+                data['total_ingresos'],
+                data['total_gastos'],
+                data['balance_neto'],
+                data['fecha_inicio'],
+                data['fecha_fin']
+            )
 
-        nombre_archivo = f"Reporte_Movimientos_{data['fecha_inicio'].strftime('%Y%m%d')}_a_{data['fecha_fin'].strftime('%Y%m%d')}.xlsx"
-        asunto = f"📊 Reporte Detallado de Ingresos y Gastos ({data['fecha_inicio'].strftime('%d/%m/%Y')} - {data['fecha_fin'].strftime('%d/%m/%Y')})"
+            nombre_archivo = f"Reporte_Movimientos_{data['fecha_inicio'].strftime('%Y%m%d')}_a_{data['fecha_fin'].strftime('%Y%m%d')}.xlsx"
+            asunto = f"📊 Reporte Detallado de Ingresos y Gastos ({data['fecha_inicio'].strftime('%d/%m/%Y')} - {data['fecha_fin'].strftime('%d/%m/%Y')})"
 
-        cuerpo_html = f"""
-            <p>Hola,</p>
-            <p>Adjunto a este correo encontrarás el <strong>Reporte Detallado de Ingresos y Gastos</strong> correspondiente al período del <strong>{data['fecha_inicio'].strftime('%d/%m/%Y')}</strong> al <strong>{data['fecha_fin'].strftime('%d/%m/%Y')}</strong>.</p>
-            <ul style="list-style: none; padding: 0;">
-                <li>🟢 <strong>Total Ingresos:</strong> RD$ {data['total_ingresos']:,.2f}</li>
-                <li>🔴 <strong>Total Gastos:</strong> RD$ {data['total_gastos']:,.2f}</li>
-                <li>💼 <strong>Balance Neto:</strong> RD$ {data['balance_neto']:,.2f}</li>
-                <li>📋 <strong>Total Movimientos:</strong> {len(data['movimientos'])} registros</li>
-            </ul>
-            <p>El archivo adjunto viene formateado en hojas de cálculo Excel (.xlsx) listo para su revisión contable.</p>
-        """
+            cuerpo_html = f"""
+                <p>Hola,</p>
+                <p>Adjunto a este correo encontrarás el <strong>Reporte Detallado de Ingresos y Gastos</strong> correspondiente al período del <strong>{data['fecha_inicio'].strftime('%d/%m/%Y')}</strong> al <strong>{data['fecha_fin'].strftime('%d/%m/%Y')}</strong>.</p>
+                <ul style="list-style: none; padding: 0;">
+                    <li>🟢 <strong>Total Ingresos:</strong> RD$ {data['total_ingresos']:,.2f}</li>
+                    <li>🔴 <strong>Total Gastos:</strong> RD$ {data['total_gastos']:,.2f}</li>
+                    <li>💼 <strong>Balance Neto:</strong> RD$ {data['balance_neto']:,.2f}</li>
+                    <li>📋 <strong>Total Movimientos:</strong> {len(data['movimientos'])} registros</li>
+                </ul>
+                <p>El archivo adjunto viene formateado en hojas de cálculo Excel (.xlsx) listo para su revisión contable.</p>
+            """
 
-        from .utils_correo import _generar_plantilla_html, enviar_correo_con_adjunto
-        html_final = _generar_plantilla_html("Reporte Contable Detallado", cuerpo_html)
+            from .utils_correo import _generar_plantilla_html, enviar_correo_con_adjunto
+            html_final = _generar_plantilla_html("Reporte Contable Detallado", cuerpo_html)
 
-        exito = enviar_correo_con_adjunto(asunto, email_destino, html_final, excel_bytes, nombre_archivo)
-        if exito:
-            messages.success(request, f"🚀 ¡Reporte enviado exitosamente en formato Excel a {email_destino}!")
-        else:
-            messages.error(request, f"❌ Ocurrió un inconveniente al enviar el correo a {email_destino}. Por favor verifica la dirección.")
+            exito = enviar_correo_con_adjunto(asunto, email_destino, html_final, excel_bytes, nombre_archivo)
+            if exito:
+                messages.success(request, f"🚀 ¡Reporte enviado exitosamente en formato Excel a {email_destino}!")
+            else:
+                messages.error(request, f"❌ Ocurrió un inconveniente al enviar el correo a {email_destino}. Por favor verifica la dirección o el servicio de correo.")
+        except Exception as e:
+            logger.error(f"Error procesando envío de reporte por correo: {e}", exc_info=True)
+            messages.error(request, f"❌ No se pudo procesar el envío del reporte por correo: {str(e)}")
 
     query_params = request.GET.urlencode()
     from django.urls import reverse
