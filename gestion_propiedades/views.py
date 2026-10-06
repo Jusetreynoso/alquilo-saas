@@ -1191,16 +1191,22 @@ def _obtener_datos_movimientos_detallados(request):
             recibos_qs = recibos_qs.filter(factura__contrato__inquilino_id=int(inquilino_id))
 
         for r in recibos_qs:
-            p = r.factura.contrato.propiedad
-            propietario_nom = p.propietario_inmueble.nombre if p.propietario_inmueble else (p.portafolio.propietario.get_full_name() or p.portafolio.propietario.username)
+            p = r.factura.contrato.propiedad if (r.factura and r.factura.contrato) else None
+            if not p:
+                continue
+            propietario_nom = p.propietario_inmueble.nombre if p.propietario_inmueble else (
+                (p.portafolio.propietario.get_full_name() or p.portafolio.propietario.username)
+                if (p.portafolio and p.portafolio.propietario) else 'Propietario General'
+            )
+            persona_nom = r.factura.contrato.inquilino.nombre if (r.factura and r.factura.contrato and r.factura.contrato.inquilino) else 'Inquilino General'
             movimientos.append({
                 'fecha': r.fecha_pago,
                 'propiedad': p.nombre_o_numero,
                 'grupo_o_residencial': p.grupo_o_residencial or '',
                 'propietario': propietario_nom,
-                'persona': r.factura.contrato.inquilino.nombre,
+                'persona': persona_nom,
                 'tipo': 'INGRESO',
-                'concepto': f"Cobro Renta (Recibo #{r.id}) - {r.factura.concepto}",
+                'concepto': f"Cobro Renta (Recibo #{r.id}) - {r.factura.concepto if r.factura else 'Renta'}",
                 'monto': r.monto_pagado,
                 'referencia_id': f"REC-{r.id}"
             })
@@ -1216,9 +1222,14 @@ def _obtener_datos_movimientos_detallados(request):
 
         for m in mantenimientos_qs:
             p = m.propiedad
-            propietario_nom = p.propietario_inmueble.nombre if p.propietario_inmueble else (p.portafolio.propietario.get_full_name() or p.portafolio.propietario.username)
-            contrato_act = p.contratos.filter(activo=True).first()
-            persona_nom = contrato_act.inquilino.nombre if contrato_act else 'Mantenimiento General'
+            if not p:
+                continue
+            propietario_nom = p.propietario_inmueble.nombre if p.propietario_inmueble else (
+                (p.portafolio.propietario.get_full_name() or p.portafolio.propietario.username)
+                if (p.portafolio and p.portafolio.propietario) else 'Propietario General'
+            )
+            contrato_act = p.contratos.filter(activo=True).first() if hasattr(p, 'contratos') else None
+            persona_nom = contrato_act.inquilino.nombre if (contrato_act and contrato_act.inquilino) else 'Mantenimiento General'
             movimientos.append({
                 'fecha': m.fecha_reporte,
                 'propiedad': p.nombre_o_numero,
@@ -1248,7 +1259,10 @@ def _obtener_datos_movimientos_detallados(request):
         for g in gastos_gen_qs:
             prop_nom = g.propiedad.nombre_o_numero if g.propiedad else 'General Propietario'
             grupo_nom = g.propiedad.grupo_o_residencial if (g.propiedad and g.propiedad.grupo_o_residencial) else ''
-            propietario_nom = g.propietario_inmueble.nombre if g.propietario_inmueble else (g.portafolio.propietario.get_full_name() or g.portafolio.propietario.username)
+            propietario_nom = g.propietario_inmueble.nombre if g.propietario_inmueble else (
+                (g.portafolio.propietario.get_full_name() or g.portafolio.propietario.username)
+                if (g.portafolio and g.portafolio.propietario) else 'Propietario General'
+            )
             movimientos.append({
                 'fecha': g.fecha,
                 'propiedad': prop_nom,
@@ -1318,50 +1332,49 @@ def exportar_movimientos_excel(request):
 
 @login_required(login_url='/login/')
 def enviar_movimientos_correo(request):
-    if request.method == 'POST':
-        email_destino = request.POST.get('email_destino', '').strip()
-        if not email_destino:
-            messages.error(request, "Por favor indica un correo de destino válido.")
-            return redirect('reporte_movimientos_detallados')
-
-        try:
-            data = _obtener_datos_movimientos_detallados(request)
-            from .utils_excel import generar_excel_movimientos_detallados
-            excel_bytes = generar_excel_movimientos_detallados(
-                data['movimientos'],
-                data['total_ingresos'],
-                data['total_gastos'],
-                data['balance_neto'],
-                data['fecha_inicio'],
-                data['fecha_fin']
-            )
-
-            nombre_archivo = f"Reporte_Movimientos_{data['fecha_inicio'].strftime('%Y%m%d')}_a_{data['fecha_fin'].strftime('%Y%m%d')}.xlsx"
-            asunto = f"📊 Reporte Detallado de Ingresos y Gastos ({data['fecha_inicio'].strftime('%d/%m/%Y')} - {data['fecha_fin'].strftime('%d/%m/%Y')})"
-
-            cuerpo_html = f"""
-                <p>Hola,</p>
-                <p>Adjunto a este correo encontrarás el <strong>Reporte Detallado de Ingresos y Gastos</strong> correspondiente al período del <strong>{data['fecha_inicio'].strftime('%d/%m/%Y')}</strong> al <strong>{data['fecha_fin'].strftime('%d/%m/%Y')}</strong>.</p>
-                <ul style="list-style: none; padding: 0;">
-                    <li>🟢 <strong>Total Ingresos:</strong> RD$ {data['total_ingresos']:,.2f}</li>
-                    <li>🔴 <strong>Total Gastos:</strong> RD$ {data['total_gastos']:,.2f}</li>
-                    <li>💼 <strong>Balance Neto:</strong> RD$ {data['balance_neto']:,.2f}</li>
-                    <li>📋 <strong>Total Movimientos:</strong> {len(data['movimientos'])} registros</li>
-                </ul>
-                <p>El archivo adjunto viene formateado en hojas de cálculo Excel (.xlsx) listo para su revisión contable.</p>
-            """
-
-            from .utils_correo import _generar_plantilla_html, enviar_correo_con_adjunto
-            html_final = _generar_plantilla_html("Reporte Contable Detallado", cuerpo_html)
-
-            exito = enviar_correo_con_adjunto(asunto, email_destino, html_final, excel_bytes, nombre_archivo)
-            if exito:
-                messages.success(request, f"🚀 ¡Reporte enviado exitosamente en formato Excel a {email_destino}!")
+    try:
+        if request.method == 'POST':
+            email_destino = request.POST.get('email_destino', '').strip()
+            if not email_destino:
+                messages.error(request, "Por favor indica un correo de destino válido.")
             else:
-                messages.error(request, f"❌ Ocurrió un inconveniente al enviar el correo a {email_destino}. Por favor verifica la dirección o el servicio de correo.")
-        except Exception as e:
-            logger.error(f"Error procesando envío de reporte por correo: {e}", exc_info=True)
-            messages.error(request, f"❌ No se pudo procesar el envío del reporte por correo: {str(e)}")
+                data = _obtener_datos_movimientos_detallados(request)
+                from .utils_excel import generar_excel_movimientos_detallados
+                excel_bytes = generar_excel_movimientos_detallados(
+                    data['movimientos'],
+                    data['total_ingresos'],
+                    data['total_gastos'],
+                    data['balance_neto'],
+                    data['fecha_inicio'],
+                    data['fecha_fin']
+                )
+
+                nombre_archivo = f"Reporte_Movimientos_{data['fecha_inicio'].strftime('%Y%m%d')}_a_{data['fecha_fin'].strftime('%Y%m%d')}.xlsx"
+                asunto = f"📊 Reporte Detallado de Ingresos y Gastos ({data['fecha_inicio'].strftime('%d/%m/%Y')} - {data['fecha_fin'].strftime('%d/%m/%Y')})"
+
+                cuerpo_html = f"""
+                    <p>Hola,</p>
+                    <p>Adjunto a este correo encontrarás el <strong>Reporte Detallado de Ingresos y Gastos</strong> correspondiente al período del <strong>{data['fecha_inicio'].strftime('%d/%m/%Y')}</strong> al <strong>{data['fecha_fin'].strftime('%d/%m/%Y')}</strong>.</p>
+                    <ul style="list-style: none; padding: 0;">
+                        <li>🟢 <strong>Total Ingresos:</strong> RD$ {data['total_ingresos']:,.2f}</li>
+                        <li>🔴 <strong>Total Gastos:</strong> RD$ {data['total_gastos']:,.2f}</li>
+                        <li>💼 <strong>Balance Neto:</strong> RD$ {data['balance_neto']:,.2f}</li>
+                        <li>📋 <strong>Total Movimientos:</strong> {len(data['movimientos'])} registros</li>
+                    </ul>
+                    <p>El archivo adjunto viene formateado en hojas de cálculo Excel (.xlsx) listo para su revisión contable.</p>
+                """
+
+                from .utils_correo import _generar_plantilla_html, enviar_correo_con_adjunto
+                html_final = _generar_plantilla_html("Reporte Contable Detallado", cuerpo_html)
+
+                exito = enviar_correo_con_adjunto(asunto, email_destino, html_final, excel_bytes, nombre_archivo)
+                if exito:
+                    messages.success(request, f"🚀 ¡Reporte enviado exitosamente en formato Excel a {email_destino}!")
+                else:
+                    messages.error(request, f"⚠️ No se pudo entregar el correo a {email_destino}. Si estás en Railway, verifica que las credenciales de correo (SendGrid API Key) estén configuradas en las variables de entorno.")
+    except Exception as e:
+        logger.error(f"Error procesando envío de reporte por correo: {e}", exc_info=True)
+        messages.error(request, f"❌ Ocurrió un error al procesar el envío del reporte: {str(e)}")
 
     query_params = request.GET.urlencode()
     from django.urls import reverse
