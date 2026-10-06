@@ -533,4 +533,36 @@ class AlquiloTests(TestCase):
         login_success = self.client.login(username='propietario2', password='newpassword123')
         self.assertTrue(login_success)
 
+    def test_recibo_ingresos_y_recordatorio_vencimiento_contrato(self):
+        # 1. Probar que el recibo impreso diga "RECIBO DE INGRESOS"
+        factura = Factura.objects.create(
+            contrato=self.contrato1,
+            fecha_emision=date.today(),
+            fecha_vencimiento=date.today(),
+            monto_base=10000.00,
+            estado='PAGADA',
+            concepto='Alquiler del mes'
+        )
+        recibo = ReciboPago.objects.create(
+            factura=factura,
+            monto_pagado=10000.00,
+            fecha_pago=date.today(),
+            registrado_por=self.user1
+        )
+        self.client.login(username='propietario1', password='password123')
+        url_recibo = reverse('imprimir_recibo', args=[recibo.id])
+        res_recibo = self.client.get(url_recibo)
+        self.assertEqual(res_recibo.status_code, 200)
+        self.assertIn('RECIBO DE INGRESOS', res_recibo.content.decode('utf-8'))
+
+        # 2. Probar recordatorio de vencimiento de contrato en el Dashboard
+        self.contrato1.fecha_fin = date.today() + timedelta(days=20)
+        self.contrato1.recordatorio_vencimiento_meses = 1
+        self.contrato1.save()
+
+        res_dashboard = self.client.get(reverse('dashboard'))
+        self.assertEqual(res_dashboard.status_code, 200)
+        self.assertIn('Recordatorio de Vencimiento de Contratos', res_dashboard.content.decode('utf-8'))
+        self.assertIn('Vence en 20 días', res_dashboard.content.decode('utf-8'))
+
 

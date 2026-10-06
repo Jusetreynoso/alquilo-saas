@@ -134,6 +134,32 @@ def dashboard(request):
         
     recordatorios_gastos.sort(key=lambda x: (x['pagado'], x['gasto'].dia_pago))
 
+    # Recordatorios de Vencimiento de Contratos
+    from datetime import timedelta
+    contratos_activos_vencimiento = Contrato.objects.filter(
+        propiedad__portafolio__in=portafolios,
+        propiedad__is_deleted=False,
+        activo=True,
+        fecha_fin__isnull=False,
+        recordatorio_vencimiento_meses__gt=0
+    ).select_related('propiedad', 'inquilino', 'propiedad__portafolio')
+
+    recordatorios_vencimiento_contratos = []
+    for c in contratos_activos_vencimiento:
+        dias_aviso = c.recordatorio_vencimiento_meses * 30
+        fecha_alerta = c.fecha_fin - timedelta(days=dias_aviso)
+        
+        if hoy >= fecha_alerta:
+            dias_restantes = (c.fecha_fin - hoy).days
+            recordatorios_vencimiento_contratos.append({
+                'contrato': c,
+                'dias_restantes': dias_restantes,
+                'dias_restantes_abs': abs(dias_restantes),
+                'vencido': dias_restantes < 0,
+            })
+
+    recordatorios_vencimiento_contratos.sort(key=lambda x: x['dias_restantes'])
+
     context = {
         'titulo_pagina': 'Resumen de Portafolio',
         'total_propiedades': total_propiedades,
@@ -142,6 +168,7 @@ def dashboard(request):
         'ingresos_mes': ingresos_mes,
         'facturas_pendientes': facturas_pendientes,
         'recordatorios_gastos': recordatorios_gastos,
+        'recordatorios_vencimiento_contratos': recordatorios_vencimiento_contratos,
     }
     
     return render(request, 'gestion_propiedades/dashboard.html', context)

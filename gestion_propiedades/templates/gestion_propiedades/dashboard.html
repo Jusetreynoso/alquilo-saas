@@ -128,6 +128,70 @@
 </div>
 
 <div class="card shadow-sm border-0 mb-4 mt-4">
+    <div class="card-header bg-white fw-bold text-warning py-3 d-flex justify-content-between align-items-center">
+        <span>📜 Recordatorio de Vencimiento de Contratos</span>
+        <span class="badge bg-warning text-dark">{{ recordatorios_vencimiento_contratos|length }} Contrato(s) por Vencer</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="px-4 py-3">Propiedad</th>
+                        <th class="py-3">Inquilino</th>
+                        <th class="py-3">Fecha de Vencimiento</th>
+                        <th class="py-3 text-center">Estado / Tiempo Restante</th>
+                        <th class="py-3 text-center px-4">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in recordatorios_vencimiento_contratos %}
+                    <tr>
+                        <td class="px-4 py-3 fw-bold">
+                            <a href="{% url 'detalle_propiedad' item.contrato.propiedad.id %}" class="text-decoration-none text-dark">
+                                {{ item.contrato.propiedad.nombre_o_numero }}
+                                {% if item.contrato.propiedad.grupo_o_residencial %}
+                                <small class="text-muted fw-normal">— {{ item.contrato.propiedad.grupo_o_residencial }}</small>
+                                {% endif %}
+                            </a>
+                        </td>
+                        <td class="py-3">
+                            <a href="{% url 'detalle_inquilino' item.contrato.inquilino.id %}" class="text-decoration-none text-secondary fw-bold">
+                                👤 {{ item.contrato.inquilino.nombre }}
+                            </a>
+                        </td>
+                        <td class="py-3 fw-bold">
+                            {{ item.contrato.fecha_fin|date:"d M Y" }}
+                        </td>
+                        <td class="py-3 text-center">
+                            {% if item.vencido %}
+                                <span class="badge bg-danger">🔴 Vencido (hace {{ item.dias_restantes_abs }} días)</span>
+                            {% elif item.dias_restantes == 0 %}
+                                <span class="badge bg-danger">⚠️ Vence HOY</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">⚠️ Vence en {{ item.dias_restantes }} días</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 text-center px-4">
+                            <a href="{% url 'editar_contrato' item.contrato.id %}" class="btn btn-sm btn-outline-primary fw-bold shadow-sm">
+                                ✏️ Revisar / Renovar
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center py-4 text-muted">
+                            🎉 No hay contratos próximos a vencer dentro del plazo de aviso configurado.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0 mb-4 mt-4">
     <div class="card-header bg-white fw-bold text-danger py-3">
         ⚠️ Atención Requerida: Pagos Pendientes y Atrasados
     </div>

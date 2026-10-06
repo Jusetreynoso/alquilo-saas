@@ -52,7 +52,7 @@ class ContratoForm(forms.ModelForm):
         model = Contrato
         fields = [
             'propiedad', 'inquilino', 'plantilla',
-            'fecha_inicio', 'fecha_fin', 'monto_renta', 'monto_deposito', 'custodia_deposito', 'detalles_custodia_deposito', 'monto_adelanto', 'dia_de_pago',
+            'fecha_inicio', 'fecha_fin', 'recordatorio_vencimiento_meses', 'monto_renta', 'monto_deposito', 'custodia_deposito', 'detalles_custodia_deposito', 'monto_adelanto', 'dia_de_pago',
             'dias_gracia', 'porcentaje_mora', 'deuda_renta_migrada', 'deuda_mora_migrada',
             'documento_contrato', 'fotos_entrega', 'foto_entrega_2', 'foto_entrega_3',
             'foto_entrega_4', 'foto_entrega_5'
@@ -63,6 +63,7 @@ class ContratoForm(forms.ModelForm):
             'plantilla': forms.Select(attrs={'class': 'form-select'}),
             'fecha_inicio': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'fecha_fin': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'recordatorio_vencimiento_meses': forms.Select(attrs={'class': 'form-select'}),
             'monto_renta': forms.NumberInput(attrs={'class': 'form-control'}),
             'monto_deposito': forms.NumberInput(attrs={'class': 'form-control'}),
             'custodia_deposito': forms.Select(attrs={'class': 'form-select'}),

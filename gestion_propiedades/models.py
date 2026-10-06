@@ -285,6 +285,18 @@ class Contrato(models.Model):
         help_text="Ej: Consignación No. 987654 Banco Agrícola/Popular o Entregado al propietario según recibo X"
     )
 
+    RECORDATORIO_VENCIMIENTO_CHOICES = [
+        (0, 'Sin recordatorio'),
+        (1, '1 mes antes del vencimiento'),
+        (2, '2 meses antes del vencimiento'),
+        (3, '3 meses antes del vencimiento'),
+    ]
+    recordatorio_vencimiento_meses = models.IntegerField(
+        choices=RECORDATORIO_VENCIMIENTO_CHOICES,
+        default=1,
+        help_text="Anticipación con la que se mostrará la alerta de vencimiento en el Dashboard"
+    )
+
     dia_de_pago = models.IntegerField(help_text="Día del mes en que se genera la factura (1-31)")
     
     # --- CONFIGURACIÓN DE MORA ---

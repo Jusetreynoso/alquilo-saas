@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <title>
-        {% if factura.saldo_pendiente > 0 %}Comprobante de Abono{% else %}Recibo de Pago{% endif %} #{{ recibo.id }}
+        {% if factura.saldo_pendiente > 0 %}Comprobante de Abono{% else %}Recibo de Ingresos{% endif %} #{{ recibo.id }}
     </title>
     <style>
         :root {
@@ -314,7 +314,7 @@
         {% if factura.saldo_pendiente > 0 %}
             <div style="text-align:center; font-size:16px; font-weight:800; color:var(--primary-color); margin:10px 0;">COMPROBANTE DE ABONO</div>
         {% else %}
-            <div style="text-align:center; font-size:16px; font-weight:800; color:var(--primary-color); margin:10px 0;">RECIBO DE PAGO</div>
+            <div style="text-align:center; font-size:16px; font-weight:800; color:var(--primary-color); margin:10px 0;">RECIBO DE INGRESOS</div>
         {% endif %}
 
         <div class="divider"></div>
