@@ -65,30 +65,33 @@ def _enviar_correo_seguro(asunto, correo_destino, html_content):
                 "content": [{"type": "text/html", "value": html_content}]
             }
             
-            resp = requests.post(url, headers=headers, data=json.dumps(payload), timeout=8)
+            resp = requests.post(url, headers=headers, data=json.dumps(payload), timeout=5)
             if resp.status_code in (200, 202):
                 return True
             logger.warning(f"SendGrid API devolvió status {resp.status_code}: {resp.text}")
     except Exception as e:
         logger.error(f"Error enviando correo a {correo_destino} por Web API: {e}")
 
-    # Fallback si SendGrid falla o no está configurado
+    # Fallback si SendGrid falla o no está configurado (por ejemplo en entorno de pruebas)
     try:
         from django.core.mail import send_mail
         from django.conf import settings
-        em_from = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@alquilosoftware.com')
-        send_mail(
-            asunto,
-            strip_tags(html_content),
-            em_from,
-            [correo_destino],
-            html_message=html_content,
-            fail_silently=True
-        )
-        return True
+        backend = getattr(settings, 'EMAIL_BACKEND', '')
+        if 'locmem' in backend or 'console' in backend or getattr(settings, 'EMAIL_HOST_USER', None):
+            em_from = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@alquilosoftware.com')
+            send_mail(
+                asunto,
+                strip_tags(html_content),
+                em_from,
+                [correo_destino],
+                html_message=html_content,
+                fail_silently=True
+            )
+            return True
     except Exception as e2:
         logger.error(f"Error fallback send_mail: {e2}")
-        return False
+        
+    return False
 
 def enviar_correo_con_adjunto(asunto, correo_destino, html_content, archivo_bytes, nombre_archivo, mime_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"):
     if not correo_destino:
@@ -128,7 +131,7 @@ def enviar_correo_con_adjunto(asunto, correo_destino, html_content, archivo_byte
                 ]
             }
             
-            resp = requests.post(url, headers=headers, data=json.dumps(payload), timeout=8)
+            resp = requests.post(url, headers=headers, data=json.dumps(payload), timeout=5)
             if resp.status_code in (200, 202):
                 return True
             logger.warning(f"SendGrid API con adjunto devolvió status {resp.status_code}: {resp.text}")
@@ -139,15 +142,18 @@ def enviar_correo_con_adjunto(asunto, correo_destino, html_content, archivo_byte
     try:
         from django.core.mail import EmailMessage
         from django.conf import settings
-        em_from = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@alquilosoftware.com')
-        msg = EmailMessage(asunto, html_content, em_from, [correo_destino])
-        msg.content_subtype = "html"
-        msg.attach(nombre_archivo, archivo_bytes, mime_type)
-        msg.send(fail_silently=False)
-        return True
+        backend = getattr(settings, 'EMAIL_BACKEND', '')
+        if 'locmem' in backend or 'console' in backend or getattr(settings, 'EMAIL_HOST_USER', None):
+            em_from = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@alquilosoftware.com')
+            msg = EmailMessage(asunto, html_content, em_from, [correo_destino])
+            msg.content_subtype = "html"
+            msg.attach(nombre_archivo, archivo_bytes, mime_type)
+            msg.send(fail_silently=True)
+            return True
     except Exception as e2:
         logger.error(f"Error fallback EmailMessage con adjunto: {e2}")
-        return False
+
+    return False
 
 # --- CASOS DE USO (B2C: RENTAS Y MORAS) ---
 
