@@ -1386,6 +1386,193 @@ def enviar_movimientos_correo(request):
 
 # --- MÓDULO DE REPORTES AVANZADOS ---
 
+def _obtener_datos_estado_propiedades_propietario(request):
+    """
+    Obtiene el estado mensual detallado de cada propiedad agrupado por propietario:
+    - Quién pagó a tiempo (🟢)
+    - Quién pagó fuera de fecha (🟡)
+    - Quién está pendiente / falta de pago (🔴)
+    - Gastos de mantenimiento del mes (Qué se gastó)
+    """
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+
+    lista_propietarios = PropietarioInmueble.objects.filter(portafolio__in=portafolios, activo=True).order_by('nombre')
+    
+    hoy = date.today()
+    mes_num = int(request.GET.get('mes', hoy.month))
+    anio_num = int(request.GET.get('anio', hoy.year))
+    propietario_id = request.GET.get('propietario_id', 'TODOS')
+
+    propiedades_qs = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False).select_related(
+        'portafolio', 'portafolio__propietario', 'propietario_inmueble'
+    ).prefetch_related('contratos', 'contratos__inquilino')
+
+    if propietario_id != 'TODOS' and propietario_id.isdigit():
+        propiedades_qs = propiedades_qs.filter(propietario_inmueble_id=int(propietario_id))
+
+    reporte_propiedades = []
+    
+    totales_resumen = {
+        'total_propiedades': 0,
+        'total_renta_pactada': decimal.Decimal('0.00'),
+        'total_cobrado': decimal.Decimal('0.00'),
+        'total_pendiente': decimal.Decimal('0.00'),
+        'total_gastos': decimal.Decimal('0.00'),
+        'neto_propietario': decimal.Decimal('0.00'),
+        'cant_a_tiempo': 0,
+        'cant_fuera_de_fecha': 0,
+        'cant_falta_pago': 0,
+        'cant_vacantes': 0,
+    }
+
+    for p in propiedades_qs:
+        totales_resumen['total_propiedades'] += 1
+        
+        propietario_nom = p.propietario_inmueble.nombre if p.propietario_inmueble else (
+            (p.portafolio.propietario.get_full_name() or p.portafolio.propietario.username)
+            if (p.portafolio and p.portafolio.propietario) else 'Propietario General'
+        )
+
+        contrato_act = p.contratos.filter(activo=True).first()
+        inquilino_nom = contrato_act.inquilino.nombre if (contrato_act and contrato_act.inquilino) else 'Disponible / Vacante'
+        inquilino_tel = contrato_act.inquilino.telefono if (contrato_act and contrato_act.inquilino) else ''
+        monto_renta = contrato_act.monto_renta if contrato_act else decimal.Decimal('0.00')
+        totales_resumen['total_renta_pactada'] += monto_renta
+
+        # Buscar Factura del Mes
+        factura_mes = None
+        if contrato_act:
+            factura_mes = Factura.objects.filter(
+                contrato=contrato_act,
+                fecha_emision__month=mes_num,
+                fecha_emision__year=anio_num
+            ).first()
+            if not factura_mes:
+                factura_mes = Factura.objects.filter(
+                    contrato=contrato_act,
+                    fecha_vencimiento__month=mes_num,
+                    fecha_vencimiento__year=anio_num
+                ).first()
+
+        recibo = ReciboPago.objects.filter(factura=factura_mes).first() if factura_mes else None
+        cargos_mora = CargoMora.objects.filter(factura=factura_mes).first() if factura_mes else None
+
+        estado_codigo = 'VACANTE'
+        estado_label = '⚪ Vacante / Sin Factura'
+        badge_class = 'bg-secondary'
+        monto_pagado = decimal.Decimal('0.00')
+        monto_pendiente = decimal.Decimal('0.00')
+        fecha_pago_str = ''
+        dias_retraso = 0
+
+        if factura_mes:
+            if factura_mes.estado == 'PAGADA' and recibo:
+                monto_pagado = recibo.monto_pagado
+                totales_resumen['total_cobrado'] += monto_pagado
+                fecha_pago_str = recibo.fecha_pago.strftime('%d/%m/%Y')
+                
+                if recibo.fecha_pago > factura_mes.fecha_vencimiento or (cargos_mora and cargos_mora.monto > 0):
+                    estado_codigo = 'FUERA_DE_FECHA'
+                    estado_label = '🟡 Pagado Fuera de Fecha'
+                    badge_class = 'bg-warning text-dark'
+                    totales_resumen['cant_fuera_de_fecha'] += 1
+                    dias_retraso = (recibo.fecha_pago - factura_mes.fecha_vencimiento).days
+                else:
+                    estado_codigo = 'A_TIEMPO'
+                    estado_label = '🟢 Pagado A Tiempo'
+                    badge_class = 'bg-success'
+                    totales_resumen['cant_a_tiempo'] += 1
+            else:
+                monto_pendiente = factura_mes.monto_base
+                totales_resumen['total_pendiente'] += monto_pendiente
+                estado_codigo = 'FALTA_PAGO'
+                estado_label = '🔴 Falta de Pago'
+                badge_class = 'bg-danger'
+                totales_resumen['cant_falta_pago'] += 1
+                if hoy > factura_mes.fecha_vencimiento:
+                    dias_retraso = (hoy - factura_mes.fecha_vencimiento).days
+        else:
+            totales_resumen['cant_vacantes'] += 1
+
+        # Mantenimientos y Gastos
+        mantenimientos_qs = MantenimientoUnidad.objects.filter(
+            propiedad=p,
+            fecha_reporte__month=mes_num,
+            fecha_reporte__year=anio_num
+        )
+        gastos_prop = sum((m.costo for m in mantenimientos_qs), decimal.Decimal('0.00'))
+        totales_resumen['total_gastos'] += gastos_prop
+
+        monto_neto = monto_pagado - gastos_prop
+
+        reporte_propiedades.append({
+            'propiedad_id': p.id,
+            'propiedad_nombre': p.nombre_o_numero,
+            'grupo_o_residencial': p.grupo_o_residencial or '',
+            'propietario': propietario_nom,
+            'inquilino': inquilino_nom,
+            'inquilino_telefono': inquilino_tel,
+            'renta_pactada': monto_renta,
+            'factura_id': factura_mes.id if factura_mes else None,
+            'fecha_vencimiento': factura_mes.fecha_vencimiento.strftime('%d/%m/%Y') if factura_mes else '',
+            'fecha_pago': fecha_pago_str,
+            'dias_retraso': dias_retraso,
+            'estado_codigo': estado_codigo,
+            'estado_label': estado_label,
+            'badge_class': badge_class,
+            'monto_pagado': monto_pagado,
+            'monto_pendiente': monto_pendiente,
+            'mantenimientos': list(mantenimientos_qs),
+            'total_gastos': gastos_prop,
+            'monto_neto': monto_neto,
+        })
+
+    totales_resumen['neto_propietario'] = totales_resumen['total_cobrado'] - totales_resumen['total_gastos']
+
+    return {
+        'reporte_propiedades': reporte_propiedades,
+        'totales_resumen': totales_resumen,
+        'lista_propietarios': lista_propietarios,
+        'propietario_sel': str(propietario_id),
+        'mes': str(mes_num),
+        'nombre_mes': obtener_nombre_mes(mes_num),
+        'anio': anio_num,
+        'anios_disponibles': range(date.today().year - 2, date.today().year + 2),
+    }
+
+
+@login_required(login_url='/login/')
+def reporte_estado_propiedades_propietario(request):
+    data = _obtener_datos_estado_propiedades_propietario(request)
+    data['titulo_pagina'] = 'Estado Mensual de Propiedades por Propietario'
+    return render(request, 'gestion_propiedades/reporte_estado_propiedades_propietario.html', data)
+
+
+@login_required(login_url='/login/')
+def exportar_estado_propiedades_excel(request):
+    from django.http import HttpResponse
+    from .utils_excel import generar_excel_estado_propiedades_propietario
+
+    data = _obtener_datos_estado_propiedades_propietario(request)
+    excel_bytes = generar_excel_estado_propiedades_propietario(data)
+
+    filename = f"Estado_Propiedades_{data['nombre_mes']}_{data['anio']}.xlsx"
+    response = HttpResponse(
+        excel_bytes,
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required(login_url='/login/')
+def imprimir_estado_propiedades_propietario(request):
+    data = _obtener_datos_estado_propiedades_propietario(request)
+    data['titulo_pagina'] = 'Estado de Propiedades - Vista de Impresión'
+    return render(request, 'gestion_propiedades/imprimir_estado_propiedades_propietario.html', data)
+
 @login_required(login_url='/login/')
 def reporte_rentabilidad(request):
     """

@@ -585,4 +585,25 @@ class AlquiloTests(TestCase):
         res_email = self.client.post(url_email, {'email_destino': 'contador@test.com'})
         self.assertEqual(res_email.status_code, 302)
 
+    def test_reporte_estado_propiedades_propietario(self):
+        self.client.login(username='propietario1', password='password123')
+        
+        # 1. Probar vista HTML del reporte
+        url_reporte = reverse('reporte_estado_propiedades_propietario')
+        res = self.client.get(url_reporte)
+        self.assertEqual(res.status_code, 200)
+        self.assertIn('Estado Mensual de Propiedades por Propietario', res.content.decode('utf-8'))
+
+        # 2. Probar exportación a Excel (.xlsx)
+        url_excel = reverse('exportar_estado_propiedades_excel')
+        res_excel = self.client.get(url_excel)
+        self.assertEqual(res_excel.status_code, 200)
+        self.assertEqual(res_excel['Content-Type'], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+        # 3. Probar vista de impresión PDF
+        url_print = reverse('imprimir_estado_propiedades_propietario')
+        res_print = self.client.get(url_print)
+        self.assertEqual(res_print.status_code, 200)
+        self.assertIn('Estado Mensual de Inmuebles por Propietario', res_print.content.decode('utf-8'))
+
 

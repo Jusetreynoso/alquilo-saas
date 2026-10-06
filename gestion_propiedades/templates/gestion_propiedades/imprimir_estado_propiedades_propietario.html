@@ -1,0 +1,159 @@
+{% load filtros_dinero %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estado Mensual de Inmuebles - {{ nombre_mes }} {{ anio }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { font-size: 12px; background-color: #ffffff; color: #1a252f; }
+        .header-print { border-bottom: 2px solid #1a252f; margin-bottom: 20px; padding-bottom: 10px; }
+        .badge-status { font-size: 10px; padding: 3px 7px; border-radius: 4px; }
+        @media print {
+            .no-print { display: none !important; }
+            body { padding: 0; margin: 0; }
+        }
+    </style>
+</head>
+<body class="p-4">
+
+    <div class="no-print mb-4 d-flex justify-content-between align-items-center bg-light p-3 border rounded">
+        <div>
+            <h5 class="mb-0 fw-bold">🖨️ Previsualización de Impresión / Documento PDF</h5>
+            <small class="text-muted">Utiliza la opción "Imprimir o Guardar como PDF" de tu navegador para compartir este informe.</small>
+        </div>
+        <button onclick="window.print();" class="btn btn-primary fw-bold shadow-sm">
+            🖨️ Imprimir / Guardar como PDF
+        </button>
+    </div>
+
+    <!-- Encabezado Membretado -->
+    <div class="header-print d-flex justify-content-between align-items-center">
+        <div>
+            <h3 class="fw-bold mb-1" style="color: #1a252f;">Alquilo Software</h3>
+            <h5 class="text-muted mb-0">Estado Mensual de Inmuebles por Propietario</h5>
+        </div>
+        <div class="text-end">
+            <h6 class="fw-bold mb-1">Período: {{ nombre_mes }} {{ anio }}</h6>
+            <small class="text-muted">Generado el: {% now "d/m/Y h:i A" %}</small>
+        </div>
+    </div>
+
+    <!-- Totales Consolidados -->
+    <div class="row mb-4 g-2 text-center">
+        <div class="col-3">
+            <div class="p-2 border rounded bg-light">
+                <small class="text-muted d-block fw-bold text-uppercase">Propiedades</small>
+                <span class="fs-6 fw-bold">{{ totales_resumen.total_propiedades }}</span>
+            </div>
+        </div>
+        <div class="col-3">
+            <div class="p-2 border rounded bg-light">
+                <small class="text-muted d-block fw-bold text-uppercase">Ingresos Cobrados</small>
+                <span class="fs-6 fw-bold text-success">$ {{ totales_resumen.total_cobrado|dinero }}</span>
+            </div>
+        </div>
+        <div class="col-3">
+            <div class="p-2 border rounded bg-light">
+                <small class="text-muted d-block fw-bold text-uppercase">Gastos Mantenimiento</small>
+                <span class="fs-6 fw-bold text-danger">$ {{ totales_resumen.total_gastos|dinero }}</span>
+            </div>
+        </div>
+        <div class="col-3">
+            <div class="p-2 border rounded bg-light">
+                <small class="text-muted d-block fw-bold text-uppercase">Neto Estimado Propietario</small>
+                <span class="fs-6 fw-bold text-primary">$ {{ totales_resumen.neto_propietario|dinero }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla Principal -->
+    <table class="table table-bordered table-striped align-middle mb-4">
+        <thead class="table-dark">
+            <tr class="text-center">
+                <th>Propiedad</th>
+                <th>Propietario</th>
+                <th>Inquilino</th>
+                <th>Estado de Pago</th>
+                <th>Fecha Pago</th>
+                <th>Renta Pactada</th>
+                <th>Monto Cobrado</th>
+                <th>Gastos Directos</th>
+                <th>Neto Propietario</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in reporte_propiedades %}
+            <tr>
+                <td class="fw-bold">
+                    {{ item.propiedad_nombre }}
+                    {% if item.grupo_o_residencial %}
+                        <small class="text-muted d-block fw-normal">{{ item.grupo_o_residencial }}</small>
+                    {% endif %}
+                </td>
+                <td>{{ item.propietario }}</td>
+                <td>
+                    <strong>{{ item.inquilino }}</strong>
+                    {% if item.inquilino_telefono %}
+                        <small class="text-muted d-block">📞 {{ item.inquilino_telefono }}</small>
+                    {% endif %}
+                </td>
+                <td class="text-center">
+                    <span class="badge {{ item.badge_class }} badge-status">
+                        {{ item.estado_label }}
+                    </span>
+                    {% if item.dias_retraso > 0 and item.estado_codigo == 'FUERA_DE_FECHA' %}
+                        <small class="d-block text-muted">({{ item.dias_retraso }} días tarde)</small>
+                    {% elif item.dias_retraso > 0 and item.estado_codigo == 'FALTA_PAGO' %}
+                        <small class="d-block text-danger">({{ item.dias_retraso }} días vencida)</small>
+                    {% endif %}
+                </td>
+                <td class="text-center">
+                    {% if item.fecha_pago %}
+                        {{ item.fecha_pago }}
+                    {% elif item.fecha_vencimiento %}
+                        <small class="text-muted">Vence: {{ item.fecha_vencimiento }}</small>
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td class="text-end fw-bold">$ {{ item.renta_pactada|dinero }}</td>
+                <td class="text-end text-success fw-bold">$ {{ item.monto_pagado|dinero }}</td>
+                <td class="text-end text-danger">
+                    {% if item.total_gastos > 0 %}-$ {{ item.total_gastos|dinero }}{% else %}$ 0.00{% endif %}
+                </td>
+                <td class="text-end fw-bold px-3">$ {{ item.monto_neto|dinero }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="9" class="text-center py-4 text-muted">No se registraron movimientos.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot class="table-light fw-bold">
+            <tr>
+                <td colspan="5" class="text-end">TOTALES GENERALES:</td>
+                <td class="text-end">$ {{ totales_resumen.total_renta_pactada|dinero }}</td>
+                <td class="text-end text-success">$ {{ totales_resumen.total_cobrado|dinero }}</td>
+                <td class="text-end text-danger">-$ {{ totales_resumen.total_gastos|dinero }}</td>
+                <td class="text-end text-primary px-3">$ {{ totales_resumen.neto_propietario|dinero }}</td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <div class="row mt-5 pt-4 text-center">
+        <div class="col-6">
+            <div class="border-top pt-2" style="width: 200px; margin: 0 auto;">
+                <small class="fw-bold">Firma Administrador Portafolio</small>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="border-top pt-2" style="width: 200px; margin: 0 auto;">
+                <small class="fw-bold">Firma / Acuse Propietario</small>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

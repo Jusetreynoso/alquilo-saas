@@ -1,0 +1,252 @@
+{% extends 'gestion_propiedades/base.html' %}
+{% load filtros_dinero %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+
+{% block encabezado %}
+    <div class="d-flex justify-content-between align-items-center w-100 flex-wrap gap-2">
+        <span>📌 Estado Mensual de Propiedades por Propietario</span>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'exportar_estado_propiedades_excel' %}?{{ request.GET.urlencode }}" class="btn btn-success shadow-sm fw-bold">
+                <i class="fa-solid fa-file-excel me-1"></i> Exportar a Excel (.xlsx)
+            </a>
+            <a href="{% url 'imprimir_estado_propiedades_propietario' %}?{{ request.GET.urlencode }}" target="_blank" class="btn btn-outline-dark shadow-sm fw-bold">
+                <i class="fa-solid fa-print me-1"></i> Vista de Impresión / PDF
+            </a>
+            <a href="{% url 'reporte_financiero' %}" class="btn btn-outline-secondary fw-bold">
+                ← Volver a Reportes
+            </a>
+        </div>
+    </div>
+{% endblock %}
+
+{% block contenido %}
+<div class="container-fluid p-0">
+
+    <!-- Tarjeta de Filtros -->
+    <div class="card shadow-sm border-0 mb-4 bg-light">
+        <div class="card-body py-3">
+            <form method="GET" action="{% url 'reporte_estado_propiedades_propietario' %}" class="row g-2 align-items-end">
+                
+                <div class="col-md-4 col-12">
+                    <label class="form-label fw-bold text-muted small mb-1">👤 Propietario de Inmuebles</label>
+                    <select name="propietario_id" class="form-select form-select-sm bg-white">
+                        <option value="TODOS" {% if propietario_sel == 'TODOS' %}selected{% endif %}>Todos los Propietarios</option>
+                        {% for prop in lista_propietarios %}
+                            <option value="{{ prop.id }}" {% if propietario_sel == prop.id|stringformat:"s" %}selected{% endif %}>{{ prop.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-3 col-6">
+                    <label class="form-label fw-bold text-muted small mb-1">📅 Mes</label>
+                    <select name="mes" class="form-select form-select-sm bg-white">
+                        <option value="1" {% if mes == '1' %}selected{% endif %}>Enero</option>
+                        <option value="2" {% if mes == '2' %}selected{% endif %}>Febrero</option>
+                        <option value="3" {% if mes == '3' %}selected{% endif %}>Marzo</option>
+                        <option value="4" {% if mes == '4' %}selected{% endif %}>Abril</option>
+                        <option value="5" {% if mes == '5' %}selected{% endif %}>Mayo</option>
+                        <option value="6" {% if mes == '6' %}selected{% endif %}>Junio</option>
+                        <option value="7" {% if mes == '7' %}selected{% endif %}>Julio</option>
+                        <option value="8" {% if mes == '8' %}selected{% endif %}>Agosto</option>
+                        <option value="9" {% if mes == '9' %}selected{% endif %}>Septiembre</option>
+                        <option value="10" {% if mes == '10' %}selected{% endif %}>Octubre</option>
+                        <option value="11" {% if mes == '11' %}selected{% endif %}>Noviembre</option>
+                        <option value="12" {% if mes == '12' %}selected{% endif %}>Diciembre</option>
+                    </select>
+                </div>
+
+                <div class="col-md-3 col-6">
+                    <label class="form-label fw-bold text-muted small mb-1">📅 Año</label>
+                    <select name="anio" class="form-select form-select-sm bg-white">
+                        {% for a in anios_disponibles %}
+                            <option value="{{ a }}" {% if anio == a %}selected{% endif %}>{{ a }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-2 col-12">
+                    <button type="submit" class="btn btn-sm btn-primary w-100 fw-bold shadow-sm py-1">
+                        🔍 Filtrar Estado
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tarjetas de Totales y Resumen Ejecutivo -->
+    <div class="row mb-4 g-3">
+        <div class="col-md-3 col-6">
+            <div class="card shadow-sm border-0 border-start border-primary border-4 h-100">
+                <div class="card-body">
+                    <h6 class="text-muted fw-bold text-uppercase small mb-1">Total Propiedades</h6>
+                    <h3 class="mb-0 fw-bold text-primary">{{ totales_resumen.total_propiedades }}</h3>
+                    <small class="text-muted">En el portafolio filtrado</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 col-6">
+            <div class="card shadow-sm border-0 border-start border-success border-4 h-100">
+                <div class="card-body">
+                    <h6 class="text-muted fw-bold text-uppercase small mb-1">Ingresos Cobrados</h6>
+                    <h3 class="mb-0 fw-bold text-success">$ {{ totales_resumen.total_cobrado|dinero }}</h3>
+                    <small class="text-muted">Rentas efectivamente cobradas</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 col-6">
+            <div class="card shadow-sm border-0 border-start border-danger border-4 h-100">
+                <div class="card-body">
+                    <h6 class="text-muted fw-bold text-uppercase small mb-1">Falta de Pago (Pendiente)</h6>
+                    <h3 class="mb-0 fw-bold text-danger">$ {{ totales_resumen.total_pendiente|dinero }}</h3>
+                    <small class="text-muted">Rentas sin cobrar este mes</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 col-6">
+            <div class="card shadow-sm border-0 border-start border-warning border-4 h-100">
+                <div class="card-body">
+                    <h6 class="text-muted fw-bold text-uppercase small mb-1">Gastos de Mantenimiento</h6>
+                    <h3 class="mb-0 fw-bold text-dark">$ {{ totales_resumen.total_gastos|dinero }}</h3>
+                    <small class="text-muted">Gastos aplicados en el mes</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Desglose por Estado de Pago -->
+    <div class="card shadow-sm border-0 mb-4 bg-light">
+        <div class="card-body py-2">
+            <div class="d-flex justify-content-around flex-wrap gap-2 text-center">
+                <div>
+                    <span class="badge bg-success px-3 py-2 fs-6">🟢 A Tiempo: {{ totales_resumen.cant_a_tiempo }}</span>
+                </div>
+                <div>
+                    <span class="badge bg-warning text-dark px-3 py-2 fs-6">🟡 Pagado Fuera de Fecha: {{ totales_resumen.cant_fuera_de_fecha }}</span>
+                </div>
+                <div>
+                    <span class="badge bg-danger px-3 py-2 fs-6">🔴 Falta de Pago: {{ totales_resumen.cant_falta_pago }}</span>
+                </div>
+                <div>
+                    <span class="badge bg-secondary px-3 py-2 fs-6">⚪ Vacante / Sin Factura: {{ totales_resumen.cant_vacantes }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla Detallada por Propiedad -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap">
+            <h5 class="mb-0 fw-bold text-secondary">
+                🏢 Estado de Inmuebles - {{ nombre_mes }} {{ anio }}
+            </h5>
+            <span class="badge bg-dark fs-6">Neto Estimado Propietario: $ {{ totales_resumen.neto_propietario|dinero }}</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="px-3 py-3">Propiedad</th>
+                            <th class="py-3">Propietario</th>
+                            <th class="py-3">Inquilino</th>
+                            <th class="py-3 text-center">Estado del Pago</th>
+                            <th class="py-3 text-center">Fecha Pago / Vencimiento</th>
+                            <th class="py-3 text-end">Renta Pactada</th>
+                            <th class="py-3 text-end">Cobrado</th>
+                            <th class="py-3 text-end">Gastos</th>
+                            <th class="py-3 text-end px-4">Neto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in reporte_propiedades %}
+                        <tr>
+                            <td class="px-3 py-3 fw-bold">
+                                {{ item.propiedad_nombre }}
+                                {% if item.grupo_o_residencial %}
+                                    <small class="text-muted d-block fw-normal">{{ item.grupo_o_residencial }}</small>
+                                {% endif %}
+                            </td>
+                            <td class="py-3 small text-secondary">
+                                {{ item.propietario }}
+                            </td>
+                            <td class="py-3 small">
+                                <strong>{{ item.inquilino }}</strong>
+                                {% if item.inquilino_telefono %}
+                                    <small class="text-muted d-block">📞 {{ item.inquilino_telefono }}</small>
+                                {% endif %}
+                            </td>
+                            <td class="py-3 text-center">
+                                <span class="badge {{ item.badge_class }} px-2 py-1">
+                                    {{ item.estado_label }}
+                                </span>
+                                {% if item.dias_retraso > 0 and item.estado_codigo == 'FUERA_DE_FECHA' %}
+                                    <small class="d-block text-muted fw-bold">({{ item.dias_retraso }} días tarde)</small>
+                                {% elif item.dias_retraso > 0 and item.estado_codigo == 'FALTA_PAGO' %}
+                                    <small class="d-block text-danger fw-bold">({{ item.dias_retraso }} días vencida)</small>
+                                {% endif %}
+                            </td>
+                            <td class="py-3 text-center small">
+                                {% if item.fecha_pago %}
+                                    <span class="text-success fw-bold">Pagado: {{ item.fecha_pago }}</span>
+                                {% elif item.fecha_vencimiento %}
+                                    <span class="text-muted">Vence: {{ item.fecha_vencimiento }}</span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-3 text-end fw-bold">
+                                $ {{ item.renta_pactada|dinero }}
+                            </td>
+                            <td class="py-3 text-end fw-bold text-success">
+                                $ {{ item.monto_pagado|dinero }}
+                            </td>
+                            <td class="py-3 text-end text-danger">
+                                {% if item.total_gastos > 0 %}
+                                    -$ {{ item.total_gastos|dinero }}
+                                    {% if item.mantenimientos %}
+                                        <button class="btn btn-sm btn-link p-0 text-muted d-block ms-auto small" type="button" data-bs-toggle="collapse" data-bs-target="#gastos-{{ item.propiedad_id }}">
+                                            Ver {{ item.mantenimientos|length }} gasto(s)
+                                        </button>
+                                    {% endif %}
+                                {% else %}
+                                    $ 0.00
+                                {% endif %}
+                            </td>
+                            <td class="py-3 text-end px-4 fw-bold {% if item.monto_neto >= 0 %}text-primary{% else %}text-danger{% endif %} text-nowrap">
+                                $ {{ item.monto_neto|dinero }}
+                            </td>
+                        </tr>
+                        {% if item.mantenimientos %}
+                        <tr class="collapse bg-light" id="gastos-{{ item.propiedad_id }}">
+                            <td colspan="9" class="px-4 py-2">
+                                <small class="fw-bold text-secondary mb-1 d-block">🔧 Detalle de Gastos de Mantenimiento en {{ nombre_mes }}:</small>
+                                <ul class="list-unstyled mb-0 small">
+                                    {% for g in item.mantenimientos %}
+                                        <li class="d-flex justify-content-between border-bottom py-1">
+                                            <span>📅 {{ g.fecha_reporte|date:"d/m/Y" }} - {{ g.descripcion }} ({{ g.get_categoria_display }})</span>
+                                            <strong class="text-danger">-$ {{ g.costo|dinero }}</strong>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            </td>
+                        </tr>
+                        {% endif %}
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center py-5 text-muted">
+                                🔍 No se encontraron propiedades registradas para el propietario o filtros seleccionados.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
