@@ -5,7 +5,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login
 from django.db.models import Sum, Q, Prefetch, F, Count
 from django.contrib import messages
-from datetime import date
+from datetime import date, datetime
+import logging
 from .models import Portafolio, Propiedad, Factura, CargoMora, ReciboPago, Contrato, SolicitudAlquiler, MantenimientoUnidad, Inquilino, PlanSaaS, SuscripcionCliente, AuditLog, GastoProgramado, RegistroProceso, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, LiquidacionDepositoInquilino, HistorialPrecioPropiedad
 from .forms import NuevoClienteSaaSForm, EditarSuscripcionForm, PropiedadForm, ContratoForm, InquilinoForm, MantenimientoForm, PlanSaaSForm, PropietarioInmuebleForm, GastoGeneralPropietarioForm, LiquidacionPropietarioForm, LiquidacionDepositoForm, HistorialPrecioForm
 from .utils import render_to_pdf, obtener_nombre_mes
@@ -14,6 +15,8 @@ import decimal
 from django.db.models.functions import TruncMonth
 from .utils_rbac import propietario_requerido
 from collections import defaultdict
+
+logger = logging.getLogger(__name__)
 
 
 # --- VISTA PÚBLICA COMERCIAL ---
