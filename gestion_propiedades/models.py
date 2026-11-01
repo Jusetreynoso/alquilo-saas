@@ -86,14 +86,20 @@ class FacturaSaaS(models.Model):
     ]
     usuario = models.ForeignKey(User, on_delete=models.CASCADE, related_name='facturas_saas')
     fecha_emision = models.DateField(auto_now_add=True)
-    fecha_vencimiento = models.DateField()
+    fecha_vencimiento = models.DateField(db_index=True)
     monto_total = models.DecimalField(max_digits=10, decimal_places=2)
     propiedades_cobradas = models.IntegerField(default=0, help_text="Cantidad de propiedades facturadas a $1 c/u")
     usuarios_cobrados = models.IntegerField(default=0, help_text="Cantidad de usuarios extra facturados a $1 c/u")
-    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='PENDIENTE')
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='PENDIENTE', db_index=True)
     
     # Podríamos guardar el comprobante de pago del cliente al dueño de Alquilo
     comprobante_pago = models.FileField(upload_to='comprobantes_saas/', blank=True, null=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['usuario', 'estado'], name='fsaas_user_est_idx'),
+            models.Index(fields=['estado', 'fecha_vencimiento'], name='fsaas_est_fvenc_idx'),
+        ]
 
     def __str__(self):
         return f"Factura SaaS #{self.id} - {self.usuario.username} - ${self.monto_total}"
@@ -113,10 +119,15 @@ class SuscripcionCliente(models.Model):
     # Legacy field
     plan = models.CharField(max_length=20, default='TRIAL')
     
-    estado = models.CharField(max_length=20, choices=ESTADOS, default='TRIAL')
-    fecha_proximo_pago = models.DateField(blank=True, null=True)
+    estado = models.CharField(max_length=20, choices=ESTADOS, default='TRIAL', db_index=True)
+    fecha_proximo_pago = models.DateField(blank=True, null=True, db_index=True)
     asistentes_gratuitos_extra = models.IntegerField(default=0, help_text="Otorga asientos VIP adicionales al plan base de 2.")
     
+    class Meta:
+        indexes = [
+            models.Index(fields=['estado', 'fecha_proximo_pago'], name='sub_est_fprox_idx'),
+        ]
+
     def __str__(self):
         nombre_plan = self.plan_saas.nombre if self.plan_saas else self.plan
         return f"{self.usuario.username} - {nombre_plan} ({self.estado})"
@@ -186,14 +197,20 @@ class Propiedad(models.Model):
     nombre_o_numero = models.CharField(max_length=100, help_text="Ej: Apt 2B, Casa #4, o Local Comercial 1")
     grupo_o_residencial = models.CharField(max_length=100, blank=True, null=True, help_text="Ej: Residencial Los Pinos (Opcional, para agrupar)")
     direccion_completa = models.TextField(blank=True, null=True)
-    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='DISPONIBLE')
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='DISPONIBLE', db_index=True)
     detalles = models.TextField(blank=True, null=True, help_text="Ej: 2 habitaciones, 1 baño")
-    is_deleted = models.BooleanField(default=False, help_text="Indica si la propiedad fue eliminada lógicamente (Soft Delete)")
+    is_deleted = models.BooleanField(default=False, db_index=True, help_text="Indica si la propiedad fue eliminada lógicamente (Soft Delete)")
 
     precio_alquiler_sugerido = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, blank=True, null=True, help_text="Precio de alquiler sugerido / publicado ($)")
     latitud = models.DecimalField(max_digits=10, decimal_places=7, blank=True, null=True, help_text="Coordenada GPS Latitud (Ej: 18.486058)")
     longitud = models.DecimalField(max_digits=10, decimal_places=7, blank=True, null=True, help_text="Coordenada GPS Longitud (Ej: -69.931211)")
     imagen_principal = models.ImageField(upload_to='propiedades_fotos/', blank=True, null=True, help_text="Foto principal o fachada de la propiedad")
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['portafolio', 'is_deleted'], name='prop_port_del_idx'),
+            models.Index(fields=['portafolio', 'estado'], name='prop_port_est_idx'),
+        ]
 
     def __str__(self):
         if self.grupo_o_residencial:
@@ -237,11 +254,16 @@ class HistorialPrecioPropiedad(models.Model):
 class Inquilino(models.Model):
     nombre = models.CharField(max_length=150)
     telefono = models.CharField(max_length=20)
-    cedula_o_pasaporte = models.CharField(max_length=50, blank=True, null=True)
+    cedula_o_pasaporte = models.CharField(max_length=50, blank=True, null=True, db_index=True)
     correo = models.EmailField(blank=True, null=True)
     recibir_alertas_correo = models.BooleanField(default=True, help_text="Apaga este interruptor si el inquilino prefiere no recibir correos automáticos de cobranza.")
     creado_por = models.ForeignKey(User, on_delete=models.CASCADE, related_name='inquilinos_registrados', null=True, blank=True)
     usuario_sistema = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, help_text="Solo si tendrá acceso al portal web")
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['nombre'], name='inq_nombre_idx'),
+        ]
 
     def __str__(self):
         return self.nombre
@@ -321,7 +343,7 @@ class Contrato(models.Model):
         help_text="Anticipación con la que se mostrará la alerta de vencimiento en el Dashboard"
     )
 
-    dia_de_pago = models.IntegerField(help_text="Día del mes en que se genera la factura (1-31)")
+    dia_de_pago = models.IntegerField(db_index=True, help_text="Día del mes en que se genera la factura (1-31)")
     
     # --- CONFIGURACIÓN DE MORA ---
     dias_gracia = models.IntegerField(default=5, help_text="Días de gracia tras la fecha de pago antes de aplicar mora")
@@ -341,7 +363,13 @@ class Contrato(models.Model):
     foto_entrega_3 = models.FileField(upload_to='entregas_galeria/', blank=True, null=True)
     foto_entrega_4 = models.FileField(upload_to='entregas_galeria/', blank=True, null=True)
     foto_entrega_5 = models.FileField(upload_to='entregas_galeria/', blank=True, null=True)
-    activo = models.BooleanField(default=True)
+    activo = models.BooleanField(default=True, db_index=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['activo', 'dia_de_pago'], name='cont_act_diapago_idx'),
+            models.Index(fields=['propiedad', 'activo'], name='cont_prop_act_idx'),
+        ]
 
     def __str__(self):
         return f"{self.propiedad} - {self.inquilino.nombre}"
@@ -355,10 +383,10 @@ class Factura(models.Model):
     ]
 
     contrato = models.ForeignKey(Contrato, on_delete=models.CASCADE, related_name='facturas')
-    fecha_emision = models.DateField()
-    fecha_vencimiento = models.DateField(help_text="Fecha en la que terminan los días de gracia")
+    fecha_emision = models.DateField(db_index=True)
+    fecha_vencimiento = models.DateField(db_index=True, help_text="Fecha en la que terminan los días de gracia")
     monto_base = models.DecimalField(max_digits=10, decimal_places=2, help_text="Monto original de la renta facturada")
-    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='PENDIENTE')
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='PENDIENTE', db_index=True)
     concepto = models.CharField(max_length=255)
     creada_en = models.DateTimeField(auto_now_add=True)
 
@@ -387,6 +415,12 @@ class Factura(models.Model):
             diferencia = self.fecha_emision - self.contrato.fecha_inicio
             return diferencia.days <= 45
         return False
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['contrato', 'fecha_emision'], name='fact_cont_femi_idx'),
+            models.Index(fields=['estado', 'fecha_vencimiento'], name='fact_est_fvenc_idx'),
+        ]
 
     def __str__(self):
         return f"Factura #{self.id} - {self.contrato.inquilino.nombre} ({self.estado})"
@@ -438,13 +472,18 @@ class ReciboPago(models.Model):
     ]
 
     factura = models.ForeignKey(Factura, on_delete=models.CASCADE, related_name='recibos')
-    fecha_pago = models.DateField()
+    fecha_pago = models.DateField(db_index=True)
     monto_pagado = models.DecimalField(max_digits=10, decimal_places=2)
     metodo_pago = models.CharField(max_length=20, choices=METODO_CHOICES, default='TRANSFERENCIA')
     referencia_transaccion = models.CharField(max_length=100, blank=True, null=True)
     comprobante_imagen = models.FileField(upload_to=ruta_comprobante_pago, blank=True, null=True, help_text="Comprobante, volante o voucher de pago (JPG, PNG o PDF)")
     registrado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='recibos_cobrados', help_text="Usuario que estaba logueado y registró este cobro")
     registrado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['factura', 'fecha_pago'], name='recibo_fact_fpago_idx'),
+        ]
 
     def __str__(self):
         return f"Recibo #{self.id} - Factura #{self.factura.id}"
@@ -556,10 +595,14 @@ class AuditLog(models.Model):
     descripcion = models.TextField()
     usuario = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='auditlogs')
     portafolio = models.ForeignKey(Portafolio, on_delete=models.SET_NULL, null=True, blank=True, related_name='auditlogs')
-    timestamp = models.DateTimeField(auto_now_add=True)
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['portafolio', '-timestamp'], name='audit_port_time_idx'),
+            models.Index(fields=['usuario', '-timestamp'], name='audit_user_time_idx'),
+        ]
 
     def __str__(self):
         return f"[{self.timestamp:%Y-%m-%d %H:%M}] {self.get_accion_display()} {self.modulo} por {self.usuario}"
