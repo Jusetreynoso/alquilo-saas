@@ -3975,3 +3975,42 @@ def restaurar_propiedad(request, propiedad_id):
         messages.success(request, f'La propiedad "{propiedad.nombre_o_numero}" ha sido restaurada con éxito. Ya está visible de nuevo en la lista activa.')
         return redirect('papelera_reciclaje')
     return redirect('papelera_reciclaje')
+
+
+@login_required(login_url='/login/')
+def descargar_backup_db(request):
+    """
+    Exclusivo para el Administrador Maestro (Superusuario).
+    Descarga una copia completa de la base de datos en formato JSON comprimido en ZIP.
+    Es compatible con PostgreSQL y SQLite, y puede ser restaurada con 'python manage.py loaddata'.
+    """
+    if not request.user.is_superuser:
+        raise PermissionDenied("Solo el Administrador Maestro tiene acceso a descargar respaldos de la base de datos.")
+
+    from django.core.management import call_command
+    from django.utils import timezone
+    import io
+    import zipfile
+
+    buffer_json = io.StringIO()
+    call_command(
+        'dumpdata',
+        exclude=['contenttypes', 'auth.permission', 'sessions.session'],
+        indent=2,
+        stdout=buffer_json
+    )
+
+    fecha_hora = timezone.now().strftime('%Y_%m_%d_%H%M%S')
+    json_filename = f"backup_alquilo_saas_{fecha_hora}.json"
+    zip_filename = f"backup_db_alquilo_{fecha_hora}.zip"
+
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(json_filename, buffer_json.getvalue().encode('utf-8'))
+
+    zip_buffer.seek(0)
+    response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
+    response['Content-Disposition'] = f'attachment; filename="{zip_filename}"'
+    return response
+    
+

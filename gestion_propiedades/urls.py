@@ -151,6 +151,7 @@ urlpatterns = [
     path('respaldos/', views.respaldos_exportacion, name='respaldos_exportacion'),
     path('respaldos/exportar-datos/', views.exportar_datos_csv_zip, name='exportar_datos_csv_zip'),
     path('respaldos/exportar-archivos/', views.exportar_archivos_adjuntos_zip, name='exportar_archivos_adjuntos_zip'),
+    path('respaldos/backup-db/', views.descargar_backup_db, name='descargar_backup_db'),
     path('papelera/', views.papelera_reciclaje, name='papelera_reciclaje'),
     path('papelera/restaurar-propiedad/<int:propiedad_id>/', views.restaurar_propiedad, name='restaurar_propiedad'),
 

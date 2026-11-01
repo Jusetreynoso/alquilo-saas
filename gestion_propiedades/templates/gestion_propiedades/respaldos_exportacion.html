@@ -112,5 +112,25 @@
         </div>
     </div>
 
+    {% if user.is_superuser %}
+    <div class="row g-4 mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm border-start border-warning border-4">
+                <div class="card-body p-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
+                    <div>
+                        <h5 class="fw-bold mb-1 text-dark">👑 Copia de Seguridad Maestra de Toda la Base de Datos</h5>
+                        <p class="text-muted mb-0 small">
+                            Herramienta de Superadministrador: Genera un volcado JSON íntegro de todas las tablas y relaciones del sistema (clientes, propiedades, contratos, cobros, logs) empaquetado en un archivo comprimido .ZIP listo para custodia o restauración en caso de desastre.
+                        </p>
+                    </div>
+                    <a href="{% url 'descargar_backup_db' %}" class="btn btn-warning btn-lg fw-bold shadow-sm text-dark px-4">
+                        💾 Descargar Backup DB (.ZIP)
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
 </div>
 {% endblock %}
