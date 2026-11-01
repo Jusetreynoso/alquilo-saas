@@ -240,11 +240,24 @@ class EditarSuscripcionForm(forms.ModelForm):
 class PlanSaaSForm(forms.ModelForm):
     class Meta:
         model = PlanSaaS
-        fields = ['nombre', 'precio_mensual', 'limite_propiedades', 'activo']
+        fields = [
+            'nombre',
+            'precio_mensual',
+            'limite_propiedades',
+            'precio_unidad_extra',
+            'usuarios_incluidos',
+            'precio_usuario_extra',
+            'dias_gracia_habiles',
+            'activo'
+        ]
         widgets = {
             'nombre': forms.TextInput(attrs={'class': 'form-control'}),
-            'precio_mensual': forms.NumberInput(attrs={'class': 'form-control'}),
+            'precio_mensual': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'limite_propiedades': forms.NumberInput(attrs={'class': 'form-control'}),
+            'precio_unidad_extra': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'usuarios_incluidos': forms.NumberInput(attrs={'class': 'form-control'}),
+            'precio_usuario_extra': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'dias_gracia_habiles': forms.NumberInput(attrs={'class': 'form-control'}),
             'activo': forms.CheckboxInput(attrs={'class': 'form-check-input'})
         }
 
@@ -436,4 +449,4 @@ class HistorialPrecioForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['notas'].required = False
-
+

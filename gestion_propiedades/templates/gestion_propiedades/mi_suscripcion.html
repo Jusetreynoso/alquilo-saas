@@ -16,7 +16,16 @@
                 <div class="fs-1 mb-2">🏢</div>
                 <h6 class="text-uppercase fw-bold opacity-75">Unidades Activas</h6>
                 <h2 class="display-5 fw-bold mb-0">{{ propiedades_activas }}</h2>
-                <small class="opacity-75">Costo fijo: $1.00 por unidad/mes</small>
+                <small class="opacity-75 d-block">
+                    {% if metricas and suscripcion.plan_saas %}
+                        Plan {{ suscripcion.plan_saas.nombre }} (hasta {{ suscripcion.plan_saas.limite_propiedades }} incl.)
+                        {% if metricas.propiedades_extra > 0 %}
+                            <br><span class="badge bg-warning text-dark">+{{ metricas.propiedades_extra }} extra</span>
+                        {% endif %}
+                    {% else %}
+                        Costo estándar SaaS
+                    {% endif %}
+                </small>
             </div>
         </div>
     </div>
@@ -25,8 +34,16 @@
             <div class="card-body py-4">
                 <div class="fs-1 mb-2">💳</div>
                 <h6 class="text-uppercase fw-bold opacity-75">Proyección del Mes</h6>
-                <h2 class="display-5 fw-bold mb-0">${{ costo_proyectado|dinero }}</h2>
-                <small class="opacity-75">Corte generado cada fin de mes</small>
+                <h2 class="display-5 fw-bold mb-0">${{ costo_proyectado|floatformat:2 }} USD</h2>
+                <small class="opacity-75 d-block">
+                    {% if metricas and suscripcion.plan_saas %}
+                        Base ${{ metricas.monto_base }} USD
+                        {% if metricas.costo_propiedades_extra > 0 %} + ${{ metricas.costo_propiedades_extra }} uds extra{% endif %}
+                        {% if metricas.costo_usuarios_extra > 0 %} + ${{ metricas.costo_usuarios_extra }} asis. extra{% endif %}
+                    {% else %}
+                        Facturación mensual automática
+                    {% endif %}
+                </small>
             </div>
         </div>
     </div>
@@ -34,9 +51,10 @@
         <div class="card border-0 shadow-sm rounded-4 h-100 bg-dark text-white text-center">
             <div class="card-body py-4">
                 <div class="fs-1 mb-2">🏷️</div>
-                <h6 class="text-uppercase fw-bold text-white-50">Estado de Cuenta B2B</h6>
+                <h6 class="text-uppercase fw-bold text-white-50">Suscripción B2B</h6>
                 {% if suscripcion %}
                     <h3 class="fw-bold mb-0">{{ suscripcion.get_estado_display }}</h3>
+                    <small class="text-white-50 d-block mt-1">Plan: {{ suscripcion.plan_saas.nombre|default:suscripcion.plan }}</small>
                 {% else %}
                     <h3 class="fw-bold mb-0 text-warning">Prueba Gratuita</h3>
                 {% endif %}

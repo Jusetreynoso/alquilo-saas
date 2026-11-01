@@ -139,8 +139,8 @@
     </style>
 </head>
 <body>
-    <!-- BANNER DINÁMICO PARA USUARIOS TRIAL -->
-    {% if request.user.is_authenticated and not request.user.is_superuser %}
+    <!-- BANNER DINÁMICO PARA USUARIOS TRIAL (Solo visible para Propietarios, nunca Asistentes) -->
+    {% if request.user.is_authenticated and not request.user.is_superuser and request.user.portafolios.all %}
         {% if request.user.suscripcion.estado == 'TRIAL' %}
         <div class="alert text-center rounded-0 mb-0 border-0 fw-bold shadow-sm" style="background-color: #f1c40f; color: #1a252f; z-index: 1050; position: relative;">
             ⏳ <strong>Días de Prueba:</strong> Tu cuenta de negocio expira el {{ request.user.suscripcion.fecha_proximo_pago|date:"d M Y" }}. 

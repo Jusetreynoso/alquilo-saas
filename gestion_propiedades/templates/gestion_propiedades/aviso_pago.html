@@ -12,39 +12,52 @@
         <div class="col-md-7 text-center">
             <div class="card shadow border-0">
                 <div class="card-body p-5">
-                    <h1 class="display-1 text-danger mb-4">⛔</h1>
-                    <h2 class="fw-bold mb-3">Acceso Suspendido</h2>
-                    
-                    {% if suscripcion.estado == 'SUSPENDIDA' %}
-                        {% if suscripcion.plan == 'TRIAL' or suscripcion.plan_saas.nombre == 'TRIAL' or 'Prueba' in suscripcion.plan_saas.nombre %}
-                            <!-- Pantalla Especial: Vencimiento de Prueba -->
-                            <p class="lead text-muted">Aviso de Suspensión de Prueba</p>
-                            <p class="text-secondary mb-4" style="font-size: 1.1rem;">
-                                ¡No se alarme! La información de su portafolio, estados de cuenta, contratos e inquilinos <strong>no se ha perdido ni será eliminada.</strong> Todo se encuentra respaldado y protegido de por vida.
-                            </p>
-                            <p class="text-secondary mb-4">
-                                Sin embargo, el período de prueba de su sistema ha vencido y necesita <strong>Reactivar su Cuenta Profesional</strong> para continuar administrando su negocio en la plataforma.
-                            </p>
-                        {% else %}
-                            <!-- Pantalla Estándar de Falta de Pago B2B -->
-                            <p class="lead text-muted">
-                                Tu plan <strong>{{ suscripcion.plan_saas.nombre|default:suscripcion.plan }}</strong> se encuentra actualmente en estado 
-                                <span class="badge bg-danger">{{ suscripcion.get_estado_display }}</span>.
-                            </p>
-                            <p class="text-secondary mb-4">
-                                Oops! Parece que hubo un problema procesando el pago o tu período de uso expiró el 
-                                <strong>{{ suscripcion.fecha_proximo_pago|date:"d M Y"|default:"(Fecha no definida)" }}</strong>.
-                            </p>
-                        {% endif %}
+                    {% if es_asistente %}
+                        <!-- VISTA PARA ASISTENTES: Cero exposición de datos financieros o cobros -->
+                        <h1 class="display-1 text-warning mb-4">⏸️</h1>
+                        <h2 class="fw-bold mb-3">Acceso en Pausa</h2>
+                        <p class="lead text-muted">Mantenimiento Administrativo del Sistema</p>
+                        <p class="text-secondary mb-4" style="font-size: 1.05rem;">
+                            El acceso a las funciones de administración para este portafolio se encuentra en pausa temporal por revisión administrativa de la cuenta.
+                        </p>
+                        <p class="text-muted mb-4 small">
+                            Por favor, comunícate con el <strong>Administrador de tu empresa</strong> para cualquier consulta o coordinación de acceso.
+                        </p>
                     {% else %}
-                        <p class="lead text-muted">Restricción de Acceso Identificada por el Sistema.</p>
+                        <!-- VISTA PARA EL ADMINISTRADOR TITULAR -->
+                        <h1 class="display-1 text-danger mb-4">⛔</h1>
+                        <h2 class="fw-bold mb-3">Acceso Suspendido</h2>
+                        
+                        {% if suscripcion.estado == 'SUSPENDIDA' %}
+                            {% if suscripcion.plan == 'TRIAL' or suscripcion.plan_saas.nombre == 'TRIAL' or 'Prueba' in suscripcion.plan_saas.nombre %}
+                                <!-- Pantalla Especial: Vencimiento de Prueba -->
+                                <p class="lead text-muted">Aviso de Suspensión de Prueba</p>
+                                <p class="text-secondary mb-4" style="font-size: 1.1rem;">
+                                    ¡No se alarme! La información de su portafolio, estados de cuenta, contratos e inquilinos <strong>no se ha perdido ni será eliminada.</strong> Todo se encuentra respaldado y protegido de por vida.
+                                </p>
+                                <p class="text-secondary mb-4">
+                                    Sin embargo, el período de prueba de su sistema ha vencido y necesita <strong>Reactivar su Cuenta Profesional</strong> para continuar administrando su negocio en la plataforma.
+                                </p>
+                            {% else %}
+                                <!-- Pantalla Estándar de Falta de Pago B2B -->
+                                <p class="lead text-muted">
+                                    Tu plan <strong>{{ suscripcion.plan_saas.nombre|default:suscripcion.plan }}</strong> se encuentra actualmente en estado 
+                                    <span class="badge bg-danger">{{ suscripcion.get_estado_display }}</span>.
+                                </p>
+                                <p class="text-secondary mb-4">
+                                    El plazo de pago para tu factura mensual ha vencido. Recuerda que todos tus datos están 100% seguros y respaldados.
+                                </p>
+                            {% endif %}
+                        {% else %}
+                            <p class="lead text-muted">Restricción de Acceso Identificada por el Sistema.</p>
+                        {% endif %}
+                        
+                        <div class="mt-4 pt-3 border-top">
+                            <a href="https://wa.me/18493532097" target="_blank" class="btn btn-success btn-lg px-5 shadow-sm fw-bold">
+                                💬 Hablar por WhatsApp para Reactivación Inmediata
+                            </a>
+                        </div>
                     {% endif %}
-                    
-                    <div class="mt-4 pt-3 border-top">
-                        <a href="https://wa.me/18493532097" target="_blank" class="btn btn-success btn-lg px-5 shadow-sm fw-bold">
-                            💬 Hablar por WhatsApp para Reactivación Inmediata
-                        </a>
-                    </div>
                     
                     <div class="mt-4">
                         <small class="text-muted">Si crees que esto es un error, por favor contacta a equipo de soporte.</small>

@@ -31,11 +31,15 @@ class Portafolio(models.Model):
 class PlanSaaS(models.Model):
     nombre = models.CharField(max_length=50)
     precio_mensual = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    limite_propiedades = models.IntegerField(default=50, help_text="Límite de propiedades permitidas")
+    limite_propiedades = models.IntegerField(default=50, help_text="Límite de propiedades incluidas en tarifa base")
+    precio_unidad_extra = models.DecimalField(max_digits=10, decimal_places=2, default=1.00, help_text="Costo mensual por cada unidad que exceda el límite")
+    usuarios_incluidos = models.IntegerField(default=2, help_text="Cantidad de usuarios incluidos sin costo extra")
+    precio_usuario_extra = models.DecimalField(max_digits=10, decimal_places=2, default=1.00, help_text="Costo mensual por cada usuario extra")
+    dias_gracia_habiles = models.IntegerField(default=15, help_text="Días laborables de plazo para pagar antes de suspender")
     activo = models.BooleanField(default=True)
     
     def __str__(self):
-        return f"{self.nombre} - ${self.precio_mensual}"
+        return f"{self.nombre} - ${self.precio_mensual} (hasta {self.limite_propiedades} uds)"
 
 class ConfiguracionGlobal(models.Model):
     """
@@ -750,4 +754,4 @@ class LiquidacionDepositoInquilino(models.Model):
         return f"Finiquito Contrato #{self.contrato.id} - Inquilino {self.contrato.inquilino.nombre} (${self.monto_neto_devuelto})"
 
 
-
+

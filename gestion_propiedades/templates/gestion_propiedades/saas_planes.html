@@ -16,7 +16,7 @@
             Todos los planes en la plataforma operan bajo un modelo híbrido <strong>(Base + Pay-As-You-Grow)</strong>. Al momento del corte, el robot de cobros aplicará automáticamente esta fórmula:
         </p>
         <code class="bg-white px-3 py-2 rounded text-dark border d-inline-block fw-bold mb-2">
-            Factura = Tarifa Base del Plan + ($1.00 × Propiedad Activa) + ($1.00 × Asistente Extra)
+            Factura = Tarifa Base + (Excedente Uds × Costo Ud Extra) + (Asistentes Extra × Costo Asistente)
         </code>
         <p class="mb-0 small">
             <strong>Ejemplo de Modelos:</strong>
@@ -38,23 +38,29 @@
                     <table class="table table-hover align-middle mb-0">
                         <thead class="table-light">
                             <tr>
-                                <th class="px-4 py-3">Nombre del Plan</th>
-                                <th>Precio (Mensual)</th>
-                                <th>Límite Propiedades</th>
+                                <th class="px-3 py-3">Nombre</th>
+                                <th>Tarifa Base</th>
+                                <th>Uds Incluidas</th>
+                                <th>Excedente/Ud</th>
+                                <th>Asientos Inc.</th>
+                                <th>Plazo Pago</th>
                                 <th>Estado</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for plan in planes %}
                             <tr>
-                                <td class="px-4 py-3 fw-bold">{{ plan.nombre }}</td>
+                                <td class="px-3 py-3 fw-bold">{{ plan.nombre }}</td>
                                 <td><span class="text-success fw-bold">${{ plan.precio_mensual }}</span></td>
-                                <td>{{ plan.limite_propiedades }} inmuebles</td>
+                                <td>{{ plan.limite_propiedades }} uds</td>
+                                <td>+${{ plan.precio_unidad_extra }}/ud</td>
+                                <td>{{ plan.usuarios_incluidos }} (extra +${{ plan.precio_usuario_extra }})</td>
+                                <td><span class="badge bg-light text-dark border">{{ plan.dias_gracia_habiles }} d. hábiles</span></td>
                                 <td>
                                     {% if plan.activo %}
-                                        <span class="badge bg-success">Público</span>
+                                        <span class="badge bg-success">Activo</span>
                                     {% else %}
-                                        <span class="badge bg-danger">Oculto</span>
+                                        <span class="badge bg-secondary">Privado</span>
                                     {% endif %}
                                 </td>
                             </tr>
@@ -92,10 +98,35 @@
                             {{ form.precio_mensual }}
                         </div>
                     </div>
-                    <div class="mb-4">
-                        <label class="form-label fw-bold small text-muted">Límite de Propiedades</label>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Propiedades Incluidas en Base</label>
                         {{ form.limite_propiedades }}
-                        <div class="form-text mt-1">Cuántas entidades podrá crear un cliente bajo este plan.</div>
+                        <div class="form-text mt-1">Límite antes de cobrar excedente.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Costo por Propiedad Excedente (USD)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light">$</span>
+                            {{ form.precio_unidad_extra }}
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label fw-bold small text-muted">Usuarios Gratis</label>
+                            {{ form.usuarios_incluidos }}
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-bold small text-muted">Extra/Usuario</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light">$</span>
+                                {{ form.precio_usuario_extra }}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Plazo de Gracia (Días Hábiles)</label>
+                        {{ form.dias_gracia_habiles }}
+                        <div class="form-text mt-1">Días laborales para pagar antes de suspender.</div>
                     </div>
                     <div class="mb-4 form-check">
                         {{ form.activo }}

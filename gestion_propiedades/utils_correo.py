@@ -235,31 +235,136 @@ def enviar_aviso_mora_aplicada(factura, mora_obj):
 # --- CASOS DE USO (B2B SAAS) ---
 
 def enviar_aviso_factura_saas(factura_saas):
+    """
+    Notificación formal de emisión de factura mensual B2B.
+    Se envía EXCLUSIVAMENTE al Administrador de la cuenta.
+    """
     cliente = factura_saas.usuario
     if not cliente.email:
         return False
         
-    asunto = "💳 Resumen de Facturación SaaS - Alquilo"
+    try:
+        sub = cliente.suscripcion
+        nombre_plan = sub.plan_saas.nombre if sub.plan_saas else 'Estándar'
+        dias_gracia = sub.plan_saas.dias_gracia_habiles if sub.plan_saas else 15
+    except Exception:
+        nombre_plan = 'Estándar'
+        dias_gracia = 15
+
+    asunto = f"💳 Factura Mensual Emitida - Plan {nombre_plan} - Alquilo Software"
     
     cuerpo = f"""
-        <p>Hola <strong>{cliente.first_name}</strong>,</p>
-        <p>Tu corte del sistema ha sido procesado. Este es el detalle del mes de uso de la plataforma:</p>
-        <ul>
-            <li>Propiedades Activas Monetizadas: <strong>{factura_saas.propiedades_cobradas}</strong></li>
-            <li>Tarifa SaaS por unidad: <strong>$1.00</strong></li>
-        </ul>
-        <div style="background-color: #e8f4fd; padding: 15px; border-radius: 5px; margin: 20px 0;">
-            <p style="margin: 0;">Total a pagar: <strong>${factura_saas.monto_total}</strong></p>
-            <p style="margin: 5px 0 0 0; font-size: 12px;">Vence el: {factura_saas.fecha_vencimiento.strftime('%d/%m/%Y')}</p>
+        <p>Estimado/a <strong>{cliente.get_full_name() or cliente.first_name}</strong>,</p>
+        <p>Hemos generado tu factura mensual de servicio para la administración de tu portafolio en <strong>Alquilo Software</strong>.</p>
+        
+        <table style="width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 14px;">
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 8px 0; color: #64748b;">Plan Contratado:</td>
+                <td style="padding: 8px 0; font-weight: bold; text-align: right; color: #1e293b;">{nombre_plan}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 8px 0; color: #64748b;">Propiedades Gestionadas:</td>
+                <td style="padding: 8px 0; font-weight: bold; text-align: right; color: #1e293b;">{factura_saas.propiedades_cobradas} unidades</td>
+            </tr>
+            {f'<tr style="border-bottom: 1px solid #e2e8f0;"><td style="padding: 8px 0; color: #64748b;">Usuarios Asistentes Extra:</td><td style="padding: 8px 0; font-weight: bold; text-align: right; color: #1e293b;">{factura_saas.usuarios_cobrados}</td></tr>' if factura_saas.usuarios_cobrados > 0 else ''}
+            <tr style="border-bottom: 2px solid #0f172a;">
+                <td style="padding: 10px 0; font-weight: bold; color: #0f172a; font-size: 16px;">Total a Pagar:</td>
+                <td style="padding: 10px 0; font-weight: bold; text-align: right; color: #16a34a; font-size: 18px;">${factura_saas.monto_total} USD</td>
+            </tr>
+        </table>
+        
+        <div style="background-color: #f8fafc; border-left: 4px solid #3b82f6; padding: 12px 16px; border-radius: 4px; margin: 15px 0;">
+            <p style="margin: 0; font-size: 13px; color: #334155;">
+                📅 <strong>Plazo de Pago:</strong> Dispones de <strong>{dias_gracia} días hábiles</strong> para efectuar el pago.<br>
+                Fecha límite: <strong>{factura_saas.fecha_vencimiento.strftime('%d/%m/%Y')}</strong>.
+            </p>
         </div>
-        <p>Mantén tu suscripción activa para garantizar el control automático del robot de cobros para tu portafolio.</p>
+
+        <p style="font-size: 13px; color: #475569; margin-top: 15px;">
+            <strong>Cuentas Bancarias Disponibles:</strong><br>
+            • <strong>Dólares (US$):</strong> BHD: <code>08931700066</code><br>
+            • <strong>Pesos (RD$):</strong> BHD: <code>08931700040</code> | Reservas: <code>0302102948</code> | Popular: <code>750927543</code>
+        </p>
+        <p style="font-size: 12px; color: #94a3b8;">Una vez realizada la transferencia, puedes adjuntar tu comprobante directamente desde tu panel.</p>
     """
     
     html = _generar_plantilla_html(
-        titulo="Recibo Comercial B2B", 
+        titulo="Factura B2B Mensual", 
         parrafos_html=cuerpo, 
-        link_texto="Abrir Master Control", 
-        link_url=f"{BASE_URL}/master-control/"
+        link_texto="Ver Factura y Subir Comprobante", 
+        link_url=f"{BASE_URL}/mi-suscripcion/"
+    )
+    return _enviar_correo_seguro(asunto, cliente.email, html)
+
+
+def enviar_recordatorio_factura_saas(factura_saas, dias_habiles_restantes):
+    """
+    Recordatorio amistoso y no intrusivo de vencimiento de factura SaaS.
+    Se envía EXCLUSIVAMENTE al Administrador titular.
+    """
+    cliente = factura_saas.usuario
+    if not cliente.email:
+        return False
+        
+    if dias_habiles_restantes == 1:
+        asunto = "⚠️ Aviso Preventivo: Tu factura de Alquilo Software vence mañana"
+        mensaje_tiempo = "vence el día de <strong>mañana</strong> (1 día hábil restante)"
+    else:
+        asunto = f"🔔 Recordatorio Amistoso: Tu factura de Alquilo Software vence en {dias_habiles_restantes} días laborables"
+        mensaje_tiempo = f"vence en <strong>{dias_habiles_restantes} días hábiles</strong>"
+
+    cuerpo = f"""
+        <p>Hola <strong>{cliente.get_full_name() or cliente.first_name}</strong>,</p>
+        <p>Te enviamos este recordatorio cordial de que tu factura mensual por <strong>${factura_saas.monto_total} USD</strong> {mensaje_tiempo} (Fecha límite: <strong>{factura_saas.fecha_vencimiento.strftime('%d/%m/%Y')}</strong>).</p>
+        
+        <p>Para garantizar la continuidad ininterrumpida de las automatizaciones de cobro y contratos de tu portafolio, recuerda reportar tu pago antes de la fecha límite.</p>
+        
+        <div style="background-color: #f1f5f9; padding: 12px 15px; border-radius: 6px; margin: 15px 0; font-size: 13px;">
+            <p style="margin: 0; color: #475569;">
+                <strong>Cuentas Bancarias:</strong><br>
+                • US$: BHD <code>08931700066</code><br>
+                • RD$: BHD <code>08931700040</code> | Reservas <code>0302102948</code> | Popular <code>750927543</code>
+            </p>
+        </div>
+        <p style="font-size: 12px; color: #64748b;">Si ya realizaste la transferencia y subiste tu comprobante, por favor haz caso omiso a este mensaje.</p>
+    """
+    
+    html = _generar_plantilla_html(
+        titulo="Recordatorio de Facturación", 
+        parrafos_html=cuerpo, 
+        link_texto="Adjuntar Comprobante de Pago", 
+        link_url=f"{BASE_URL}/mi-suscripcion/"
+    )
+    return _enviar_correo_seguro(asunto, cliente.email, html)
+
+
+def enviar_aviso_suspension_saas(factura_saas):
+    """
+    Notificación respetuosa de suspensión por vencimiento cumplido sin pago.
+    Se envía EXCLUSIVAMENTE al Administrador titular.
+    """
+    cliente = factura_saas.usuario
+    if not cliente.email:
+        return False
+        
+    asunto = "⏸️ Servicio en Pausa Temporal - Alquilo Software"
+    cuerpo = f"""
+        <p>Estimado/a <strong>{cliente.get_full_name() or cliente.first_name}</strong>,</p>
+        <p>Te informamos que el plazo de pago para la factura #{factura_saas.id} (${factura_saas.monto_total} USD) venció el pasado <strong>{factura_saas.fecha_vencimiento.strftime('%d/%m/%Y')}</strong>, por lo que el acceso a la plataforma se encuentra pausado temporalmente.</p>
+        
+        <div style="background-color: #ecfdf5; border-left: 4px solid #10b981; padding: 12px 16px; border-radius: 4px; margin: 15px 0;">
+            <p style="margin: 0; font-weight: bold; color: #065f46;">¡Tus datos están 100% seguros y respaldados!</p>
+            <p style="margin: 4px 0 0 0; font-size: 13px; color: #047857;">Toda la información de tus 132 inmuebles, inquilinos, contratos y estados de cuenta se encuentra intacta y bajo máxima seguridad.</p>
+        </div>
+
+        <p>Para restablecer el acceso de tu equipo de inmediato, puedes subir tu comprobante de transferencia o contactarnos directamente por WhatsApp.</p>
+    """
+    
+    html = _generar_plantilla_html(
+        titulo="Pausa Preventiva de Servicio", 
+        parrafos_html=cuerpo, 
+        link_texto="💬 Hablar por WhatsApp para Reactivar", 
+        link_url="https://wa.me/18493532097"
     )
     return _enviar_correo_seguro(asunto, cliente.email, html)
 

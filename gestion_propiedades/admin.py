@@ -72,7 +72,7 @@ class SuscripcionClienteAdmin(admin.ModelAdmin):
 
 @admin.register(PlanSaaS)
 class PlanSaaSAdmin(admin.ModelAdmin):
-    list_display = ('nombre', 'precio_mensual', 'limite_propiedades', 'activo')
+    list_display = ('nombre', 'precio_mensual', 'limite_propiedades', 'precio_unidad_extra', 'usuarios_incluidos', 'precio_usuario_extra', 'dias_gracia_habiles', 'activo')
 
 @admin.register(AvisoSistema)
 class AvisoSistemaAdmin(admin.ModelAdmin):
@@ -133,4 +133,4 @@ class RegistroProcesoAdmin(admin.ModelAdmin):
     list_filter = ('exitoso', 'fecha_ejecucion', 'nombre_proceso')
     search_fields = ('nombre_proceso', 'detalles')
 
-
+

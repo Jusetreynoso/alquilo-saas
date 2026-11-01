@@ -8,13 +8,20 @@ from django.contrib.auth.models import User
 from gestion_propiedades.models import Propiedad, FacturaSaaS, Contrato, Factura, CargoMora, AccesoPortafolio, RegistroProceso
 from gestion_propiedades.utils import obtener_nombre_mes
 from gestion_propiedades.utils_correo import (
-    enviar_aviso_factura_saas, 
+    enviar_aviso_factura_saas,
+    enviar_recordatorio_factura_saas,
+    enviar_aviso_suspension_saas,
     enviar_aviso_factura_generada, 
     enviar_aviso_vencimiento_cercano, 
     enviar_aviso_mora_aplicada,
     enviar_aviso_trial_por_vencer,
     enviar_aviso_trial_vencido,
     enviar_reporte_diario_admin
+)
+from gestion_propiedades.utils_saas import (
+    calcular_metricas_facturacion_saas,
+    calcular_fecha_vencimiento_dias_habiles,
+    contar_dias_habiles_entre
 )
 
 class Command(BaseCommand):
@@ -25,7 +32,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"=== Iniciando Cron Job B2B/B2C + Moras | {hoy} ==="))
         
         # ---------------------------------------------------------
-        # FASE 1: AUTOMATIZACIÓN SAAS (B2B)
+        # FASE 1: AUTOMATIZACIÓN SAAS (B2B) - EMISIÓN POR ADELANTADO
         # ---------------------------------------------------------
         clientes = User.objects.filter(is_superuser=False, suscripcion__isnull=False)
         facturas_saas = 0
@@ -35,36 +42,61 @@ class Command(BaseCommand):
             if suscripcion.estado != 'ACTIVA': continue
             if suscripcion.fecha_proximo_pago and hoy < suscripcion.fecha_proximo_pago: continue
                 
-            cant_propiedades = Propiedad.objects.filter(portafolio__propietario=cliente, is_deleted=False).count()
+            # Cálculo financiero según el plan y tarifa escalonada
+            metricas = calcular_metricas_facturacion_saas(suscripcion)
             
-            # Matemáticas Usuarios VIP
-            cant_asistentes = AccesoPortafolio.objects.filter(portafolio__propietario=cliente).count()
-            usuarios_activos = 1 + cant_asistentes
-            max_gratis = 2 + suscripcion.asistentes_gratuitos_extra
-            usuarios_extra = max(0, usuarios_activos - max_gratis)
-            
-            # El monto base vendrá del plan, o 0 si no tiene uno asignado
-            monto_base = suscripcion.plan_saas.precio_mensual if suscripcion.plan_saas else decimal.Decimal('0.00')
-            
-            # Se cobra el monto base + las propiedades ($1/cu) y los usuarios extra ($1/cu)
-            monto = float(monto_base) + (cant_propiedades * 1.00) + (usuarios_extra * 1.00)
+            # Fecha de vencimiento calculada en días hábiles (Lunes a Viernes)
+            dias_gracia = metricas['dias_gracia_habiles']
+            fecha_venc = calcular_fecha_vencimiento_dias_habiles(hoy, dias_gracia)
             
             nueva_fs = FacturaSaaS.objects.create(
                 usuario=cliente,
-                fecha_vencimiento=hoy + timedelta(days=5),
-                monto_total=monto,
-                propiedades_cobradas=cant_propiedades,
-                usuarios_cobrados=usuarios_extra,
+                fecha_vencimiento=fecha_venc,
+                monto_total=metricas['monto_total'],
+                propiedades_cobradas=metricas['propiedades_total'],
+                usuarios_cobrados=metricas['usuarios_extra'],
                 estado='PENDIENTE'
             )
             facturas_saas += 1
             suscripcion.fecha_proximo_pago = hoy + timedelta(days=30)
             suscripcion.save()
             
-            # Enviar recibo B2B
+            # Enviar factura por adelantado al Administrador Titular
             enviar_aviso_factura_saas(nueva_fs)
                 
         self.stdout.write(self.style.SUCCESS(f"[OK] SaaS (B2B): {facturas_saas} facturas a dueños emitidas."))
+
+        # ---------------------------------------------------------
+        # FASE 1.5: SEGUIMIENTO Y RECORDATORIOS DISCRETOS DE FACTURAS SAAS
+        # ---------------------------------------------------------
+        facturas_saas_pendientes = FacturaSaaS.objects.filter(estado='PENDIENTE').select_related('usuario', 'usuario__suscripcion')
+        saas_recordatorios = 0
+        saas_suspendidas = 0
+        
+        for fs in facturas_saas_pendientes:
+            dias_habiles_restantes = contar_dias_habiles_entre(hoy, fs.fecha_vencimiento)
+            
+            if hoy > fs.fecha_vencimiento:
+                # Plazo cumplido sin pago: Marcar vencida y suspender
+                fs.estado = 'VENCIDA'
+                fs.save()
+                
+                try:
+                    sub = fs.usuario.suscripcion
+                    if sub.estado == 'ACTIVA':
+                        sub.estado = 'SUSPENDIDA'
+                        sub.save()
+                        enviar_aviso_suspension_saas(fs)
+                        saas_suspendidas += 1
+                except Exception:
+                    pass
+            elif dias_habiles_restantes in [5, 1]:
+                # Recordatorio cortes (5 dias habiles) o aviso preventivo (1 dia habil)
+                enviar_recordatorio_factura_saas(fs, dias_habiles_restantes)
+                saas_recordatorios += 1
+
+        if saas_recordatorios > 0 or saas_suspendidas > 0:
+            self.stdout.write(self.style.SUCCESS(f"[OK] SaaS Seguimiento: {saas_recordatorios} recordatorios discretos, {saas_suspendidas} cuentas pausadas."))
 
         # ---------------------------------------------------------
         contratos_activos = Contrato.objects.filter(activo=True)
