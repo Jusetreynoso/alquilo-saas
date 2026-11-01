@@ -60,6 +60,24 @@
     </div>
 </div>
 
+<!-- BANNER: ONBOARDING CARTERA BASORA & ARRIAGA -->
+<div class="card border-0 shadow-sm border-start border-primary border-4 mb-4">
+    <div class="card-body p-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div>
+            <h5 class="fw-bold mb-1 text-primary">🏢 Onboarding Cartera: Basora & Arriaga (132 Propiedades)</h5>
+            <p class="text-muted mb-0 small">
+                Cliente: <strong>lbasora@basoraarriaga.com</strong> | 132 inmuebles, 47 propietarios agrupados y 121 contratos activos listos para migrar en 1 clic.
+            </p>
+        </div>
+        <form method="POST" action="{% url 'importar_cartera_basora_web' %}" onsubmit="return confirm('¿Confirmas importar los 132 apartamentos, contratos y propietarios para el cliente lbasora@basoraarriaga.com?');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary fw-bold shadow-sm px-4">
+                🚀 Importar Cartera (1-Clic)
+            </button>
+        </form>
+    </div>
+</div>
+
 <!-- Tabla de Clientes SaaS -->
 <div class="card shadow-sm border-0">
     <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">

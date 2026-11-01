@@ -4012,5 +4012,32 @@ def descargar_backup_db(request):
     response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
     response['Content-Disposition'] = f'attachment; filename="{zip_filename}"'
     return response
+
+
+@login_required(login_url='/login/')
+def importar_cartera_basora_web(request):
+    """
+    Ejecuta la migración masiva de los 132 apartamentos de Basora & Arriaga en 1 clic
+    directamente desde la interfaz web de superadministrador.
+    """
+    if not request.user.is_superuser:
+        raise PermissionDenied("Solo el Administrador Maestro puede ejecutar importaciones masivas.")
+
+    if request.method == 'POST':
+        from importar_cartera_basora import ejecutar_importacion
+        import io
+        from contextlib import redirect_stdout
+
+        f = io.StringIO()
+        try:
+            with redirect_stdout(f):
+                ejecutar_importacion(commit=True)
+            messages.success(request, "¡Cartera de Basora & Arriaga (132 propiedades y contratos) importada con éxito total!")
+        except Exception as e:
+            messages.error(request, f"Error durante la importación: {str(e)}")
+
+        return redirect('saas_master_control')
+
+    return redirect('saas_master_control')
     
 

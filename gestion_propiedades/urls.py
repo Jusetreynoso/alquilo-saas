@@ -159,5 +159,6 @@ urlpatterns = [
     path('propiedad/<int:propiedad_id>/galeria/subir/', views.subir_imagen_galeria, name='subir_imagen_galeria'),
     path('galeria/imagen/<int:imagen_id>/eliminar/', views.eliminar_imagen_galeria, name='eliminar_imagen_galeria'),
     path('solicitud/<int:solicitud_id>/devolver/', views.devolver_solicitud_alquiler, name='devolver_solicitud_alquiler'),
+    path('master-control/importar-cartera-basora/', views.importar_cartera_basora_web, name='importar_cartera_basora_web'),
     path('propietario/<int:propietario_id>/imprimir-situacion/', views.imprimir_estado_situacion_propietario, name='imprimir_estado_situacion_propietario'),
 ]
