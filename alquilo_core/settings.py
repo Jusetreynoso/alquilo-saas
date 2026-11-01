@@ -22,7 +22,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-nwo9bt*3$(k)zxtk(_@gmd(-_35xvtk-3r0j$u*=uhm$o-xcsg'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-nwo9bt*3$(k)zxtk(_@gmd(-_35xvtk-3r0j$u*=uhm$o-xcsg')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
@@ -150,7 +150,14 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 import os
-os.environ.setdefault('CLOUDINARY_URL', 'cloudinary://284174934694294:GKUr66a6Tabj1iwE7oRi2fcM9Kg@df7iu3qdl')
+# CLOUDINARY_URL se gestiona mediante variables de entorno en Railway
+if 'CLOUDINARY_URL' in os.environ and os.environ['CLOUDINARY_URL']:
+    _raw_cloudinary = os.environ['CLOUDINARY_URL'].strip("\"' ")
+    if _raw_cloudinary.startswith("CLOUDINARY_URL="):
+        _raw_cloudinary = _raw_cloudinary.replace("CLOUDINARY_URL=", "", 1).strip("\"' ")
+    if not _raw_cloudinary.startswith("cloudinary://"):
+        _raw_cloudinary = f"cloudinary://{_raw_cloudinary}"
+    os.environ['CLOUDINARY_URL'] = _raw_cloudinary
 
 import sys
 if 'test' in sys.argv:
@@ -165,7 +172,7 @@ if 'test' in sys.argv:
 else:
     STORAGES = {
         "default": {
-            "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
+            "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage" if os.environ.get('CLOUDINARY_URL') else "django.core.files.storage.FileSystemStorage",
         },
         "staticfiles": {
             "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
