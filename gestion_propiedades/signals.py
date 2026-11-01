@@ -1,5 +1,5 @@
 import threading
-from django.db.models.signals import post_save, post_delete
+from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 from .models import Contrato, Factura, ReciboPago, MantenimientoUnidad, AuditLog
 
@@ -98,3 +98,80 @@ def audit_mantenimiento(sender, instance, created, **kwargs):
 def audit_mantenimiento_delete(sender, instance, **kwargs):
     desc = f"Mantenimiento #{instance.id} eliminado de {instance.propiedad}"
     _registrar('ELIMINAR', 'Mantenimiento', desc, _portafolio_de(instance) or instance.propiedad.portafolio)
+
+# =====================================================================
+# OPTIMIZACIÓN Y COMPRESIÓN AUTOMÁTICA DE IMÁGENES / ARCHIVOS (Cloudinary & Local)
+# Reduce el peso hasta un 90% preservando legibilidad de contratos y comprobantes.
+# =====================================================================
+from .utils_imagen import optimizar_campo_imagen, optimizar_campos_modelo
+from .models import (
+    Propiedad,
+    ImagenPropiedad,
+    Portafolio,
+    FacturaSaaS,
+    GastoGeneralPropietario,
+    ImagenPublicacion,
+    SolicitudAlquiler
+)
+
+
+@receiver(pre_save, sender=ReciboPago)
+def optimizar_recibo_pago_imagen(sender, instance, **kwargs):
+    optimizar_campo_imagen(instance, 'comprobante_imagen')
+
+
+@receiver(pre_save, sender=Contrato)
+def optimizar_contrato_adjuntos(sender, instance, **kwargs):
+    optimizar_campos_modelo(instance, [
+        'documento_contrato',
+        'fotos_entrega',
+        'foto_entrega_2',
+        'foto_entrega_3',
+        'foto_entrega_4',
+        'foto_entrega_5'
+    ])
+
+
+@receiver(pre_save, sender=Propiedad)
+def optimizar_propiedad_fachada(sender, instance, **kwargs):
+    optimizar_campo_imagen(instance, 'imagen_principal')
+
+
+@receiver(pre_save, sender=ImagenPropiedad)
+def optimizar_propiedad_galeria(sender, instance, **kwargs):
+    optimizar_campo_imagen(instance, 'imagen')
+
+
+@receiver(pre_save, sender=Portafolio)
+def optimizar_portafolio_logo(sender, instance, **kwargs):
+    optimizar_campo_imagen(instance, 'logo_empresa', max_dimension=800, calidad=85)
+
+
+@receiver(pre_save, sender=FacturaSaaS)
+def optimizar_factura_saas_comprobante(sender, instance, **kwargs):
+    optimizar_campo_imagen(instance, 'comprobante_pago')
+
+
+@receiver(pre_save, sender=MantenimientoUnidad)
+def optimizar_mantenimiento_factura(sender, instance, **kwargs):
+    optimizar_campo_imagen(instance, 'factura_adjunta')
+
+
+@receiver(pre_save, sender=GastoGeneralPropietario)
+def optimizar_gasto_propietario_factura(sender, instance, **kwargs):
+    optimizar_campo_imagen(instance, 'factura_adjunta')
+
+
+@receiver(pre_save, sender=ImagenPublicacion)
+def optimizar_marketplace_imagen(sender, instance, **kwargs):
+    optimizar_campo_imagen(instance, 'imagen')
+
+
+@receiver(pre_save, sender=SolicitudAlquiler)
+def optimizar_solicitud_adjuntos(sender, instance, **kwargs):
+    optimizar_campos_modelo(instance, [
+        'adjunto_cedula_solicitante',
+        'adjunto_ingresos_solicitante',
+        'adjunto_cedula_fiador',
+        'adjunto_ingresos_fiador'
+    ])
