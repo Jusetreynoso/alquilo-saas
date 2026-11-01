@@ -83,6 +83,20 @@ def limpiar_texto(val):
     return txt
 
 
+def limpiar_telefono(val):
+    if not val:
+        return ""
+    txt = str(val).strip()
+    if txt.upper() in ['N/A', 'NA', 'NULL', 'NONE']:
+        return ""
+    # Si viene con múltiples números (ej: (829) 677-0676 / (809)-863-9982), tomar el principal
+    if '/' in txt:
+        txt = txt.split('/')[0].strip()
+    if ',' in txt:
+        txt = txt.split(',')[0].strip()
+    return txt[:20].strip()
+
+
 def ejecutar_importacion(csv_path='cartera_basora_arriaga.csv', email_cliente='lbasora@basoraarriaga.com', commit=False):
     print("=" * 70)
     print("🚀 INICIANDO IMPORTACIÓN MASIVA - CARTERA BASORA & ARRIAGA")
@@ -156,14 +170,15 @@ def ejecutar_importacion(csv_path='cartera_basora_arriaga.csv', email_cliente='l
 
         for idx, row in enumerate(rows, start=1):
             exp_inm = limpiar_texto(row.get('Expediente inmueble\nA-', ''))
-            nombre_prop = limpiar_texto(row.get('Propietario (a)', ''))
-            cedula_prop = limpiar_texto(row.get('Identificación del Propietario (a)', ''))
-            celular_prop = limpiar_texto(row.get('Celular del Propietario (a)', '')) or limpiar_texto(row.get('Teléfono del Propietario (a)', ''))
+            nombre_prop = limpiar_texto(row.get('Propietario (a)', ''))[:150]
+            cedula_prop = limpiar_texto(row.get('Identificación del Propietario (a)', ''))[:50]
+            celular_prop = (limpiar_telefono(row.get('Celular del Propietario (a)', '')) or 
+                            limpiar_telefono(row.get('Teléfono del Propietario (a)', '')) or None)
             correo_prop = limpiar_texto(row.get('Correo electrónico del Propietario (a)', ''))
             dir_prop = limpiar_texto(row.get('Dirección Física del Propietario (a)', ''))
-            banco = limpiar_texto(row.get('Banco', ''))
-            tipo_cuenta = limpiar_texto(row.get('Tipo de Cuenta', ''))
-            num_cuenta = limpiar_texto(row.get('Número de Cuenta', ''))
+            banco = limpiar_texto(row.get('Banco', ''))[:100]
+            tipo_cuenta = limpiar_texto(row.get('Tipo de Cuenta', ''))[:50]
+            num_cuenta = limpiar_texto(row.get('Número de Cuenta', ''))[:50]
 
             # A. PROPIETARIO
             prop_key = cedula_prop if cedula_prop else nombre_prop.upper()
@@ -224,9 +239,10 @@ def ejecutar_importacion(csv_path='cartera_basora_arriaga.csv', email_cliente='l
             total_depositos_acumulados += deposito
 
             # C. INQUILINO Y CONTRATO (Solo si está alquilado y hay nombre de inquilino)
-            nombre_inq = limpiar_texto(row.get('Inquilino (a)', ''))
-            cedula_inq = limpiar_texto(row.get('Documento de Identidad del Inquilino (a)', ''))
-            tel_inq = limpiar_texto(row.get('Celular Inquilino (a)', '')) or limpiar_texto(row.get('Teléfono Inquilino (a)', ''))
+            nombre_inq = limpiar_texto(row.get('Inquilino (a)', ''))[:150]
+            cedula_inq = limpiar_texto(row.get('Documento de Identidad del Inquilino (a)', ''))[:50]
+            tel_inq = (limpiar_telefono(row.get('Celular Inquilino (a)', '')) or 
+                       limpiar_telefono(row.get('Teléfono Inquilino (a)', '')) or "N/D")
             correo_inq = limpiar_texto(row.get('Correo Electrónico Inquilino (a)', ''))
 
             if es_alquilado and nombre_inq and nombre_inq.lower() not in ['desocupado', 'na', 'n/a']:
