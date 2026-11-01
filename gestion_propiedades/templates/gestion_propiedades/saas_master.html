@@ -128,11 +128,6 @@
                             {{ cliente.fecha_proximo_pago|date:"d M Y"|default:"Sin definir" }}
                         </td>
                         <td class="text-center">
-                            {% if cliente.estado != 'ACTIVA' %}
-                            <a href="{% url 'activar_plan_cliente' cliente.id %}" class="btn btn-sm btn-success fw-bold px-2 me-1" onclick="return confirm('¿Confirmas activar formalmente el plan para {{ cliente.nombre }} e iniciar su primer ciclo de cobro de 15 días hábiles?');" title="Activar Plan e Iniciar Cobro">
-                                🚀 Activar Plan
-                            </a>
-                            {% endif %}
                             <a href="{% url 'editar_suscripcion_saas' cliente.id %}" class="btn btn-sm btn-outline-primary fw-bold px-2" title="Editar Suscripción">
                                 ⚙️ Configurar
                             </a>

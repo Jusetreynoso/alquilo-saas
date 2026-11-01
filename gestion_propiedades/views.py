@@ -2158,66 +2158,6 @@ def generar_corte_saas(request):
 
 
 @login_required(login_url='/login/')
-def activar_plan_cliente(request, cliente_id):
-    """
-    Acción rápida para el Superadmin: Activa formalmente la suscripción de un cliente,
-    inicia su ciclo mensual y emite su primera factura por adelantado con su plazo de días hábiles.
-    Ideal para el día en que se le entrega el acceso al cliente.
-    """
-    if not request.user.is_superuser:
-        messages.error(request, "Acceso denegado. Solo el Administrador Global puede activar planes.")
-        return redirect('dashboard')
-        
-    from django.contrib.auth.models import User
-    from django.utils import timezone
-    from datetime import timedelta
-    from .models import FacturaSaaS, PlanSaaS
-    from .utils_saas import calcular_metricas_facturacion_saas, calcular_fecha_vencimiento_dias_habiles
-    from .utils_correo import enviar_aviso_factura_saas
-    
-    cliente = get_object_or_404(User, id=cliente_id)
-    hoy = timezone.now().date()
-    
-    try:
-        sub = cliente.suscripcion
-    except Exception:
-        messages.error(request, f"El cliente {cliente.username} no tiene suscripción registrada.")
-        return redirect('saas_master_control')
-        
-    # Asignar plan-B132 si aún no tiene un plan definitivo o si estaba en TRIAL
-    if not sub.plan_saas or 'TRIAL' in str(sub.plan_saas.nombre).upper():
-        plan_asignar = PlanSaaS.objects.filter(nombre='plan-B132').first() or PlanSaaS.objects.filter(activo=True).first()
-        if plan_asignar:
-            sub.plan_saas = plan_asignar
-            
-    sub.estado = 'ACTIVA'
-    sub.fecha_proximo_pago = hoy + timedelta(days=30)
-    sub.save()
-    
-    # Calcular métricas y emitir primera factura por adelantado
-    metricas = calcular_metricas_facturacion_saas(sub)
-    fecha_venc = calcular_fecha_vencimiento_dias_habiles(hoy, metricas['dias_gracia_habiles'])
-    
-    factura = FacturaSaaS.objects.create(
-        usuario=cliente,
-        fecha_vencimiento=fecha_venc,
-        monto_total=metricas['monto_total'],
-        propiedades_cobradas=metricas['propiedades_total'],
-        usuarios_cobrados=metricas['usuarios_extra'],
-        estado='PENDIENTE'
-    )
-    
-    # Enviar correo de notificación formal al Administrador
-    enviar_aviso_factura_saas(factura)
-    
-    messages.success(
-        request, 
-        f"🚀 ¡Plan '{sub.plan_saas.nombre}' activado exitosamente para {cliente.get_full_name() or cliente.username}! "
-        f"Se emitió la factura #{factura.id} por ${factura.monto_total} USD (Vence en {metricas['dias_gracia_habiles']} días laborables: {fecha_venc.strftime('%d/%m/%Y')}) y se notificó al correo {cliente.email}."
-    )
-    return redirect('saas_master_control')
-
-@login_required(login_url='/login/')
 def prueba_correo_saas(request):
     """ Utilidad de diagnóstico para lanzar un correo de prueba SMTP """
     if not request.user.is_superuser:
