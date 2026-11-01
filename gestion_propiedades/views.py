@@ -324,6 +324,7 @@ def registrar_pago(request, factura_id):
         metodo = request.POST.get('metodo_pago')
         referencia = request.POST.get('referencia')
         fecha = request.POST.get('fecha_pago')
+        comprobante = request.FILES.get('comprobante_imagen')
 
         # 1. Creamos el Recibo de Pago en la base de datos
         ReciboPago.objects.create(
@@ -332,6 +333,7 @@ def registrar_pago(request, factura_id):
             monto_pagado=monto,
             metodo_pago=metodo,
             referencia_transaccion=referencia,
+            comprobante_imagen=comprobante,
             registrado_por=request.user
         )
 
@@ -2577,13 +2579,16 @@ def registrar_pago_anticipado(request, contrato_id):
         referencia = request.POST.get('referencia', '')
         # Si el usuario quiere, asume la fecha real de hoy como pago
         fecha_pago = request.POST.get('fecha_pago', timezone.now().date())
+        comprobante = request.FILES.get('comprobante_imagen')
         
         ReciboPago.objects.create(
             factura=nueva_factura,
             fecha_pago=fecha_pago,
             monto_pagado=contrato.monto_renta,
             metodo_pago=metodo,
-            referencia_transaccion=referencia
+            referencia_transaccion=referencia,
+            comprobante_imagen=comprobante,
+            registrado_por=request.user
         )
         
         messages.success(request, f'Generado recibo de pago anticipado para el mes de {fecha_proxima_emision.strftime("%m/%Y")}.')

@@ -175,6 +175,11 @@
                                 <td class="fw-bold text-success">${{ recibo.monto_pagado|dinero }}</td>
                                 <td>{{ recibo.metodo_pago }}</td>
                                 <td class="text-center">
+                                    {% if recibo.comprobante_imagen %}
+                                        <a href="{{ recibo.comprobante_imagen.url }}" target="_blank" class="btn btn-sm btn-outline-info me-1" title="Ver Volante de Pago">
+                                            📎 Comprobante
+                                        </a>
+                                    {% endif %}
                                     <a href="{% url 'imprimir_recibo' recibo.id %}" target="_blank" class="btn btn-sm btn-outline-secondary">
                                         🖨️ Imprimir PDF
                                     </a>

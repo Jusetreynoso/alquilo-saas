@@ -25,7 +25,7 @@
                     <small>Factura Completa: ${{ factura.monto_total_con_mora|dinero }}</small>
                 </div>
 
-                <form method="POST">
+                <form method="POST" enctype="multipart/form-data">
                     {% csrf_token %} <div class="mb-3">
                         <label class="form-label fw-bold">Fecha del Pago</label>
                         <input type="date" name="fecha_pago" class="form-control" required value="{% now 'Y-m-d' %}">
@@ -49,6 +49,12 @@
                     <div class="mb-4">
                         <label class="form-label fw-bold">Número de Referencia (Opcional)</label>
                         <input type="text" name="referencia" class="form-control" placeholder="Ej: TXN-123456789">
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-bold text-primary">📎 Volante o Comprobante de Pago (Opcional)</label>
+                        <input type="file" name="comprobante_imagen" class="form-control" accept="image/*,.pdf">
+                        <div class="form-text small">Sube la foto del voucher, captura de transferencia bancaria o PDF. Se archivará automáticamente en la carpeta de este apartamento.</div>
                     </div>
 
                     <div class="d-grid">

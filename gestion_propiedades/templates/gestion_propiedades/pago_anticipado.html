@@ -31,7 +31,7 @@
             </div>
 
             <div class="card-body border-top p-4">
-                <form method="POST">
+                <form method="POST" enctype="multipart/form-data">
                     {% csrf_token %}
                     
                     <div class="mb-3">
@@ -63,6 +63,12 @@
                     <div class="mb-4">
                         <label class="form-label text-muted fw-bold small">Referencia (Opcional)</label>
                         <input type="text" name="referencia" class="form-control form-control-lg" placeholder="Número de confirmación, ID de transacción, etc.">
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label text-muted fw-bold small">📎 Volante o Comprobante de Pago (Opcional)</label>
+                        <input type="file" name="comprobante_imagen" class="form-control form-control-lg" accept="image/*,.pdf">
+                        <small class="text-muted mt-1 d-block">Sube la foto del voucher o PDF. Se archivará en la carpeta de este apartamento.</small>
                     </div>
 
                     <div class="d-grid mt-4">

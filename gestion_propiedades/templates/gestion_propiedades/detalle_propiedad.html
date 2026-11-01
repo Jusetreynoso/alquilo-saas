@@ -558,6 +558,9 @@
                                     {% endif %}
                                     
                                     {% for recibo in factura.recibos.all %}
+                                        {% if recibo.comprobante_imagen %}
+                                            <a href="{{ recibo.comprobante_imagen.url }}" class="btn btn-sm btn-outline-info mb-1 mt-1" target="_blank" title="Ver Volante o Comprobante Adjunto">📎</a>
+                                        {% endif %}
                                         <a href="{% url 'imprimir_recibo' recibo.id %}" class="btn btn-sm btn-outline-primary mb-1 mt-1" target="_blank" title="Imprimir Abono/Pago #${{ recibo.monto_pagado|dinero }}">
                                             🖨️
                                         </a>

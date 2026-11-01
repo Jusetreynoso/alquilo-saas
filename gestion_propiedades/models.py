@@ -254,6 +254,26 @@ class PlantillaContrato(models.Model):
             return f"{self.titulo} (Sistema)"
         return f"{self.titulo} - {self.portafolio.nombre}"
 
+def ruta_documento_contrato(instance, filename):
+    import os
+    from django.utils.text import slugify
+
+    prop_id = "general"
+    prop_nombre = "inmueble"
+    try:
+        if instance.propiedad_id:
+            prop = instance.propiedad
+            prop_id = str(prop.id)
+            prop_nombre = slugify(prop.nombre_o_numero or f"prop_{prop.id}")
+    except Exception:
+        pass
+
+    nombre_base, extension = os.path.splitext(filename)
+    nombre_limpio = slugify(nombre_base)[:35] or "contrato"
+    ext_limpia = extension.lower() if extension else ".pdf"
+    return f"contratos/propiedad_{prop_id}_{prop_nombre}/{nombre_limpio}{ext_limpia}"
+
+
 class Contrato(models.Model):
     propiedad = models.ForeignKey(Propiedad, on_delete=models.CASCADE, related_name='contratos')
     inquilino = models.ForeignKey(Inquilino, on_delete=models.PROTECT, related_name='contratos')
@@ -311,7 +331,7 @@ class Contrato(models.Model):
     plantilla = models.ForeignKey(PlantillaContrato, on_delete=models.SET_NULL, null=True, blank=True, help_text="Plantilla base utilizada")
     texto_legal_generado = models.TextField(blank=True, null=True, help_text="Copia exacta del texto generado al momento de crear el contrato")
     
-    documento_contrato = models.FileField(upload_to='contratos/', blank=True, null=True)
+    documento_contrato = models.FileField(upload_to=ruta_documento_contrato, blank=True, null=True, help_text="Copia digitalizada o PDF firmado del contrato")
     fotos_entrega = models.FileField(upload_to='entregas_galeria/', blank=True, null=True)
     foto_entrega_2 = models.FileField(upload_to='entregas_galeria/', blank=True, null=True)
     foto_entrega_3 = models.FileField(upload_to='entregas_galeria/', blank=True, null=True)
@@ -378,6 +398,33 @@ class CargoMora(models.Model):
     def __str__(self):
         return f"Mora de ${self.monto} a Factura #{self.factura.id}"
 
+def ruta_comprobante_pago(instance, filename):
+    import os
+    from django.utils.text import slugify
+
+    prop_id = "general"
+    prop_nombre = "inmueble"
+    try:
+        if instance.factura_id:
+            factura = instance.factura
+            if factura and factura.contrato_id and factura.contrato.propiedad_id:
+                prop = factura.contrato.propiedad
+                prop_id = str(prop.id)
+                prop_nombre = slugify(prop.nombre_o_numero or f"prop_{prop.id}")
+    except Exception:
+        pass
+
+    try:
+        fecha_str = instance.fecha_pago.strftime('%Y_%m') if instance.fecha_pago else 'recientes'
+    except Exception:
+        fecha_str = 'recientes'
+
+    nombre_base, extension = os.path.splitext(filename)
+    nombre_limpio = slugify(nombre_base)[:35] or "comprobante"
+    ext_limpia = extension.lower() if extension else ".jpg"
+    return f"comprobantes_pagos/propiedad_{prop_id}_{prop_nombre}/{fecha_str}/{nombre_limpio}{ext_limpia}"
+
+
 class ReciboPago(models.Model):
     METODO_CHOICES = [
         ('TRANSFERENCIA', 'Transferencia Bancaria'),
@@ -391,7 +438,7 @@ class ReciboPago(models.Model):
     monto_pagado = models.DecimalField(max_digits=10, decimal_places=2)
     metodo_pago = models.CharField(max_length=20, choices=METODO_CHOICES, default='TRANSFERENCIA')
     referencia_transaccion = models.CharField(max_length=100, blank=True, null=True)
-    comprobante_imagen = models.FileField(upload_to='comprobantes_pago/', blank=True, null=True)
+    comprobante_imagen = models.FileField(upload_to=ruta_comprobante_pago, blank=True, null=True, help_text="Comprobante, volante o voucher de pago (JPG, PNG o PDF)")
     registrado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='recibos_cobrados', help_text="Usuario que estaba logueado y registró este cobro")
     registrado_en = models.DateTimeField(auto_now_add=True)
 
