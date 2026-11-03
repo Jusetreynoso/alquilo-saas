@@ -4,9 +4,20 @@ from .models import Propiedad, Contrato, Portafolio, MantenimientoUnidad, Solici
 from django.db.models import Q
 
 class PortafolioForm(forms.ModelForm):
+    actualizar_facturas_existentes = forms.BooleanField(
+        required=False,
+        initial=False,
+        label="Actualizar también las facturas emitidas de este portafolio al formato seleccionado",
+        help_text="Si se marca, el sistema reformateará automáticamente el concepto de las facturas existentes de tus contratos."
+    )
+
     class Meta:
         model = Portafolio
-        fields = ['nombre', 'eslogan', 'direccion_fisica', 'telefono_contacto', 'logo_empresa', 'formato_impresion', 'config_meses_deposito', 'config_meses_adelanto']
+        fields = [
+            'nombre', 'eslogan', 'direccion_fisica', 'telefono_contacto', 
+            'logo_empresa', 'formato_impresion', 'formato_concepto_factura',
+            'config_meses_deposito', 'config_meses_adelanto'
+        ]
         widgets = {
             'nombre': forms.TextInput(attrs={'class': 'form-control', 'required': True}),
             'eslogan': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Tu hogar ideal (Opcional)'}),
@@ -14,6 +25,7 @@ class PortafolioForm(forms.ModelForm):
             'telefono_contacto': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Opcional'}),
             'logo_empresa': forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/*'}),
             'formato_impresion': forms.Select(attrs={'class': 'form-select'}),
+            'formato_concepto_factura': forms.Select(attrs={'class': 'form-select'}),
             'config_meses_deposito': forms.NumberInput(attrs={'class': 'form-control'}),
             'config_meses_adelanto': forms.NumberInput(attrs={'class': 'form-control'}),
         }
@@ -343,6 +355,16 @@ class NuevoClienteSaaSForm(forms.Form):
     email = forms.EmailField(widget=forms.EmailInput(attrs={'class': 'form-control'}))
     password = forms.CharField(widget=forms.PasswordInput(attrs={'class': 'form-control'}))
     nombre_portafolio = forms.CharField(max_length=100, required=False, widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej. Inversiones García'}), help_text="Se creará uno por defecto si se deja en blanco.")
+    formato_concepto_factura = forms.ChoiceField(
+        choices=[
+            ('MES_ANIO', 'Estándar (Ej: Renta Octubre 2026)'),
+            ('RANGO_FECHAS', 'Rango de Período (Ej: PAGO DESDE EL 1 DE OCTUBRE DEL 2026 HASTA EL 1 DE NOVIEMBRE DEL 2026)')
+        ],
+        initial='MES_ANIO',
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        label="Formato de Concepto de Facturación"
+    )
 
 class EditarSuscripcionForm(forms.ModelForm):
     class Meta:

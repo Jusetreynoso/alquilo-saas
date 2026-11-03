@@ -607,12 +607,13 @@ def generar_facturas_masivas(request):
                     fecha_vencimiento = date(hoy.year, hoy.month, ultimo_dia_mes)
 
                 # 4. Crear la Factura
+                concepto_factura = contrato.propiedad.portafolio.generar_concepto_factura(contrato, hoy)
                 Factura.objects.create(
                     contrato=contrato,
                     fecha_emision=hoy,
                     fecha_vencimiento=fecha_vencimiento,
                     monto_base=contrato.monto_renta,
-                    concepto=f"Renta {obtener_nombre_mes(hoy.month)} {hoy.year}",
+                    concepto=concepto_factura,
                     estado='PENDIENTE'
                 )
                 facturas_creadas += 1
@@ -2175,7 +2176,8 @@ def crear_cliente_saas(request):
             )
             # Portafolio inicial
             nombre_portf = form.cleaned_data['nombre_portafolio'] or f"Portafolio de {user.first_name}"
-            Portafolio.objects.create(nombre=nombre_portf, propietario=user)
+            formato_concepto = form.cleaned_data.get('formato_concepto_factura') or 'MES_ANIO'
+            Portafolio.objects.create(nombre=nombre_portf, propietario=user, formato_concepto_factura=formato_concepto)
             
             # Suscripcion Trial
             plan_trial = PlanSaaS.objects.filter(activo=True).first()
@@ -2769,12 +2771,13 @@ def registrar_pago_anticipado(request, contrato_id):
     
     if request.method == 'POST':
         # 1. Generar la Factura "del futuro"
+        concepto_anticipada = contrato.propiedad.portafolio.generar_concepto_factura(contrato, fecha_proxima_emision, es_anticipada=True)
         nueva_factura = Factura.objects.create(
             contrato=contrato,
             fecha_emision=fecha_proxima_emision,
             fecha_vencimiento=fecha_vencimiento_proxima,
             monto_base=contrato.monto_renta,
-            concepto=f"Renta {obtener_nombre_mes(fecha_proxima_emision.month)} {fecha_proxima_emision.year} (Anticipada)",
+            concepto=concepto_anticipada,
             estado='PAGADA'
         )
         
@@ -2901,8 +2904,21 @@ def editar_portafolio(request):
     if request.method == 'POST':
         form = PortafolioForm(request.POST, request.FILES, instance=portafolio)
         if form.is_valid():
-            form.save()
-            messages.success(request, "Ajustes de Marca Blanca y del portafolio actualizados correctamente.")
+            p = form.save()
+            if form.cleaned_data.get('actualizar_facturas_existentes'):
+                from .models import Factura, Contrato
+                contratos = Contrato.objects.filter(propiedad__portafolio=p)
+                facturas = Factura.objects.filter(contrato__in=contratos).exclude(concepto__icontains='migrado')
+                cant_actualizadas = 0
+                for f in facturas:
+                    nuevo_concepto = p.generar_concepto_factura(f.contrato, fecha_base=f.fecha_vencimiento or f.fecha_emision, concepto_actual=f.concepto)
+                    if nuevo_concepto != f.concepto:
+                        f.concepto = nuevo_concepto
+                        f.save()
+                        cant_actualizadas += 1
+                messages.success(request, f"Ajustes de portafolio guardados. Se actualizaron {cant_actualizadas} factura(s) existentes al formato seleccionado.")
+            else:
+                messages.success(request, "Ajustes de Marca Blanca y del portafolio actualizados correctamente.")
             return redirect('editar_portafolio')
     else:
         form = PortafolioForm(instance=portafolio)

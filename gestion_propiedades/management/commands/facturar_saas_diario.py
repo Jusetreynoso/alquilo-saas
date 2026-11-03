@@ -114,13 +114,14 @@ class Command(BaseCommand):
                     ).exists()
                     
                     if not ya_facturado:
+                        concepto_cron = contrato.propiedad.portafolio.generar_concepto_factura(contrato, hoy)
                         nueva_fact = Factura.objects.create(
                             contrato=contrato,
                             fecha_emision=hoy,
                             fecha_vencimiento=hoy + timedelta(days=contrato.dias_gracia),
                             monto_base=contrato.monto_renta,
                             estado='PENDIENTE',
-                            concepto=f'Renta {obtener_nombre_mes(hoy.month)} {hoy.year}'
+                            concepto=concepto_cron
                         )
                         facturas_b2c += 1
                         

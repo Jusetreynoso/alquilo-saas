@@ -139,11 +139,14 @@ def ejecutar_importacion(csv_path='cartera_basora_arriaga.csv', email_cliente='l
                 nombre="Basora & Arriaga Gestión Inmobiliaria",
                 propietario=user,
                 telefono_contacto="(809) 307-8582",
-                direccion_fisica="Santo Domingo, República Dominicana"
+                direccion_fisica="Santo Domingo, República Dominicana",
+                formato_concepto_factura='RANGO_FECHAS'
             )
             print(f"📁 Creado nuevo portafolio: '{portafolio.nombre}' (ID: {portafolio.id})")
         else:
-            print(f"📁 Usando portafolio existente: '{portafolio.nombre}' (ID: {portafolio.id})")
+            portafolio.formato_concepto_factura = 'RANGO_FECHAS'
+            portafolio.save()
+            print(f"📁 Usando portafolio existente: '{portafolio.nombre}' (ID: {portafolio.id}) con formato RANGO_FECHAS")
 
         # 3. Suscripción activa si no tiene
         if not hasattr(user, 'suscripcion'):

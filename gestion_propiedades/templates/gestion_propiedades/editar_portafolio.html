@@ -53,6 +53,26 @@
                         </div>
                     </div>
 
+                    <div class="mb-3 p-3 bg-light rounded border border-light-subtle">
+                        <label class="form-label text-dark fw-bold mb-1">
+                            <i class="fa-solid fa-file-invoice-dollar text-primary me-1"></i> Formato de Concepto en Facturas de Alquiler
+                        </label>
+                        {{ form.formato_concepto_factura }}
+                        <div class="form-text mt-2 small">
+                            Personaliza cómo se generará el texto del concepto en las facturas y recibos de este portafolio:
+                            <ul class="mb-2 ps-3 mt-1">
+                                <li><strong>Estándar por Mes:</strong> <code>Renta Octubre 2026</code></li>
+                                <li><strong>Rango de Período Facturado:</strong> <code>PAGO DESDE EL 1 DE OCTUBRE DEL 2026 HASTA EL 1 DE NOVIEMBRE DEL 2026</code></li>
+                            </ul>
+                        </div>
+                        <div class="form-check mt-3 pt-2 border-top">
+                            {{ form.actualizar_facturas_existentes }}
+                            <label class="form-check-label fw-semibold small text-primary" for="{{ form.actualizar_facturas_existentes.id_for_label }}">
+                                🔄 Actualizar también las facturas emitidas de este portafolio al formato seleccionado
+                            </label>
+                        </div>
+                    </div>
+
                     <hr class="my-4">
                     
                     <h6 class="fw-bold mb-3 text-secondary"><i class="fa-solid fa-gears"></i> Configuraciones por Defecto (Nuevos Contratos)</h6>

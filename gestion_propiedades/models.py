@@ -25,8 +25,100 @@ class Portafolio(models.Model):
     ]
     formato_impresion = models.CharField(max_length=10, choices=OPCIONES_IMPRESORA, default='A4', help_text="Formato de recibos B2C")
 
+    # Configuración de Formato de Concepto de Facturación
+    OPCIONES_CONCEPTO_FACTURA = [
+        ('MES_ANIO', 'Estándar (Ej: Renta Octubre 2026)'),
+        ('RANGO_FECHAS', 'Rango de Período (Ej: PAGO DESDE EL 1 DE OCTUBRE DEL 2026 HASTA EL 1 DE NOVIEMBRE DEL 2026)'),
+    ]
+    formato_concepto_factura = models.CharField(
+        max_length=20,
+        choices=OPCIONES_CONCEPTO_FACTURA,
+        default='MES_ANIO',
+        help_text="Formato con el que se generará el concepto de las facturas de alquiler"
+    )
+
+    def generar_concepto_factura(self, contrato, fecha_base=None, concepto_actual=None, es_anticipada=False):
+        import calendar
+        import re
+        from datetime import date
+
+        mes = None
+        anio = None
+
+        meses_dict = {
+            'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,
+            'julio': 7, 'agosto': 8, 'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12,
+            'january': 1, 'february': 2, 'march': 3, 'april': 4, 'may': 5, 'june': 6,
+            'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12
+        }
+
+        if concepto_actual:
+            c_lower = concepto_actual.lower()
+            for m_name, m_num in meses_dict.items():
+                if m_name in c_lower:
+                    mes = m_num
+                    break
+            match_anio = re.search(r'\b(202\d|203\d)\b', concepto_actual)
+            if match_anio:
+                anio = int(match_anio.group(1))
+
+        if not mes or not anio:
+            ref = fecha_base or date.today()
+            mes = ref.month
+            anio = ref.year
+
+        nombres_meses_mayus = {
+            1: 'ENERO', 2: 'FEBRERO', 3: 'MARZO', 4: 'ABRIL', 5: 'MAYO', 6: 'JUNIO',
+            7: 'JULIO', 8: 'AGOSTO', 9: 'SEPTIEMBRE', 10: 'OCTUBRE', 11: 'NOVIEMBRE', 12: 'DICIEMBRE'
+        }
+        nombres_meses_title = {
+            1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril', 5: 'Mayo', 6: 'Junio',
+            7: 'Julio', 8: 'Agosto', 9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
+        }
+
+        if self.formato_concepto_factura == 'RANGO_FECHAS':
+            dia = getattr(contrato, 'dia_de_pago', 1) or 1
+            max_d1 = calendar.monthrange(anio, mes)[1]
+            dia_inicio = min(dia, max_d1)
+
+            if mes == 12:
+                mes_fin = 1
+                anio_fin = anio + 1
+            else:
+                mes_fin = mes + 1
+                anio_fin = anio
+
+            max_d2 = calendar.monthrange(anio_fin, mes_fin)[1]
+            dia_fin = min(dia, max_d2)
+
+            mes1_str = nombres_meses_mayus.get(mes, '')
+            mes2_str = nombres_meses_mayus.get(mes_fin, '')
+
+            texto = f"PAGO DESDE EL {dia_inicio} DE {mes1_str} DEL {anio} HASTA EL {dia_fin} DE {mes2_str} DEL {anio_fin}"
+            if es_anticipada:
+                texto += " (Anticipada)"
+            return texto
+        else:
+            mes_title = nombres_meses_title.get(mes, '')
+            texto = f"Renta {mes_title} {anio}"
+            if es_anticipada:
+                texto += " (Anticipada)"
+            return texto
+
     def __str__(self):
         return self.nombre
+
+
+def calcular_concepto_factura(contrato, fecha_base=None, concepto_actual=None, es_anticipada=False):
+    if hasattr(contrato, 'propiedad') and hasattr(contrato.propiedad, 'portafolio') and contrato.propiedad.portafolio:
+        return contrato.propiedad.portafolio.generar_concepto_factura(
+            contrato, fecha_base=fecha_base, concepto_actual=concepto_actual, es_anticipada=es_anticipada
+        )
+    import calendar
+    from datetime import date
+    ref = fecha_base or date.today()
+    meses = {1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril', 5: 'Mayo', 6: 'Junio', 7: 'Julio', 8: 'Agosto', 9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'}
+    return f"Renta {meses.get(ref.month, '')} {ref.year}"
 
 class PlanSaaS(models.Model):
     nombre = models.CharField(max_length=50)
