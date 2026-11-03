@@ -10,19 +10,25 @@
 </div>
 
 <div class="card-elegant">
-    <form method="POST">
+    <form method="POST" enctype="multipart/form-data">
         {% csrf_token %}
         <div class="mb-3 text-start">
-            <label class="form-label fw-bold small text-secondary">Avería o Titulo Principal</label>
-            <input type="text" name="titulo" class="form-control bg-light border-0" placeholder="Ej: Fuga de agua en el baño principal" required>
+            <label class="form-label fw-bold small text-secondary">Avería o Título Principal</label>
+            <input type="text" name="titulo" class="form-control bg-light border-0 py-2" placeholder="Ej: Fuga de agua en el baño principal" required>
         </div>
         
-        <div class="mb-4 text-start">
+        <div class="mb-3 text-start">
             <label class="form-label fw-bold small text-secondary">Explicación Detallada</label>
-            <textarea name="descripcion" class="form-control bg-light border-0" rows="4" placeholder="Háblenos sobre el problema, desde cuándo ocurre y cualquier detalle que el técnico deba saber." required></textarea>
+            <textarea name="descripcion" class="form-control bg-light border-0 py-2" rows="4" placeholder="Describa el problema, desde cuándo ocurre y cualquier detalle que el técnico deba saber..." required></textarea>
+        </div>
+
+        <div class="mb-4 text-start">
+            <label class="form-label fw-bold small text-secondary">Foto o Evidencia (Opcional)</label>
+            <input type="file" name="foto_averia" class="form-control bg-light border-0 py-2" accept="image/*">
+            <div class="form-text small">Puedes subir una foto del problema para que el técnico acuda preparado.</div>
         </div>
         
-        <button type="submit" class="btn btn-portal d-flex align-items-center justify-content-center gap-2">
+        <button type="submit" class="btn btn-portal d-flex align-items-center justify-content-center gap-2 py-3 fw-bold">
             <i class="fa-solid fa-paper-plane"></i> Enviar Reporte Ahora
         </button>
     </form>

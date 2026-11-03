@@ -354,20 +354,46 @@ def registrar_pago(request, factura_id):
 
 @login_required(login_url='/login/')
 def lista_contratos(request):
-    # 1. Filtramos por los portafolios del usuario
     portafolios = Portafolio.objects.filter(
         Q(propietario=request.user) | Q(accesos__usuario=request.user)
     ).distinct()
 
-    # 2. Buscamos los contratos de esas propiedades
-    # Los ordenamos para que los Activos salgan primero, y luego por el nombre de la propiedad
+    q = request.GET.get('q', '').strip()
+    estado = request.GET.get('estado', 'TODOS')
+    portafolio_id = request.GET.get('portafolio_id', 'TODOS')
+
     contratos = Contrato.objects.filter(
         propiedad__portafolio__in=portafolios
-    ).select_related('propiedad').order_by('-activo', 'propiedad__nombre_o_numero')
+    ).select_related('propiedad', 'inquilino', 'propiedad__portafolio')
+
+    if portafolio_id != 'TODOS' and portafolio_id and str(portafolio_id).isdigit():
+        contratos = contratos.filter(propiedad__portafolio_id=int(portafolio_id))
+
+    if estado == 'ACTIVOS':
+        contratos = contratos.filter(activo=True)
+    elif estado == 'FINALIZADOS':
+        contratos = contratos.filter(activo=False)
+
+    if q:
+        contratos = contratos.filter(
+            Q(inquilino__nombre__icontains=q) |
+            Q(inquilino__telefono__icontains=q) |
+            Q(inquilino__telefono_secundario__icontains=q) |
+            Q(inquilino__cedula_o_pasaporte__icontains=q) |
+            Q(propiedad__nombre_o_numero__icontains=q) |
+            Q(propiedad__grupo_o_residencial__icontains=q)
+        )
+
+    contratos = contratos.order_by('-activo', 'propiedad__nombre_o_numero')
 
     context = {
         'titulo_pagina': 'Gestión de Contratos',
         'contratos': contratos,
+        'q': q,
+        'estado_sel': estado,
+        'portafolios': portafolios,
+        'portafolio_sel': str(portafolio_id),
+        'total_contratos': contratos.count(),
     }
     return render(request, 'gestion_propiedades/lista_contratos.html', context)
 

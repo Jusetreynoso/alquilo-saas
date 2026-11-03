@@ -72,6 +72,34 @@
         </div>
     </a>
 
+    <!-- Historial de Averías Reportadas -->
+    {% if incidencias_recientes %}
+    <h6 class="text-uppercase text-muted fw-bold small mt-4 mb-2"><i class="fa-solid fa-wrench"></i> Averías Reportadas Recientemente</h6>
+    <div class="card-elegant p-0 overflow-hidden mb-3">
+        <div class="list-group list-group-flush">
+            {% for inc in incidencias_recientes %}
+            <div class="list-group-item p-3 border-light">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="me-2">
+                        <div class="fw-bold text-dark small">{{ inc.descripcion|truncatewords:6 }}</div>
+                        <div class="text-muted" style="font-size: 0.75rem;"><i class="fa-regular fa-calendar"></i> {{ inc.fecha_reporte|date:"d M, Y" }}</div>
+                    </div>
+                    <div class="text-end">
+                        {% if inc.estado == 'PENDIENTE' %}
+                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill small">⏳ Pendiente</span>
+                        {% elif inc.estado == 'PROGRESO' %}
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill small">⚙️ En Revisión</span>
+                        {% else %}
+                            <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill small">✅ Resuelto</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Historial de Pagos -->
     {% if historial_facturas %}
     <h5 class="fw-bold mt-5 mb-3">Últimos Recibos</h5>

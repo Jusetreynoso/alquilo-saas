@@ -37,19 +37,27 @@ def portal_login(request):
 def portal_dashboard(request):
     inquilino_id = request.session.get('inquilino_id')
     inquilino = get_object_or_404(Inquilino, id=inquilino_id)
-    contrato = Contrato.objects.filter(inquilino=inquilino, activo=True).first()
+    contrato = Contrato.objects.filter(inquilino=inquilino, activo=True).select_related('propiedad').first()
     
     facturas_pendientes = []
     historial_facturas = []
+    incidencias_recientes = []
+    
     if contrato:
         facturas_pendientes = Factura.objects.filter(contrato=contrato, estado='PENDIENTE').order_by('fecha_vencimiento')
         historial_facturas = Factura.objects.filter(contrato=contrato).exclude(estado='PENDIENTE').order_by('-fecha_emision')[:5]
+        
+        from .models import MantenimientoUnidad
+        incidencias_recientes = MantenimientoUnidad.objects.filter(
+            propiedad=contrato.propiedad
+        ).order_by('-fecha_reporte', '-id')[:4]
         
     context = {
         'inquilino': inquilino,
         'contrato': contrato,
         'facturas_pendientes': facturas_pendientes,
-        'historial_facturas': historial_facturas
+        'historial_facturas': historial_facturas,
+        'incidencias_recientes': incidencias_recientes,
     }
     return render(request, 'gestion_propiedades/portal/dashboard.html', context)
 
@@ -63,22 +71,36 @@ def portal_logout(request):
 def portal_mantenimiento(request):
     inquilino_id = request.session.get('inquilino_id')
     inquilino = get_object_or_404(Inquilino, id=inquilino_id)
-    contrato = Contrato.objects.filter(inquilino=inquilino, activo=True).first()
+    contrato = Contrato.objects.filter(inquilino=inquilino, activo=True).select_related('propiedad').first()
     
-    if request.method == 'POST' and contrato:
-        # Importación diferida para evitar ciclos
-        from .models import MantenimientoGlobal
-        titulo = request.POST.get('titulo')
-        descripcion = request.POST.get('descripcion')
+    if not contrato:
+        messages.warning(request, "No posees un contrato de alquiler activo en este momento para emitir reportes.")
+        return redirect('portal_dashboard')
+    
+    if request.method == 'POST':
+        from .models import MantenimientoUnidad
+        titulo = request.POST.get('titulo', '').strip()
+        descripcion = request.POST.get('descripcion', '').strip()
+        foto = request.FILES.get('foto_averia')
         
-        MantenimientoGlobal.objects.create(
+        if not titulo or not descripcion:
+            messages.error(request, "Por favor indica el título y los detalles de la avería.")
+            return render(request, 'gestion_propiedades/portal/mantenimiento.html', {'contrato': contrato, 'inquilino': inquilino})
+        
+        texto_descripcion = f"Avería: {titulo}\n\nReportado por: {inquilino.nombre} (Tel: {inquilino.telefono})\n\nDetalles del problema:\n{descripcion}"
+        
+        mantenimiento = MantenimientoUnidad.objects.create(
             propiedad=contrato.propiedad,
-            titulo=f"[Portal Inquilino] {titulo}",
-            descripcion=f"Reportado por: {inquilino.nombre} - Tel: {inquilino.telefono}\n\nDetalles del problema:\n{descripcion}",
-            estado='PENDIENTE',
-            prioridad='MEDIA'
+            categoria='REPARACION',
+            descripcion=texto_descripcion,
+            costo=0.00,
+            estado='PENDIENTE'
         )
-        messages.success(request, "Tu incidencia ha sido enviada exitosamente al administrador de la propiedad.")
+        if foto:
+            mantenimiento.factura_adjunta = foto
+            mantenimiento.save()
+            
+        messages.success(request, "Tu reporte de incidencia ha sido enviado exitosamente al administrador de la propiedad.")
         return redirect('portal_dashboard')
         
-    return render(request, 'gestion_propiedades/portal/mantenimiento.html', {'contrato': contrato})
+    return render(request, 'gestion_propiedades/portal/mantenimiento.html', {'contrato': contrato, 'inquilino': inquilino})

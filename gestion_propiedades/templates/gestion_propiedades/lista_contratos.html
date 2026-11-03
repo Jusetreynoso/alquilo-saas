@@ -3,66 +3,135 @@
 {% block titulo %}{{ titulo_pagina }}{% endblock %}
 
 {% block encabezado %}
-    {{ titulo_pagina }}
-    <a href="{% url 'crear_contrato' %}" class="btn btn-sm btn-primary ms-3">+ Nuevo Contrato</a>
+    <div class="d-flex justify-content-between align-items-center w-100 flex-wrap gap-2">
+        <span>📑 {{ titulo_pagina }}</span>
+        <a href="{% url 'crear_contrato' %}" class="btn btn-primary fw-bold shadow-sm">+ Nuevo Contrato</a>
+    </div>
 {% endblock %}
 
 {% block contenido %}
+<!-- Barra de Búsqueda y Filtros -->
+<div class="card shadow-sm border-0 mb-4 bg-light">
+    <div class="card-body py-3">
+        <form method="GET" action="{% url 'lista_contratos' %}" class="row g-2 align-items-center" id="formFiltroContratos">
+            <div class="col-md-{% if portafolios|length > 1 %}5{% else %}7{% endif %} col-12">
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0 text-muted">🔍</span>
+                    <input type="text" name="q" id="buscadorContratos" class="form-control bg-white border-start-0" placeholder="Buscar por inquilino, teléfono, cédula, propiedad o residencial..." value="{{ q }}" autocomplete="off">
+                    {% if q %}
+                        <a href="{% url 'lista_contratos' %}" class="btn btn-outline-secondary border" title="Limpiar búsqueda">✕</a>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if portafolios|length > 1 %}
+            <div class="col-md-3 col-6">
+                <select name="portafolio_id" class="form-select bg-white" onchange="this.form.submit()">
+                    <option value="TODOS" {% if portafolio_sel == 'TODOS' %}selected{% endif %}>📂 Todos los Portafolios</option>
+                    {% for port in portafolios %}
+                        <option value="{{ port.id }}" {% if portafolio_sel == port.id|stringformat:"s" %}selected{% endif %}>📂 {{ port.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+
+            <div class="col-md-{% if portafolios|length > 1 %}2{% else %}3{% endif %} col-6">
+                <select name="estado" class="form-select bg-white" onchange="this.form.submit()">
+                    <option value="TODOS" {% if estado_sel == 'TODOS' %}selected{% endif %}>Todos los Estados</option>
+                    <option value="ACTIVOS" {% if estado_sel == 'ACTIVOS' %}selected{% endif %}>🟢 Solo Activos</option>
+                    <option value="FINALIZADOS" {% if estado_sel == 'FINALIZADOS' %}selected{% endif %}>⚪ Finalizados</option>
+                </select>
+            </div>
+
+            <div class="col-md-2 col-12 text-end">
+                <button type="submit" class="btn btn-primary w-100 fw-bold">
+                    Filtrar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div class="card shadow-sm border-0">
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
+            <table class="table table-hover align-middle mb-0" id="tablaContratos">
                 <thead class="table-light">
                     <tr>
                         <th class="px-4 py-3">Inquilino</th>
                         <th class="py-3">Propiedad</th>
+                        {% if portafolios|length > 1 %}
+                            <th class="py-3">Portafolio</th>
+                        {% endif %}
                         <th class="py-3">Renta</th>
                         <th class="py-3">Día de Pago</th>
                         <th class="py-3">Vigencia</th>
-                        <th class="py-3">Estado</th>
-                        <th class="py-3 text-center">Acciones</th>
+                        <th class="py-3 text-center">Estado</th>
+                        <th class="py-3 text-center px-4">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for contrato in contratos %}
-                    <tr>
+                    <tr class="fila-contrato">
                         <td class="px-4 py-3 fw-bold">
-                            {{ contrato.inquilino.nombre }}
-                            <br>
-                            <small class="text-muted fw-normal">📞 {{ contrato.inquilino.telefono }}</small>
-                        </td>
-                        <td class="py-3 text-primary fw-bold">
-                            <a href="{% url 'detalle_propiedad' contrato.propiedad.id %}" class="text-decoration-none">
-                                {{ contrato.propiedad.nombre_o_numero }}
+                            <a href="{% url 'detalle_inquilino' contrato.inquilino.id %}" class="text-decoration-none text-dark">
+                                👤 {{ contrato.inquilino.nombre }}
                             </a>
-                        </td>
-                        <td class="py-3 fw-bold text-success">${{ contrato.monto_renta|dinero }}</td>
-                        <td class="py-3">Los días {{ contrato.dia_de_pago }}</td>
-                        <td class="py-3 small">
-                            {{ contrato.fecha_inicio|date:"d M Y" }} <br>
-                            <span class="text-muted">al</span> <br>
-                            {{ contrato.fecha_fin|date:"d M Y"|default:"Indefinido" }}
+                            <br>
+                            <small class="text-muted fw-normal">
+                                📞 <a href="tel:{{ contrato.inquilino.telefono }}" class="text-decoration-none text-muted">{{ contrato.inquilino.telefono }}</a>
+                                {% if contrato.inquilino.telefono_secundario %}
+                                    | <a href="tel:{{ contrato.inquilino.telefono_secundario }}" class="text-decoration-none text-muted">{{ contrato.inquilino.telefono_secundario }}</a>
+                                {% endif %}
+                            </small>
                         </td>
                         <td class="py-3">
-                            {% if contrato.activo %}
-                                <span class="badge bg-success">Activo</span>
-                            {% else %}
-                                <span class="badge bg-secondary">Finalizado</span>
+                            <a href="{% url 'detalle_propiedad' contrato.propiedad.id %}" class="text-decoration-none fw-bold text-primary">
+                                🏠 {{ contrato.propiedad.nombre_o_numero }}
+                            </a>
+                            {% if contrato.propiedad.grupo_o_residencial %}
+                                <div class="small text-muted">{{ contrato.propiedad.grupo_o_residencial }}</div>
                             {% endif %}
                         </td>
+                        {% if portafolios|length > 1 %}
+                        <td class="py-3">
+                            <span class="badge bg-light text-secondary border">📂 {{ contrato.propiedad.portafolio.nombre }}</span>
+                        </td>
+                        {% endif %}
+                        <td class="py-3 fw-bold text-success">${{ contrato.monto_renta|dinero }}</td>
+                        <td class="py-3">Día {{ contrato.dia_de_pago }} de c/mes</td>
+                        <td class="py-3 small">
+                            <span class="fw-semibold">{{ contrato.fecha_inicio|date:"d M Y" }}</span> <br>
+                            <span class="text-muted">al</span> <br>
+                            <span class="fw-semibold">{{ contrato.fecha_fin|date:"d M Y"|default:"Indefinido" }}</span>
+                        </td>
                         <td class="py-3 text-center">
-                            <a href="{% url 'imprimir_contrato_legal' contrato.id %}" target="_blank" class="btn btn-sm btn-dark" title="Imprimir Contrato">
-                                <i class="fa-solid fa-print"></i>
-                            </a>
-                            <a href="{% url 'editar_contrato' contrato.id %}" class="btn btn-sm btn-outline-secondary ms-1" title="Editar Contrato">
-                                <i class="fa-solid fa-pen"></i>
-                            </a>
+                            {% if contrato.activo %}
+                                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">Activo</span>
+                            {% else %}
+                                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-1">Finalizado</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 text-center px-4">
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'imprimir_contrato_legal' contrato.id %}" target="_blank" class="btn btn-outline-dark" title="Imprimir Contrato">
+                                    <i class="fa-solid fa-print"></i>
+                                </a>
+                                <a href="{% url 'editar_contrato' contrato.id %}" class="btn btn-outline-secondary" title="Editar Contrato">
+                                    <i class="fa-solid fa-pen"></i>
+                                </a>
+                            </div>
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="text-center py-5 text-muted">
-                            No tienes contratos registrados en tu portafolio.
+                        <td colspan="{% if portafolios|length > 1 %}8{% else %}7{% endif %}" class="text-center py-5 text-muted">
+                            <h5>No se encontraron contratos{% if q %} para "{{ q }}"{% endif %}.</h5>
+                            {% if q %}
+                                <a href="{% url 'lista_contratos' %}" class="btn btn-outline-primary btn-sm mt-2">Limpiar Filtro</a>
+                            {% else %}
+                                <a href="{% url 'crear_contrato' %}" class="btn btn-primary btn-sm mt-2">+ Registrar Primer Contrato</a>
+                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}
@@ -71,4 +140,15 @@
         </div>
     </div>
 </div>
+
+<script>
+    // Filtrado en vivo mientras escribe en el buscador
+    document.getElementById("buscadorContratos").addEventListener("keyup", function() {
+        let filter = this.value.toLowerCase().trim();
+        let rows = document.querySelectorAll(".fila-contrato");
+        rows.forEach(row => {
+            row.style.display = row.innerText.toLowerCase().includes(filter) ? "" : "none";
+        });
+    });
+</script>
 {% endblock %}
