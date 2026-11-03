@@ -99,6 +99,8 @@ urlpatterns = [
 
     # Mantenimientos (Helpdesk)
     path('mantenimientos/', views.lista_mantenimientos_global, name='lista_mantenimientos_global'),
+    path('mantenimientos/<int:mantenimiento_id>/cambiar-estado/', views.cambiar_estado_mantenimiento, name='cambiar_estado_mantenimiento'),
+    path('mantenimientos/crear/', views.crear_mantenimiento_global, name='crear_mantenimiento_global'),
 
     # Inquilinos
     path('inquilinos/', views.lista_inquilinos, name='lista_inquilinos'),

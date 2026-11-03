@@ -23,6 +23,23 @@
     {% endif %}
 </div>
 
+{% if mantenimientos_pendientes_count > 0 %}
+<div class="alert alert-warning border-0 shadow-sm mb-4 d-flex align-items-center justify-content-between p-3 rounded-3 flex-wrap gap-3" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%); border-left: 5px solid #ffc107 !important;">
+    <div class="d-flex align-items-center gap-3">
+        <span class="fs-1">🛠️</span>
+        <div>
+            <h6 class="mb-1 fw-bold text-dark">
+                Tienes {{ mantenimientos_pendientes_count }} reporte{{ mantenimientos_pendientes_count|pluralize }} de avería o incidencia pendiente{{ mantenimientos_pendientes_count|pluralize }} de atención
+            </h6>
+            <p class="mb-0 text-muted small">Los inquilinos han enviado reportes de incidencias desde su portal web que requieren tu revisión.</p>
+        </div>
+    </div>
+    <a href="{% url 'lista_mantenimientos_global' %}?estado=PENDIENTE" class="btn btn-warning text-dark fw-bold shadow-sm text-nowrap px-3 py-2">
+        Atender Incidencias &rarr;
+    </a>
+</div>
+{% endif %}
+
 <div class="row mb-4 g-3">
     <div class="col-md-3">
         <div class="card shadow-sm border-0 border-start border-primary border-4 h-100">

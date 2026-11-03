@@ -1748,10 +1748,43 @@ def reporte_ocupacion(request):
 def lista_mantenimientos_global(request):
     from django.db.models import Case, When, Value, IntegerField, Q
     
-    mantenimientos = MantenimientoUnidad.objects.filter(
-        Q(propiedad__portafolio__propietario=request.user) |
-        Q(propiedad__portafolio__accesos__usuario=request.user)
-    ).distinct().annotate(
+    if request.user.is_superuser:
+        base_qs = MantenimientoUnidad.objects.all()
+        propiedades = Propiedad.objects.filter(is_deleted=False).order_by('nombre_o_numero')
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) |
+            Q(accesos__usuario=request.user)
+        ).distinct()
+        base_qs = MantenimientoUnidad.objects.filter(
+            propiedad__portafolio__in=portafolios
+        ).distinct()
+        propiedades = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False).order_by('nombre_o_numero')
+
+    # Contadores para las pestañas
+    total_todos = base_qs.count()
+    total_pendientes = base_qs.filter(estado='PENDIENTE').count()
+    total_progreso = base_qs.filter(estado='PROGRESO').count()
+    total_completados = base_qs.filter(estado='COMPLETADO').count()
+
+    # Filtro por estado
+    estado_filtro = request.GET.get('estado', '').strip().upper()
+    if estado_filtro in ['PENDIENTE', 'PROGRESO', 'COMPLETADO']:
+        mantenimientos_qs = base_qs.filter(estado=estado_filtro)
+    else:
+        mantenimientos_qs = base_qs
+
+    # Buscador de texto
+    busqueda = request.GET.get('q', '').strip()
+    if busqueda:
+        mantenimientos_qs = mantenimientos_qs.filter(
+            Q(propiedad__nombre_o_numero__icontains=busqueda) |
+            Q(propiedad__grupo_o_residencial__icontains=busqueda) |
+            Q(descripcion__icontains=busqueda) |
+            Q(categoria__icontains=busqueda)
+        )
+
+    mantenimientos = mantenimientos_qs.annotate(
         estado_order=Case(
             When(estado='PENDIENTE', then=Value(1)),
             When(estado='PROGRESO', then=Value(2)),
@@ -1759,13 +1792,112 @@ def lista_mantenimientos_global(request):
             default=Value(4),
             output_field=IntegerField()
         )
-    ).order_by('estado_order', '-fecha_reporte')
+    ).select_related('propiedad', 'propiedad__portafolio').order_by('estado_order', '-fecha_reporte')
     
     context = {
         'titulo_pagina': 'Mantenimiento Global (Helpdesk)',
         'mantenimientos': mantenimientos,
+        'propiedades': propiedades,
+        'estado_filtro': estado_filtro,
+        'busqueda': busqueda,
+        'total_todos': total_todos,
+        'total_pendientes': total_pendientes,
+        'total_progreso': total_progreso,
+        'total_completados': total_completados,
     }
     return render(request, 'gestion_propiedades/mantenimientos_global.html', context)
+
+
+@login_required
+def cambiar_estado_mantenimiento(request, mantenimiento_id):
+    from datetime import date, datetime
+    from decimal import Decimal
+    from django.shortcuts import get_object_or_404, redirect
+    from django.contrib import messages
+    from .models import MantenimientoUnidad, Portafolio
+    from django.db.models import Q
+
+    if request.user.is_superuser:
+        mantenimiento = get_object_or_404(MantenimientoUnidad, id=mantenimiento_id)
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
+        mantenimiento = get_object_or_404(MantenimientoUnidad, id=mantenimiento_id, propiedad__portafolio__in=portafolios)
+
+    if request.method == 'POST':
+        nuevo_estado = request.POST.get('estado', '').strip().upper()
+        if nuevo_estado in ['PENDIENTE', 'PROGRESO', 'COMPLETADO']:
+            mantenimiento.estado = nuevo_estado
+            if nuevo_estado == 'COMPLETADO' and not mantenimiento.fecha_resolucion:
+                mantenimiento.fecha_resolucion = date.today()
+
+        costo_str = request.POST.get('costo', '').strip()
+        if costo_str != '':
+            try:
+                mantenimiento.costo = Decimal(costo_str.replace(',', '.'))
+            except Exception:
+                pass
+
+        fecha_res_str = request.POST.get('fecha_resolucion', '').strip()
+        if fecha_res_str:
+            try:
+                mantenimiento.fecha_resolucion = datetime.strptime(fecha_res_str, '%Y-%m-%d').date()
+            except Exception:
+                pass
+        elif nuevo_estado != 'COMPLETADO':
+            mantenimiento.fecha_resolucion = None
+
+        mantenimiento.save()
+        messages.success(request, f"Ticket de avería/mantenimiento #{mantenimiento.id} actualizado con éxito a '{mantenimiento.get_estado_display()}'.")
+
+    return redirect(request.META.get('HTTP_REFERER', 'lista_mantenimientos_global'))
+
+
+@login_required
+def crear_mantenimiento_global(request):
+    from decimal import Decimal
+    from django.shortcuts import get_object_or_404, redirect
+    from django.contrib import messages
+    from .models import MantenimientoUnidad, Propiedad, Portafolio
+    from django.db.models import Q
+
+    if request.method == 'POST':
+        propiedad_id = request.POST.get('propiedad')
+        categoria = request.POST.get('categoria', 'REPARACION')
+        descripcion = request.POST.get('descripcion', '').strip()
+        costo_raw = request.POST.get('costo', '0').strip()
+        estado = request.POST.get('estado', 'PENDIENTE')
+        factura = request.FILES.get('factura_adjunta')
+
+        if not descripcion:
+            messages.error(request, "Debes ingresar una descripción del mantenimiento.")
+            return redirect('lista_mantenimientos_global')
+
+        if request.user.is_superuser:
+            propiedad = get_object_or_404(Propiedad, id=propiedad_id)
+        else:
+            portafolios = Portafolio.objects.filter(
+                Q(propietario=request.user) | Q(accesos__usuario=request.user)
+            ).distinct()
+            propiedad = get_object_or_404(Propiedad, id=propiedad_id, portafolio__in=portafolios)
+
+        try:
+            costo = Decimal(costo_raw.replace(',', '.')) if costo_raw else Decimal('0.00')
+        except Exception:
+            costo = Decimal('0.00')
+
+        MantenimientoUnidad.objects.create(
+            propiedad=propiedad,
+            categoria=categoria,
+            descripcion=descripcion,
+            costo=costo,
+            estado=estado,
+            factura_adjunta=factura
+        )
+        messages.success(request, f"Mantenimiento registrado para la propiedad {propiedad.nombre_o_numero}.")
+
+    return redirect('lista_mantenimientos_global')
 
 @login_required(login_url='/login/')
 def lista_inquilinos(request):

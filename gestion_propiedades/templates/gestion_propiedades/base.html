@@ -157,11 +157,27 @@
     </div>
     {% endfor %}
 
+    <!-- BANNER DINÁMICO DE REPORTES DE MANTENIMIENTO / INCIDENCIAS PENDIENTES -->
+    {% if mantenimientos_pendientes_count > 0 and request.resolver_match.url_name != 'lista_mantenimientos_global' %}
+    <div class="alert alert-warning alert-dismissible fade show text-center rounded-0 mb-0 border-0 fw-bold border-bottom shadow-sm d-flex align-items-center justify-content-center gap-2 flex-wrap py-2" role="alert" style="background-color: #fff3cd; color: #856404; font-size: 0.95rem; z-index: 1040; position: relative;">
+        <span>🔔 <strong>Incidencias Recibidas:</strong> Hay <strong>{{ mantenimientos_pendientes_count }}</strong> reporte{{ mantenimientos_pendientes_count|pluralize }} de avería / mantenimiento pendiente{{ mantenimientos_pendientes_count|pluralize }} de revisión.</span>
+        <a href="{% url 'lista_mantenimientos_global' %}?estado=PENDIENTE" class="btn btn-sm btn-dark text-white fw-bold ms-2 px-3 shadow-sm" style="font-size: 0.8rem; border-radius: 20px;">
+            Atender Ahora &rarr;
+        </a>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close" style="padding: 0.75rem;"></button>
+    </div>
+    {% endif %}
+
     <!-- ALERTS PARA MENSAJES DE ÉXITO O ERROR LOCALES -->
 <div class="container-fluid p-0">
     <!-- Navbar Móvil -->
     <header class="navbar navbar-dark sticky-top bg-dark flex-md-nowrap p-0 shadow d-md-none" style="min-height: 60px;">
         <a class="navbar-brand col-md-3 col-lg-2 me-0 px-3 fw-bold" href="#">🏢 ALQUILO</a>
+        {% if mantenimientos_pendientes_count > 0 %}
+        <a href="{% url 'lista_mantenimientos_global' %}?estado=PENDIENTE" class="badge bg-danger rounded-pill text-decoration-none me-5 py-2 px-3 fw-bold">
+            🔧 {{ mantenimientos_pendientes_count }}
+        </a>
+        {% endif %}
         <button class="navbar-toggler position-absolute d-md-none collapsed border-0 outline-0" type="button" data-bs-toggle="collapse" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu" aria-expanded="false" aria-label="Navegación" style="right: 15px; top: 10px;">
             <span class="navbar-toggler-icon"></span>
         </button>
@@ -213,7 +229,12 @@
                         </div>
                     </li>
                     <li class="nav-item mb-2">
-                        <a class="nav-link {% if request.resolver_match.url_name == 'lista_mantenimientos_global' %}text-white fw-bold{% else %}text-white-50{% endif %}" href="{% url 'lista_mantenimientos_global' %}">🔧 Mantenimientos</a>
+                        <a class="nav-link d-flex align-items-center justify-content-between {% if request.resolver_match.url_name == 'lista_mantenimientos_global' %}text-white fw-bold{% else %}text-white-50{% endif %}" href="{% url 'lista_mantenimientos_global' %}">
+                            <span>🔧 Mantenimientos</span>
+                            {% if mantenimientos_pendientes_count > 0 %}
+                            <span class="badge bg-danger rounded-pill shadow-sm" style="font-size: 0.75rem;" title="{{ mantenimientos_pendientes_count }} reporte(s) pendiente(s)">{{ mantenimientos_pendientes_count }}</span>
+                            {% endif %}
+                        </a>
                     </li>
                     <li class="nav-item mb-2">
                         <a class="nav-link {% if request.resolver_match.url_name == 'lista_gastos_generales' %}text-white fw-bold{% else %}text-white-50{% endif %}" href="{% url 'lista_gastos_generales' %}">💸 Gastos Generales</a>

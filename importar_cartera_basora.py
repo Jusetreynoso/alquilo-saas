@@ -292,6 +292,7 @@ def ejecutar_importacion(csv_path='cartera_basora_arriaga.csv', email_cliente='l
                         monto_deposito=deposito,
                         dia_de_pago=dia_cobro,
                         dias_gracia=5,
+                        porcentaje_mora=Decimal('10.00'),
                         custodia_deposito='ADMINISTRADORA_CUENTA',
                         detalles_custodia_deposito=f"Depósito registrado en migración: ${deposito:,.2f}",
                         texto_legal_generado=texto_fiador,

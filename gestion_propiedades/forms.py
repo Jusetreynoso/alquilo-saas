@@ -80,8 +80,8 @@ class ContratoForm(forms.ModelForm):
             'propiedad': forms.Select(attrs={'class': 'form-select'}),
             'inquilino': forms.Select(attrs={'class': 'form-select'}),
             'plantilla': forms.Select(attrs={'class': 'form-select'}),
-            'fecha_inicio': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
-            'fecha_fin': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'fecha_inicio': forms.DateInput(format='%Y-%m-%d', attrs={'class': 'form-control', 'type': 'date'}),
+            'fecha_fin': forms.DateInput(format='%Y-%m-%d', attrs={'class': 'form-control', 'type': 'date'}),
             'recordatorio_vencimiento_meses': forms.Select(attrs={'class': 'form-select'}),
             'monto_renta': forms.NumberInput(attrs={'class': 'form-control'}),
             'monto_deposito': forms.NumberInput(attrs={'class': 'form-control'}),
@@ -90,7 +90,7 @@ class ContratoForm(forms.ModelForm):
             'monto_adelanto': forms.NumberInput(attrs={'class': 'form-control'}),
             'dia_de_pago': forms.NumberInput(attrs={'class': 'form-control'}),
             'dias_gracia': forms.NumberInput(attrs={'class': 'form-control'}),
-            'porcentaje_mora': forms.NumberInput(attrs={'class': 'form-control'}),
+            'porcentaje_mora': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': 'Ej: 10.00'}),
             'deuda_renta_migrada': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': '0.00'}),
             'deuda_mora_migrada': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': '0.00'}),
 
@@ -109,17 +109,30 @@ class ContratoForm(forms.ModelForm):
         if self.instance and self.instance.pk:
             # Modo EDICIÓN: Evitamos que cambien la propiedad, el inquilino y la fecha inicial
             self.fields['propiedad'].queryset = Propiedad.objects.filter(id=self.instance.propiedad.id)
+            self.fields['propiedad'].required = False
             self.fields['propiedad'].widget.attrs['readonly'] = True
             self.fields['propiedad'].widget.attrs['style'] = 'pointer-events: none; background-color: #e9ecef;'
             
             if 'inquilino' in self.fields:
                 self.fields['inquilino'].queryset = Inquilino.objects.filter(id=self.instance.inquilino.id)
+                self.fields['inquilino'].required = False
                 self.fields['inquilino'].widget.attrs['readonly'] = True
                 self.fields['inquilino'].widget.attrs['style'] = 'pointer-events: none; background-color: #e9ecef;'
                 
             if 'fecha_inicio' in self.fields:
+                self.fields['fecha_inicio'].required = False
                 self.fields['fecha_inicio'].widget.attrs['readonly'] = True
                 self.fields['fecha_inicio'].widget.attrs['style'] = 'pointer-events: none; background-color: #e9ecef;'
+
+            # En edición estos campos no deben bloquear si vienen vacíos
+            for f_opc in [
+                'recordatorio_vencimiento_meses', 'deuda_renta_migrada', 'deuda_mora_migrada',
+                'porcentaje_mora', 'dias_gracia', 'monto_adelanto', 'detalles_custodia_deposito',
+                'custodia_deposito', 'documento_contrato', 'fotos_entrega', 'foto_entrega_2',
+                'foto_entrega_3', 'foto_entrega_4', 'foto_entrega_5'
+            ]:
+                if f_opc in self.fields:
+                    self.fields[f_opc].required = False
         else:
             # Modo CREACIÓN NUEVA
             if 'inquilino' in self.fields:
@@ -140,6 +153,54 @@ class ContratoForm(forms.ModelForm):
         )
         self.fields['plantilla'].empty_label = "--- SELECCIONAR PLANTILLA LEGAL ---"
         self.fields['plantilla'].required = False
+
+    def clean_propiedad(self):
+        val = self.cleaned_data.get('propiedad')
+        if not val and self.instance and self.instance.pk:
+            return self.instance.propiedad
+        return val
+
+    def clean_inquilino(self):
+        val = self.cleaned_data.get('inquilino')
+        if not val and self.instance and self.instance.pk:
+            return self.instance.inquilino
+        return val
+
+    def clean_fecha_inicio(self):
+        val = self.cleaned_data.get('fecha_inicio')
+        if not val and self.instance and self.instance.pk:
+            return self.instance.fecha_inicio
+        return val
+
+    def clean_porcentaje_mora(self):
+        val = self.cleaned_data.get('porcentaje_mora')
+        if val is None or val == '':
+            return decimal.Decimal('0.00')
+        return val
+
+    def clean_dias_gracia(self):
+        val = self.cleaned_data.get('dias_gracia')
+        if val is None or val == '':
+            return 5
+        return val
+
+    def clean_deuda_renta_migrada(self):
+        val = self.cleaned_data.get('deuda_renta_migrada')
+        if val is None or val == '':
+            return decimal.Decimal('0.00')
+        return val
+
+    def clean_deuda_mora_migrada(self):
+        val = self.cleaned_data.get('deuda_mora_migrada')
+        if val is None or val == '':
+            return decimal.Decimal('0.00')
+        return val
+
+    def clean_recordatorio_vencimiento_meses(self):
+        val = self.cleaned_data.get('recordatorio_vencimiento_meses')
+        if val is None or val == '':
+            return 2
+        return val
 
 class InquilinoForm(forms.ModelForm):
     class Meta:
