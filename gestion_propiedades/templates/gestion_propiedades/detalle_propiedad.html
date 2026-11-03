@@ -142,27 +142,21 @@
             <div class="card-body">
                 {% if contrato_activo %}
                     <!-- Cabecera del Inquilino con Enlace al Perfil -->
-                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 pb-3 border-bottom">
-                        <div class="d-flex align-items-center gap-3">
-                            <div class="bg-primary-subtle text-primary rounded-circle d-flex align-items-center justify-content-center shadow-sm" style="width: 46px; height: 46px; font-size: 1.4rem;">
-                                👤
-                            </div>
-                            <div>
-                                <h5 class="fw-bold mb-0">
-                                    <a href="{% url 'detalle_inquilino' contrato_activo.inquilino.id %}" class="text-dark text-decoration-none d-inline-flex align-items-center gap-2 link-hover-perfil" title="Haz clic para ver el perfil completo de {{ contrato_activo.inquilino.nombre }}">
-                                        <span class="border-bottom border-2 border-primary pb-0">{{ contrato_activo.inquilino.nombre }}</span>
-                                        <span class="badge bg-primary text-white small" style="font-size: 0.72rem; font-weight: 500;">Ver Perfil ↗</span>
-                                    </a>
-                                </h5>
-                                {% if contrato_activo.inquilino.cedula_o_pasaporte %}
-                                    <small class="text-muted">🆔 Cédula: <strong>{{ contrato_activo.inquilino.cedula_o_pasaporte }}</strong></small>
-                                {% endif %}
-                            </div>
+                    <div class="d-flex align-items-center gap-3 mb-3 pb-3 border-bottom">
+                        <div class="bg-primary-subtle text-primary rounded-circle d-flex align-items-center justify-content-center shadow-sm" style="width: 46px; height: 46px; font-size: 1.4rem;">
+                            👤
                         </div>
-                        <a href="{% url 'detalle_inquilino' contrato_activo.inquilino.id %}" class="btn btn-sm btn-outline-primary fw-semibold shadow-sm d-inline-flex align-items-center gap-1">
-                            <span>Ver Ficha de Cliente</span>
-                            <span>&rarr;</span>
-                        </a>
+                        <div>
+                            <h5 class="fw-bold mb-0">
+                                <a href="{% url 'detalle_inquilino' contrato_activo.inquilino.id %}" class="text-dark text-decoration-none d-inline-flex align-items-center gap-2 link-hover-perfil" title="Haz clic para ver el perfil completo de {{ contrato_activo.inquilino.nombre }}">
+                                    <span class="border-bottom border-2 border-primary pb-0">{{ contrato_activo.inquilino.nombre }}</span>
+                                    <span class="badge bg-primary text-white small" style="font-size: 0.72rem; font-weight: 500;">Ver Perfil ↗</span>
+                                </a>
+                            </h5>
+                            {% if contrato_activo.inquilino.cedula_o_pasaporte %}
+                                <small class="text-muted">🆔 Cédula: <strong>{{ contrato_activo.inquilino.cedula_o_pasaporte }}</strong></small>
+                            {% endif %}
+                        </div>
                     </div>
 
                     <div class="row g-2 mb-2">
