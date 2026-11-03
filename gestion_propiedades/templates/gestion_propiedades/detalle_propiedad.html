@@ -115,11 +115,14 @@
         </div>
 
         <div class="card shadow-sm border-0 mb-4">
-            <div class="card-header bg-white fw-bold text-secondary py-3 d-flex justify-content-between align-items-center">
+            <div class="card-header bg-white fw-bold text-secondary py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <span>👤 Inquilino Actual</span>
 
                 {% if contrato_activo %}
-                <div class="d-flex gap-2">
+                <div class="d-flex gap-2 flex-wrap">
+                    <a href="{% url 'detalle_inquilino' contrato_activo.inquilino.id %}" class="btn btn-sm btn-primary shadow-sm fw-bold">
+                        👤 Ver Perfil de Inquilino
+                    </a>
                     <a href="{% url 'registrar_pago_anticipado' contrato_activo.id %}" class="btn btn-sm btn-outline-success">
                         💰 Recibir Adelanto
                     </a>
@@ -138,8 +141,60 @@
             
             <div class="card-body">
                 {% if contrato_activo %}
-                    <h5 class="fw-bold">{{ contrato_activo.inquilino.nombre }}</h5>
-                    <p class="mb-1"><strong>Teléfono:</strong> {{ contrato_activo.inquilino.telefono }}</p>
+                    <!-- Cabecera del Inquilino con Enlace al Perfil -->
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 pb-3 border-bottom">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="bg-primary-subtle text-primary rounded-circle d-flex align-items-center justify-content-center shadow-sm" style="width: 46px; height: 46px; font-size: 1.4rem;">
+                                👤
+                            </div>
+                            <div>
+                                <h5 class="fw-bold mb-0">
+                                    <a href="{% url 'detalle_inquilino' contrato_activo.inquilino.id %}" class="text-dark text-decoration-none d-inline-flex align-items-center gap-2 link-hover-perfil" title="Haz clic para ver el perfil completo de {{ contrato_activo.inquilino.nombre }}">
+                                        <span class="border-bottom border-2 border-primary pb-0">{{ contrato_activo.inquilino.nombre }}</span>
+                                        <span class="badge bg-primary text-white small" style="font-size: 0.72rem; font-weight: 500;">Ver Perfil ↗</span>
+                                    </a>
+                                </h5>
+                                {% if contrato_activo.inquilino.cedula_o_pasaporte %}
+                                    <small class="text-muted">🆔 Cédula: <strong>{{ contrato_activo.inquilino.cedula_o_pasaporte }}</strong></small>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <a href="{% url 'detalle_inquilino' contrato_activo.inquilino.id %}" class="btn btn-sm btn-outline-primary fw-semibold shadow-sm d-inline-flex align-items-center gap-1">
+                            <span>Ver Ficha de Cliente</span>
+                            <span>&rarr;</span>
+                        </a>
+                    </div>
+
+                    <div class="row g-2 mb-2">
+                        <div class="col-sm-6">
+                            <p class="mb-1">
+                                <strong>📞 Teléfono:</strong> 
+                                <a href="tel:{{ contrato_activo.inquilino.telefono }}" class="text-decoration-none text-dark fw-semibold">{{ contrato_activo.inquilino.telefono }}</a>
+                                {% if contrato_activo.inquilino.telefono_secundario %}
+                                    <span class="text-muted small"> / <a href="tel:{{ contrato_activo.inquilino.telefono_secundario }}" class="text-decoration-none text-muted">{{ contrato_activo.inquilino.telefono_secundario }}</a></span>
+                                {% endif %}
+                            </p>
+                        </div>
+                        {% if contrato_activo.inquilino.correo %}
+                        <div class="col-sm-6">
+                            <p class="mb-1 text-truncate">
+                                <strong>✉️ Correo:</strong> 
+                                <a href="mailto:{{ contrato_activo.inquilino.correo }}" class="text-decoration-none text-dark">{{ contrato_activo.inquilino.correo }}</a>
+                            </p>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    {% if contrato_activo.inquilino.nombre_fiador %}
+                    <div class="p-2 mb-2 bg-light rounded border border-light-subtle small">
+                        <span class="fw-bold text-dark d-block">🤝 Fiador / Garante Solidario:</span>
+                        <span class="text-secondary">{{ contrato_activo.inquilino.nombre_fiador }}</span>
+                        {% if contrato_activo.inquilino.telefono_fiador %}
+                            <span class="text-muted"> — Tel: <a href="tel:{{ contrato_activo.inquilino.telefono_fiador }}" class="text-decoration-none text-muted">{{ contrato_activo.inquilino.telefono_fiador }}</a></span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
                     <p class="mb-1"><strong>Renta:</strong> ${{ contrato_activo.monto_renta|dinero }}</p>
                     <p class="mb-1 text-primary"><strong>Fianza Retenida:</strong> ${{ contrato_activo.monto_deposito|dinero }} <small class="text-muted">(Adelanto: ${{ contrato_activo.monto_adelanto|dinero }})</small></p>
                     <div class="mb-2 p-2 bg-light rounded border border-warning-subtle">
