@@ -78,23 +78,28 @@ class Portafolio(models.Model):
 
         if self.formato_concepto_factura == 'RANGO_FECHAS':
             dia = getattr(contrato, 'dia_de_pago', 1) or 1
-            max_d1 = calendar.monthrange(anio, mes)[1]
-            dia_inicio = min(dia, max_d1)
 
-            if mes == 12:
-                mes_fin = 1
-                anio_fin = anio + 1
+            # El mes y año de la factura marcan el corte final del período (cobro a mes vencido)
+            mes_fin = mes
+            anio_fin = anio
+            max_d_fin = calendar.monthrange(anio_fin, mes_fin)[1]
+            dia_fin = min(dia, max_d_fin)
+
+            # El mes y año inicial corresponden al mes anterior
+            if mes_fin == 1:
+                mes_inicio = 12
+                anio_inicio = anio_fin - 1
             else:
-                mes_fin = mes + 1
-                anio_fin = anio
+                mes_inicio = mes_fin - 1
+                anio_inicio = anio_fin
 
-            max_d2 = calendar.monthrange(anio_fin, mes_fin)[1]
-            dia_fin = min(dia, max_d2)
+            max_d_inicio = calendar.monthrange(anio_inicio, mes_inicio)[1]
+            dia_inicio = min(dia, max_d_inicio)
 
-            mes1_str = nombres_meses_mayus.get(mes, '')
+            mes1_str = nombres_meses_mayus.get(mes_inicio, '')
             mes2_str = nombres_meses_mayus.get(mes_fin, '')
 
-            texto = f"PAGO DESDE EL {dia_inicio} DE {mes1_str} DEL {anio} HASTA EL {dia_fin} DE {mes2_str} DEL {anio_fin}"
+            texto = f"PAGO DESDE EL {dia_inicio} DE {mes1_str} DEL {anio_inicio} HASTA EL {dia_fin} DE {mes2_str} DEL {anio_fin}"
             if es_anticipada:
                 texto += " (Anticipada)"
             return texto
