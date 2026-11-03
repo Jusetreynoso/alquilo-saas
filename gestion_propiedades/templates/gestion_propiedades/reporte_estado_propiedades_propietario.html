@@ -27,8 +27,19 @@
     <div class="card shadow-sm border-0 mb-4 bg-light">
         <div class="card-body py-3">
             <form method="GET" action="{% url 'reporte_estado_propiedades_propietario' %}" class="row g-2 align-items-end">
+                {% if portafolios|length > 1 %}
+                <div class="col-md-3 col-12">
+                    <label class="form-label fw-bold text-muted small mb-1">📂 Portafolio</label>
+                    <select name="portafolio_id" class="form-select form-select-sm bg-white" onchange="this.form.submit()">
+                        <option value="TODOS" {% if portafolio_sel == 'TODOS' %}selected{% endif %}>Todos los Portafolios</option>
+                        {% for port in portafolios %}
+                            <option value="{{ port.id }}" {% if portafolio_sel == port.id|stringformat:"s" %}selected{% endif %}>{{ port.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
                 
-                <div class="col-md-4 col-12">
+                <div class="col-md-{% if portafolios|length > 1 %}3{% else %}4{% endif %} col-12">
                     <label class="form-label fw-bold text-muted small mb-1">👤 Propietario de Inmuebles</label>
                     <select name="propietario_id" class="form-select form-select-sm bg-white">
                         <option value="TODOS" {% if propietario_sel == 'TODOS' %}selected{% endif %}>Todos los Propietarios</option>

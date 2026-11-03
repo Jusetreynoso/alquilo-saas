@@ -39,13 +39,32 @@ class PropiedadForm(forms.ModelForm):
             'estado': forms.Select(attrs={'class': 'form-select'}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, portafolio=None, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['propietario_inmueble'].required = False
         self.fields['precio_alquiler_sugerido'].required = False
         self.fields['latitud'].required = False
         self.fields['longitud'].required = False
         self.fields['imagen_principal'].required = False
+
+        # Aislamiento estricto de propietarios por portafolio
+        target_portafolio = portafolio
+        if not target_portafolio and self.instance and self.instance.pk and self.instance.portafolio:
+            target_portafolio = self.instance.portafolio
+
+        if target_portafolio:
+            self.fields['propietario_inmueble'].queryset = PropietarioInmueble.objects.filter(
+                portafolio=target_portafolio, activo=True
+            ).order_by('nombre')
+        elif user:
+            portafolios_user = Portafolio.objects.filter(Q(propietario=user) | Q(accesos__usuario=user))
+            self.fields['propietario_inmueble'].queryset = PropietarioInmueble.objects.filter(
+                portafolio__in=portafolios_user, activo=True
+            ).order_by('nombre')
+        else:
+            self.fields['propietario_inmueble'].queryset = PropietarioInmueble.objects.none()
+
+        self.fields['propietario_inmueble'].empty_label = "--- SELECCIONAR PROPIETARIO (OPCIONAL) ---"
 
 class ContratoForm(forms.ModelForm):
     class Meta:
@@ -125,14 +144,52 @@ class ContratoForm(forms.ModelForm):
 class InquilinoForm(forms.ModelForm):
     class Meta:
         model = Inquilino
-        fields = ['nombre', 'telefono', 'cedula_o_pasaporte', 'correo', 'recibir_alertas_correo']
-        widgets = {
-            'nombre': forms.TextInput(attrs={'class': 'form-control', 'required': True}),
-            'telefono': forms.TextInput(attrs={'class': 'form-control', 'required': True}),
-            'cedula_o_pasaporte': forms.TextInput(attrs={'class': 'form-control'}),
-            'correo': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'Para enviarle cuenta de cobro y recordatorios'}),
-            'recibir_alertas_correo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        fields = [
+            'nombre', 'cedula_o_pasaporte', 'telefono', 'telefono_secundario',
+            'correo', 'direccion', 'recibir_alertas_correo',
+            'nombre_fiador', 'cedula_fiador', 'telefono_fiador',
+            'telefono_fiador_secundario', 'direccion_fiador'
+        ]
+        labels = {
+            'nombre': 'Nombre Completo del Inquilino',
+            'cedula_o_pasaporte': 'Cédula / Pasaporte',
+            'telefono': 'Teléfono Principal',
+            'telefono_secundario': 'Teléfono Secundario / Alternativo',
+            'correo': 'Correo Electrónico',
+            'direccion': 'Dirección Física del Inquilino',
+            'recibir_alertas_correo': '¿Recibir facturas y avisos automáticos por correo?',
+            'nombre_fiador': 'Nombre del Fiador / Garante Solidario',
+            'cedula_fiador': 'Cédula o Pasaporte del Fiador',
+            'telefono_fiador': 'Teléfono Principal del Fiador',
+            'telefono_fiador_secundario': 'Teléfono Secundario del Fiador',
+            'direccion_fiador': 'Dirección del Fiador / Garante',
         }
+        widgets = {
+            'nombre': forms.TextInput(attrs={'class': 'form-control', 'required': True, 'placeholder': 'Ej: Juan Pérez'}),
+            'cedula_o_pasaporte': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: 001-0000000-0 o Pasaporte'}),
+            'telefono': forms.TextInput(attrs={'class': 'form-control', 'required': True, 'placeholder': 'Ej: 809-555-0101'}),
+            'telefono_secundario': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: 829-555-0202 (Opcional)'}),
+            'correo': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'correo@ejemplo.com (Para facturas y avisos)'}),
+            'direccion': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Dirección de procedencia o residencia previa (Opcional)'}),
+            'recibir_alertas_correo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'nombre_fiador': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Nombre del garante o fiador'}),
+            'cedula_fiador': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: 001-0000000-0'}),
+            'telefono_fiador': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: 809-555-0303'}),
+            'telefono_fiador_secundario': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: 849-555-0404'}),
+            'direccion_fiador': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Dirección física o lugar de trabajo del fiador'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['cedula_o_pasaporte'].required = False
+        self.fields['telefono_secundario'].required = False
+        self.fields['correo'].required = False
+        self.fields['direccion'].required = False
+        self.fields['nombre_fiador'].required = False
+        self.fields['cedula_fiador'].required = False
+        self.fields['telefono_fiador'].required = False
+        self.fields['telefono_fiador_secundario'].required = False
+        self.fields['direccion_fiador'].required = False
 
 class MantenimientoForm(forms.ModelForm):
     class Meta:
@@ -364,6 +421,8 @@ class PropietarioInmuebleForm(forms.ModelForm):
             self.fields['propiedades'].queryset = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False).order_by('nombre_o_numero')
         elif self.instance and self.instance.pk:
             self.fields['propiedades'].queryset = Propiedad.objects.filter(portafolio=self.instance.portafolio, is_deleted=False).order_by('nombre_o_numero')
+
+        if self.instance and self.instance.pk:
             self.fields['propiedades'].initial = self.instance.propiedades.filter(is_deleted=False)
 
     def clean_porcentaje_comision(self):
@@ -389,11 +448,40 @@ class GastoGeneralPropietarioForm(forms.ModelForm):
             'factura_adjunta': forms.FileInput(attrs={'class': 'form-control'}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, portafolio=None, portafolios=None, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['propietario_inmueble'].required = False
         self.fields['propiedad'].required = False
         self.fields['factura_adjunta'].required = False
+
+        target_portafolios = None
+        if portafolios is not None:
+            target_portafolios = portafolios
+        elif portafolio is not None:
+            target_portafolios = [portafolio]
+        elif user is not None:
+            target_portafolios = Portafolio.objects.filter(Q(propietario=user) | Q(accesos__usuario=user))
+
+        if target_portafolios is not None:
+            self.fields['propietario_inmueble'].queryset = PropietarioInmueble.objects.filter(
+                portafolio__in=target_portafolios, activo=True
+            ).order_by('nombre')
+            self.fields['propiedad'].queryset = Propiedad.objects.filter(
+                portafolio__in=target_portafolios, is_deleted=False
+            ).order_by('nombre_o_numero')
+        elif self.instance and self.instance.pk and self.instance.portafolio:
+            self.fields['propietario_inmueble'].queryset = PropietarioInmueble.objects.filter(
+                portafolio=self.instance.portafolio, activo=True
+            ).order_by('nombre')
+            self.fields['propiedad'].queryset = Propiedad.objects.filter(
+                portafolio=self.instance.portafolio, is_deleted=False
+            ).order_by('nombre_o_numero')
+        else:
+            self.fields['propietario_inmueble'].queryset = PropietarioInmueble.objects.none()
+            self.fields['propiedad'].queryset = Propiedad.objects.none()
+
+        self.fields['propietario_inmueble'].empty_label = "--- SELECCIONAR PROPIETARIO (OPCIONAL) ---"
+        self.fields['propiedad'].empty_label = "--- APLICAR A PROPIEDAD ESPECÍFICA (OPCIONAL) ---"
 
 
 class LiquidacionPropietarioForm(forms.ModelForm):

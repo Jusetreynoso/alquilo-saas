@@ -16,9 +16,11 @@
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th class="px-4 py-3">Nombre</th>
-                            <th class="py-3">Teléfono</th>
+                            <th class="px-4 py-3">Nombre del Inquilino</th>
+                            <th class="py-3">Teléfonos</th>
                             <th class="py-3">Cédula / Pasaporte</th>
+                            <th class="py-3">Fiador / Garante</th>
+                            <th class="py-3 text-end px-4">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -26,16 +28,41 @@
                         <tr>
                             <td class="px-4 py-3 fw-bold">
                                 <a href="{% url 'detalle_inquilino' inquilino.id %}" class="text-decoration-none text-primary">
-                                    {{ inquilino.nombre }} 🔍
+                                    👤 {{ inquilino.nombre }}
                                 </a>
+                                {% if inquilino.correo %}
+                                    <div class="small text-muted fw-normal">{{ inquilino.correo }}</div>
+                                {% endif %}
                             </td>
-                            <td class="py-3 text-muted">{{ inquilino.telefono }}</td>
+                            <td class="py-3">
+                                <div><a href="tel:{{ inquilino.telefono }}" class="text-decoration-none text-dark fw-semibold">{{ inquilino.telefono }}</a></div>
+                                {% if inquilino.telefono_secundario %}
+                                    <small class="text-muted"><i class="fa fa-phone"></i> {{ inquilino.telefono_secundario }}</small>
+                                {% endif %}
+                            </td>
                             <td class="py-3 text-muted">{{ inquilino.cedula_o_pasaporte|default:"---" }}</td>
+                            <td class="py-3">
+                                {% if inquilino.nombre_fiador %}
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1">
+                                        🤝 {{ inquilino.nombre_fiador }}
+                                    </span>
+                                    {% if inquilino.telefono_fiador %}
+                                        <div class="small text-muted mt-1"><i class="fa fa-phone"></i> {{ inquilino.telefono_fiador }}</div>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted small">Sin fiador</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-3 text-end px-4">
+                                <a href="{% url 'detalle_inquilino' inquilino.id %}" class="btn btn-sm btn-outline-primary me-1">👁️ Ver</a>
+                                <a href="{% url 'editar_inquilino' inquilino.id %}" class="btn btn-sm btn-outline-secondary">✏️ Editar</a>
+                            </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="3" class="text-center py-5 text-muted">
-                                No tienes inquilinos registrados.
+                            <td colspan="5" class="text-center py-5 text-muted">
+                                <h5>No tienes inquilinos registrados.</h5>
+                                <a href="{% url 'crear_inquilino' %}" class="btn btn-primary mt-2">+ Registrar Primer Inquilino</a>
                             </td>
                         </tr>
                         {% endfor %}

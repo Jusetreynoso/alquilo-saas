@@ -401,26 +401,33 @@ def crear_propiedad(request):
     # IMPORTACIÓN LOCAL (CRUCIAL):
     from .forms import PropiedadForm 
 
+    portafolios = Portafolio.objects.filter(Q(propietario=request.user) | Q(accesos__usuario=request.user)).distinct()
+    if not portafolios.exists():
+        return HttpResponse("Error: No tienes un portafolio asignado.")
+
+    portafolio_id = request.GET.get('portafolio_id') or request.POST.get('portafolio_id')
+    portafolio_principal = None
+    if portafolio_id and str(portafolio_id).isdigit():
+        portafolio_principal = portafolios.filter(id=int(portafolio_id)).first()
+
+    if not portafolio_principal:
+        portafolio_principal = Portafolio.objects.filter(propietario=request.user).first()
+        if not portafolio_principal:
+            acceso = request.user.portafolios_asignados.first()
+            if acceso:
+                portafolio_principal = acceso.portafolio
+        if not portafolio_principal:
+            portafolio_principal = portafolios.first()
+
     if request.method == 'POST':
-        form = PropiedadForm(request.POST, request.FILES)
+        form = PropiedadForm(request.POST, request.FILES, portafolio=portafolio_principal, user=request.user)
         if form.is_valid():
             nueva_propiedad = form.save(commit=False)
-            # Buscamos el portafolio principal del usuario
-            portafolio_principal = Portafolio.objects.filter(propietario=request.user).first()
-            
-            if not portafolio_principal:
-                acceso = request.user.portafolios_asignados.first()
-                if acceso:
-                    portafolio_principal = acceso.portafolio
-            
-            if portafolio_principal:
-                nueva_propiedad.portafolio = portafolio_principal
-                nueva_propiedad.save()
-                return redirect('lista_propiedades')
-            else:
-                return HttpResponse("Error: No tienes un portafolio asignado.")
+            nueva_propiedad.portafolio = portafolio_principal
+            nueva_propiedad.save()
+            return redirect('lista_propiedades')
     else:
-        form = PropiedadForm()
+        form = PropiedadForm(portafolio=portafolio_principal, user=request.user)
 
     context = {'titulo_pagina': 'Nueva Propiedad', 'form': form}
     return render(request, 'gestion_propiedades/form_generico.html', context)
@@ -440,21 +447,28 @@ def crear_contrato(request):
                 import datetime
                 hoy = datetime.date.today()
                 
-                # Intentamos sacar datos
-                prop_nombre = nuevo_contrato.propiedad.portafolio.propietario.get_full_name() or nuevo_contrato.propiedad.portafolio.propietario.username
-                prop_dir = nuevo_contrato.propiedad.portafolio.direccion_fisica or '___________________'
+                # Intentamos sacar datos del propietario (dueño específico o del portafolio)
+                if nuevo_contrato.propiedad.propietario_inmueble:
+                    prop_nombre = nuevo_contrato.propiedad.propietario_inmueble.nombre
+                    prop_cedula = nuevo_contrato.propiedad.propietario_inmueble.cedula_o_rnc or '___________________'
+                    prop_dir = nuevo_contrato.propiedad.propietario_inmueble.direccion or nuevo_contrato.propiedad.portafolio.direccion_fisica or '___________________'
+                else:
+                    prop_nombre = nuevo_contrato.propiedad.portafolio.propietario.get_full_name() or nuevo_contrato.propiedad.portafolio.propietario.username
+                    prop_cedula = '___________________'
+                    prop_dir = nuevo_contrato.propiedad.portafolio.direccion_fisica or '___________________'
                 
                 meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
                 mes_actual_es = meses[hoy.month - 1]
                 
                 reemplazos = {
                     '{{PROPIETARIO_NOMBRE}}': prop_nombre,
-                    '{{PROPIETARIO_CEDULA}}': '___________________',
+                    '{{PROPIETARIO_CEDULA}}': prop_cedula,
                     '{{PROPIETARIO_DIRECCION}}': prop_dir,
                     '{{INQUILINO_NOMBRE}}': nuevo_contrato.inquilino.nombre,
                     '{{INQUILINO_CEDULA}}': nuevo_contrato.inquilino.cedula_o_pasaporte or '___________________',
-                    '{{INQUILINO_DIRECCION}}': '___________________',
+                    '{{INQUILINO_DIRECCION}}': nuevo_contrato.inquilino.direccion or '___________________',
                     '{{INQUILINO_TELEFONO}}': nuevo_contrato.inquilino.telefono or '___________________',
+                    '{{INQUILINO_TELEFONO_SECUNDARIO}}': nuevo_contrato.inquilino.telefono_secundario or '___________________',
                     '{{PROPIEDAD_DIRECCION}}': nuevo_contrato.propiedad.direccion_completa or nuevo_contrato.propiedad.nombre_o_numero,
                     '{{MONTO_RENTA}}': f"RD$ {nuevo_contrato.monto_renta:,.2f}",
                     '{{MONTO_DEPOSITO}}': f"RD$ {nuevo_contrato.monto_deposito:,.2f}",
@@ -464,9 +478,11 @@ def crear_contrato(request):
                     '{{DIA_ACTUAL}}': str(hoy.day),
                     '{{MES_ACTUAL}}': mes_actual_es,
                     '{{ANIO_ACTUAL}}': str(hoy.year),
-                    '{{FIADOR_NOMBRE}}': '___________________',
-                    '{{FIADOR_CEDULA}}': '___________________',
-                    '{{FIADOR_DIRECCION}}': '___________________',
+                    '{{FIADOR_NOMBRE}}': nuevo_contrato.inquilino.nombre_fiador or '___________________',
+                    '{{FIADOR_CEDULA}}': nuevo_contrato.inquilino.cedula_fiador or '___________________',
+                    '{{FIADOR_TELEFONO}}': nuevo_contrato.inquilino.telefono_fiador or '___________________',
+                    '{{FIADOR_TELEFONO_SECUNDARIO}}': nuevo_contrato.inquilino.telefono_fiador_secundario or '___________________',
+                    '{{FIADOR_DIRECCION}}': nuevo_contrato.inquilino.direccion_fiador or '___________________',
                 }
                 
                 for tag, valor in reemplazos.items():
@@ -747,13 +763,13 @@ def editar_propiedad(request, propiedad_id):
 
     if request.method == 'POST':
         # instance=propiedad le dice a Django "actualiza este registro, no crees uno nuevo"
-        form = PropiedadForm(request.POST, request.FILES, instance=propiedad)
+        form = PropiedadForm(request.POST, request.FILES, instance=propiedad, portafolio=propiedad.portafolio, user=request.user)
         if form.is_valid():
             form.save()
             messages.success(request, 'Propiedad actualizada correctamente.')
             return redirect('detalle_propiedad', propiedad_id=propiedad.id)
     else:
-        form = PropiedadForm(instance=propiedad)
+        form = PropiedadForm(instance=propiedad, portafolio=propiedad.portafolio, user=request.user)
 
     context = {'titulo_pagina': f'Editar Propiedad: {propiedad.nombre_o_numero}', 'form': form}
     return render(request, 'gestion_propiedades/form_generico.html', context)
@@ -776,20 +792,28 @@ def editar_contrato(request, contrato_id):
                 import datetime
                 hoy = datetime.date.today()
                 
-                prop_nombre = contrato_editado.propiedad.portafolio.propietario.get_full_name() or contrato_editado.propiedad.portafolio.propietario.username
-                prop_dir = contrato_editado.propiedad.portafolio.direccion_fisica or '___________________'
+                # Intentamos sacar datos del propietario (dueño específico o del portafolio)
+                if contrato_editado.propiedad.propietario_inmueble:
+                    prop_nombre = contrato_editado.propiedad.propietario_inmueble.nombre
+                    prop_cedula = contrato_editado.propiedad.propietario_inmueble.cedula_o_rnc or '___________________'
+                    prop_dir = contrato_editado.propiedad.propietario_inmueble.direccion or contrato_editado.propiedad.portafolio.direccion_fisica or '___________________'
+                else:
+                    prop_nombre = contrato_editado.propiedad.portafolio.propietario.get_full_name() or contrato_editado.propiedad.portafolio.propietario.username
+                    prop_cedula = '___________________'
+                    prop_dir = contrato_editado.propiedad.portafolio.direccion_fisica or '___________________'
                 
                 meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
                 mes_actual_es = meses[hoy.month - 1]
                 
                 reemplazos = {
                     '{{PROPIETARIO_NOMBRE}}': prop_nombre,
-                    '{{PROPIETARIO_CEDULA}}': '___________________',
+                    '{{PROPIETARIO_CEDULA}}': prop_cedula,
                     '{{PROPIETARIO_DIRECCION}}': prop_dir,
                     '{{INQUILINO_NOMBRE}}': contrato_editado.inquilino.nombre,
                     '{{INQUILINO_CEDULA}}': contrato_editado.inquilino.cedula_o_pasaporte or '___________________',
-                    '{{INQUILINO_DIRECCION}}': '___________________',
+                    '{{INQUILINO_DIRECCION}}': contrato_editado.inquilino.direccion or '___________________',
                     '{{INQUILINO_TELEFONO}}': contrato_editado.inquilino.telefono or '___________________',
+                    '{{INQUILINO_TELEFONO_SECUNDARIO}}': contrato_editado.inquilino.telefono_secundario or '___________________',
                     '{{PROPIEDAD_DIRECCION}}': contrato_editado.propiedad.direccion_completa or contrato_editado.propiedad.nombre_o_numero,
                     '{{MONTO_RENTA}}': f"RD$ {contrato_editado.monto_renta:,.2f}",
                     '{{MONTO_DEPOSITO}}': f"RD$ {contrato_editado.monto_deposito:,.2f}",
@@ -799,9 +823,11 @@ def editar_contrato(request, contrato_id):
                     '{{DIA_ACTUAL}}': str(hoy.day),
                     '{{MES_ACTUAL}}': mes_actual_es,
                     '{{ANIO_ACTUAL}}': str(hoy.year),
-                    '{{FIADOR_NOMBRE}}': '___________________',
-                    '{{FIADOR_CEDULA}}': '___________________',
-                    '{{FIADOR_DIRECCION}}': '___________________',
+                    '{{FIADOR_NOMBRE}}': contrato_editado.inquilino.nombre_fiador or '___________________',
+                    '{{FIADOR_CEDULA}}': contrato_editado.inquilino.cedula_fiador or '___________________',
+                    '{{FIADOR_TELEFONO}}': contrato_editado.inquilino.telefono_fiador or '___________________',
+                    '{{FIADOR_TELEFONO_SECUNDARIO}}': contrato_editado.inquilino.telefono_fiador_secundario or '___________________',
+                    '{{FIADOR_DIRECCION}}': contrato_editado.inquilino.direccion_fiador or '___________________',
                 }
                 
                 for tag, valor in reemplazos.items():
@@ -1001,21 +1027,27 @@ def reporte_financiero(request):
         Q(propietario=request.user) | Q(accesos__usuario=request.user)
     ).distinct()
 
-    # Listas para desplegables de filtro
-    propietarios_list = PropietarioInmueble.objects.filter(portafolio__in=portafolios, activo=True).order_by('nombre')
-    inquilinos_list = Inquilino.objects.filter(
-        contratos__propiedad__portafolio__in=portafolios
-    ).distinct().order_by('nombre')
-    
     # Parámetros GET
     mes = request.GET.get('mes', str(date.today().month)) # "0" para Todo el Año
     anio = int(request.GET.get('anio', date.today().year))
     filtro_tipo = request.GET.get('filtro_tipo', 'PORTAFOLIO') # PORTAFOLIO, PROPIETARIO, INQUILINO
+    portafolio_id = request.GET.get('portafolio_id', 'TODOS')
     propietario_id = request.GET.get('propietario_id', '')
     inquilino_id = request.GET.get('inquilino_id', '')
 
+    if portafolio_id != 'TODOS' and portafolio_id and str(portafolio_id).isdigit():
+        portafolios_filtrados = portafolios.filter(id=int(portafolio_id))
+    else:
+        portafolios_filtrados = portafolios
+
+    # Listas para desplegables de filtro estrictamente acotadas al portafolio
+    propietarios_list = PropietarioInmueble.objects.filter(portafolio__in=portafolios_filtrados, activo=True).order_by('nombre')
+    inquilinos_list = Inquilino.objects.filter(
+        contratos__propiedad__portafolio__in=portafolios_filtrados
+    ).distinct().order_by('nombre')
+
     # Base QuerySets de Propiedades
-    propiedades_qs = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False)
+    propiedades_qs = Propiedad.objects.filter(portafolio__in=portafolios_filtrados, is_deleted=False)
 
     if filtro_tipo == 'PROPIETARIO' and propietario_id:
         propiedades_qs = propiedades_qs.filter(propietario_inmueble_id=propietario_id)
@@ -1130,7 +1162,9 @@ def reporte_financiero(request):
         'recibos_list': recibos_list,
         'mantenimientos_list': mantenimientos_list,
         'gastos_gen_list': gastos_gen_list,
-        'finanzas': lista_finanzas
+        'finanzas': lista_finanzas,
+        'portafolios': portafolios,
+        'portafolio_sel': str(portafolio_id),
     }
 
     return render(request, 'gestion_propiedades/reporte_financiero.html', context)
@@ -1145,9 +1179,6 @@ def _obtener_datos_movimientos_detallados(request):
     portafolios = Portafolio.objects.filter(
         Q(propietario=request.user) | Q(accesos__usuario=request.user)
     ).distinct()
-
-    lista_propietarios = PropietarioInmueble.objects.filter(portafolio__in=portafolios).order_by('nombre')
-    lista_inquilinos = Inquilino.objects.filter(contratos__propiedad__portafolio__in=portafolios).distinct().order_by('nombre')
 
     hoy = date.today()
     fecha_inicio_str = request.GET.get('fecha_inicio', '').strip()
@@ -1168,9 +1199,15 @@ def _obtener_datos_movimientos_detallados(request):
     inquilino_id = request.GET.get('inquilino_id', 'TODOS')
     tipo_movimiento = request.GET.get('tipo_movimiento', 'TODOS')
 
-    propiedades_qs = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False)
-    if portafolio_id != 'TODOS' and portafolio_id.isdigit():
-        propiedades_qs = propiedades_qs.filter(portafolio_id=int(portafolio_id))
+    if portafolio_id != 'TODOS' and portafolio_id and portafolio_id.isdigit():
+        portafolios_filtrados = portafolios.filter(id=int(portafolio_id))
+    else:
+        portafolios_filtrados = portafolios
+
+    lista_propietarios = PropietarioInmueble.objects.filter(portafolio__in=portafolios_filtrados).order_by('nombre')
+    lista_inquilinos = Inquilino.objects.filter(contratos__propiedad__portafolio__in=portafolios_filtrados).distinct().order_by('nombre')
+
+    propiedades_qs = Propiedad.objects.filter(portafolio__in=portafolios_filtrados, is_deleted=False)
 
     if propietario_id != 'TODOS' and propietario_id.isdigit():
         propiedades_qs = propiedades_qs.filter(propietario_inmueble_id=int(propietario_id))
@@ -1400,14 +1437,20 @@ def _obtener_datos_estado_propiedades_propietario(request):
         Q(propietario=request.user) | Q(accesos__usuario=request.user)
     ).distinct()
 
-    lista_propietarios = PropietarioInmueble.objects.filter(portafolio__in=portafolios, activo=True).order_by('nombre')
+    portafolio_id = request.GET.get('portafolio_id', 'TODOS')
+    if portafolio_id != 'TODOS' and portafolio_id and str(portafolio_id).isdigit():
+        portafolios_filtrados = portafolios.filter(id=int(portafolio_id))
+    else:
+        portafolios_filtrados = portafolios
+
+    lista_propietarios = PropietarioInmueble.objects.filter(portafolio__in=portafolios_filtrados, activo=True).order_by('nombre')
     
     hoy = date.today()
     mes_num = int(request.GET.get('mes', hoy.month))
     anio_num = int(request.GET.get('anio', hoy.year))
     propietario_id = request.GET.get('propietario_id', 'TODOS')
 
-    propiedades_qs = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False).select_related(
+    propiedades_qs = Propiedad.objects.filter(portafolio__in=portafolios_filtrados, is_deleted=False).select_related(
         'portafolio', 'portafolio__propietario', 'propietario_inmueble'
     ).prefetch_related('contratos', 'contratos__inquilino')
 
@@ -1538,6 +1581,8 @@ def _obtener_datos_estado_propiedades_propietario(request):
         'totales_resumen': totales_resumen,
         'lista_propietarios': lista_propietarios,
         'propietario_sel': str(propietario_id),
+        'portafolios': portafolios,
+        'portafolio_sel': str(portafolio_id),
         'mes': str(mes_num),
         'nombre_mes': obtener_nombre_mes(mes_num),
         'anio': anio_num,
@@ -2790,16 +2835,24 @@ def lista_propietarios(request):
     portafolios = Portafolio.objects.filter(
         Q(propietario=request.user) | Q(accesos__usuario=request.user)
     ).distinct()
+
+    portafolio_id = request.GET.get('portafolio_id', 'TODOS')
+    if portafolio_id != 'TODOS' and portafolio_id and str(portafolio_id).isdigit():
+        portafolios_filtrados = portafolios.filter(id=int(portafolio_id))
+    else:
+        portafolios_filtrados = portafolios
     
     propietarios = PropietarioInmueble.objects.filter(
-        portafolio__in=portafolios
+        portafolio__in=portafolios_filtrados
     ).annotate(
         cant_propiedades=Count('propiedades', filter=Q(propiedades__is_deleted=False))
-    ).order_by('nombre')
+    ).select_related('portafolio').order_by('nombre')
     
     context = {
         'titulo_pagina': 'Gestión de Propietarios',
         'propietarios': propietarios,
+        'portafolios': portafolios,
+        'portafolio_sel': str(portafolio_id),
     }
     return render(request, 'gestion_propiedades/lista_propietarios.html', context)
 
@@ -2929,7 +2982,7 @@ def registrar_gasto_general(request):
     next_url = request.POST.get('next') or request.GET.get('next')
     
     if request.method == 'POST':
-        form = GastoGeneralPropietarioForm(request.POST, request.FILES)
+        form = GastoGeneralPropietarioForm(request.POST, request.FILES, portafolios=portafolios)
         if form.is_valid():
             gasto = form.save(commit=False)
             gasto.portafolio = portafolios.first()
@@ -2948,9 +3001,7 @@ def registrar_gasto_general(request):
         initial_dict = {}
         if request.GET.get('propietario_id'):
             initial_dict['propietario_inmueble'] = request.GET.get('propietario_id')
-        form = GastoGeneralPropietarioForm(initial=initial_dict)
-        form.fields['propietario_inmueble'].queryset = PropietarioInmueble.objects.filter(portafolio__in=portafolios, activo=True)
-        form.fields['propiedad'].queryset = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False)
+        form = GastoGeneralPropietarioForm(initial=initial_dict, portafolios=portafolios)
         
     context = {
         'titulo_pagina': 'Registrar Gasto General o Deducción',
@@ -2982,9 +3033,15 @@ def reporte_propietario(request):
     portafolios = Portafolio.objects.filter(
         Q(propietario=request.user) | Q(accesos__usuario=request.user)
     ).distinct()
+
+    portafolio_id = request.GET.get('portafolio_id', 'TODOS')
+    if portafolio_id != 'TODOS' and portafolio_id and str(portafolio_id).isdigit():
+        portafolios_filtrados = portafolios.filter(id=int(portafolio_id))
+    else:
+        portafolios_filtrados = portafolios
     
-    propietarios_list = PropietarioInmueble.objects.filter(portafolio__in=portafolios, activo=True).order_by('nombre')
-    todas_propiedades = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False).order_by('nombre_o_numero')
+    propietarios_list = PropietarioInmueble.objects.filter(portafolio__in=portafolios_filtrados, activo=True).order_by('nombre')
+    todas_propiedades = Propiedad.objects.filter(portafolio__in=portafolios_filtrados, is_deleted=False).order_by('nombre_o_numero')
     
     propietario_id = request.GET.get('propietario_id')
     mes = int(request.GET.get('mes', date.today().month))
@@ -3220,7 +3277,9 @@ def reporte_propietario(request):
         'neto_a_liquidar_mes': neto_a_liquidar_mes if 'neto_a_liquidar_mes' in locals() else decimal.Decimal('0.00'),
         'neto_a_liquidar': neto_a_liquidar,
         'liquidacion_existente': liquidacion_existente,
-        'fecha_generacion': timezone.now()
+        'fecha_generacion': timezone.now(),
+        'portafolios': portafolios,
+        'portafolio_sel': str(portafolio_id),
     }
     return render(request, 'gestion_propiedades/reporte_propietario.html', context)
 

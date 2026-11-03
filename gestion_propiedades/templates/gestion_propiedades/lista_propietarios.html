@@ -10,8 +10,24 @@
 {% endblock %}
 
 {% block contenido %}
-    <div class="mb-3">
-        <input type="text" id="buscadorPropietarios" class="form-control form-control-lg shadow-sm" placeholder="🔍 Buscar propietario por nombre, cédula/RNC, teléfono o correo...">
+    <div class="row g-2 mb-3 align-items-center">
+        <div class="col-md-{% if portafolios|length > 1 %}8{% else %}12{% endif %}">
+            <input type="text" id="buscadorPropietarios" class="form-control form-control-lg shadow-sm" placeholder="🔍 Buscar propietario por nombre, cédula/RNC, teléfono o correo...">
+        </div>
+        {% if portafolios|length > 1 %}
+        <div class="col-md-4">
+            <form method="GET" action="{% url 'lista_propietarios' %}">
+                <select name="portafolio_id" class="form-select form-select-lg shadow-sm" onchange="this.form.submit()">
+                    <option value="TODOS" {% if portafolio_sel == 'TODOS' %}selected{% endif %}>📂 Todos los Portafolios</option>
+                    {% for port in portafolios %}
+                        <option value="{{ port.id }}" {% if portafolio_sel == port.id|stringformat:"s" %}selected{% endif %}>
+                            📂 {{ port.nombre }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+        {% endif %}
     </div>
 
     <div class="card shadow-sm border-0">
@@ -21,6 +37,9 @@
                     <thead class="table-light">
                         <tr>
                             <th class="px-4 py-3">Propietario / Dueño</th>
+                            {% if portafolios|length > 1 %}
+                                <th class="py-3">Portafolio</th>
+                            {% endif %}
                             <th class="py-3">Cédula / RNC</th>
                             <th class="py-3">Teléfono</th>
                             <th class="py-3">Correo</th>
@@ -37,6 +56,13 @@
                                     🏢 {{ p.nombre }}
                                 </a>
                             </td>
+                            {% if portafolios|length > 1 %}
+                            <td class="py-3">
+                                <span class="badge bg-light text-secondary border">
+                                    📂 {{ p.portafolio.nombre }}
+                                </span>
+                            </td>
+                            {% endif %}
                             <td class="py-3 text-muted">{{ p.cedula_o_rnc|default:"---" }}</td>
                             <td class="py-3 text-muted">{{ p.telefono|default:"---" }}</td>
                             <td class="py-3 text-muted">{{ p.correo|default:"---" }}</td>
@@ -61,7 +87,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="7" class="text-center py-5 text-muted">
+                            <td colspan="{% if portafolios|length > 1 %}8{% else %}7{% endif %}" class="text-center py-5 text-muted">
                                 <h5>No hay propietarios de inmuebles registrados.</h5>
                                 <p class="mb-0">Los propietarios te permiten agrupar propiedades de terceros y generarles reportes de liquidación.</p>
                                 <a href="{% url 'crear_propietario' %}" class="btn btn-primary mt-3">+ Registrar Primer Propietario</a>

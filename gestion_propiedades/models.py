@@ -174,7 +174,7 @@ class PropietarioInmueble(models.Model):
     creado_en = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.nombre} ({self.portafolio.nombre})"
+        return self.nombre
 
 
 class Propiedad(models.Model):
@@ -253,10 +253,20 @@ class HistorialPrecioPropiedad(models.Model):
 
 class Inquilino(models.Model):
     nombre = models.CharField(max_length=150)
-    telefono = models.CharField(max_length=20)
+    telefono = models.CharField(max_length=20, help_text="Teléfono principal de contacto")
+    telefono_secundario = models.CharField(max_length=20, blank=True, null=True, help_text="Teléfono alternativo o secundario")
     cedula_o_pasaporte = models.CharField(max_length=50, blank=True, null=True, db_index=True)
     correo = models.EmailField(blank=True, null=True)
+    direccion = models.TextField(blank=True, null=True, help_text="Dirección física o de procedencia del inquilino")
     recibir_alertas_correo = models.BooleanField(default=True, help_text="Apaga este interruptor si el inquilino prefiere no recibir correos automáticos de cobranza.")
+    
+    # --- DATOS DEL FIADOR / GARANTE SOLIDARIO ---
+    nombre_fiador = models.CharField(max_length=150, blank=True, null=True, help_text="Nombre completo del fiador o garante solidario")
+    cedula_fiador = models.CharField(max_length=50, blank=True, null=True, help_text="Cédula o pasaporte del fiador")
+    telefono_fiador = models.CharField(max_length=20, blank=True, null=True, help_text="Teléfono principal del fiador")
+    telefono_fiador_secundario = models.CharField(max_length=20, blank=True, null=True, help_text="Teléfono secundario del fiador")
+    direccion_fiador = models.TextField(blank=True, null=True, help_text="Dirección de residencia o laboral del fiador")
+
     creado_por = models.ForeignKey(User, on_delete=models.CASCADE, related_name='inquilinos_registrados', null=True, blank=True)
     usuario_sistema = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, help_text="Solo si tendrá acceso al portal web")
 

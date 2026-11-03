@@ -8,21 +8,92 @@
 
 {% block contenido %}
 <div class="row">
-    <!-- Información de Contacto -->
+    <!-- Información de Contacto y Fiador -->
     <div class="col-md-4 mb-4">
-        <div class="card shadow-sm border-0 h-100">
-            <div class="card-header bg-white fw-bold text-secondary py-3">
-                👤 Detalles Personales
+        <!-- Detalles Personales -->
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white fw-bold text-secondary py-3 d-flex justify-content-between align-items-center">
+                <span>👤 Detalles Personales</span>
+                <a href="{% url 'editar_inquilino' inquilino.id %}" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 0.8rem;">✏️ Editar</a>
             </div>
             
-            <div class="card-body text-center pt-4">
-                <div class="bg-light rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 80px; height: 80px; font-size: 2rem;">
-                    🏢
+            <div class="card-body pt-3">
+                <div class="text-center mb-3">
+                    <div class="bg-primary-subtle text-primary rounded-circle d-inline-flex align-items-center justify-content-center mb-2" style="width: 70px; height: 70px; font-size: 2rem;">
+                        👤
+                    </div>
+                    <h5 class="fw-bold mb-1">{{ inquilino.nombre }}</h5>
+                    <span class="badge bg-light text-secondary border">🆔 {{ inquilino.cedula_o_pasaporte|default:"Sin Cédula" }}</span>
                 </div>
-                <h5 class="fw-bold">{{ inquilino.nombre }}</h5>
-                <p class="mb-1"><strong>📞 Teléfono:</strong> {{ inquilino.telefono }}</p>
-                <p class="mb-1"><strong>📧 Correo:</strong> {{ inquilino.correo|default:"No especificado" }}</p>
-                <p class="mb-0"><strong>🆔 Cédula/Pasaporte:</strong> {{ inquilino.cedula_o_pasaporte|default:"No especificado" }}</p>
+                
+                <ul class="list-group list-group-flush small">
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <span class="text-muted"><i class="fa fa-phone me-1"></i> Teléfono Principal:</span>
+                        <a href="tel:{{ inquilino.telefono }}" class="text-decoration-none fw-bold text-dark">{{ inquilino.telefono }}</a>
+                    </li>
+                    {% if inquilino.telefono_secundario %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <span class="text-muted"><i class="fa fa-mobile-screen me-1"></i> Teléfono Secundario:</span>
+                        <a href="tel:{{ inquilino.telefono_secundario }}" class="text-decoration-none fw-bold text-dark">{{ inquilino.telefono_secundario }}</a>
+                    </li>
+                    {% endif %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <span class="text-muted"><i class="fa fa-envelope me-1"></i> Correo:</span>
+                        <span class="text-break">{{ inquilino.correo|default:"No especificado" }}</span>
+                    </li>
+                    {% if inquilino.direccion %}
+                    <li class="list-group-item px-0">
+                        <span class="text-muted d-block mb-1"><i class="fa fa-location-dot me-1"></i> Dirección:</span>
+                        <span class="fw-semibold">{{ inquilino.direccion }}</span>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+
+        <!-- Tarjeta de Garante / Fiador Solidario -->
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white fw-bold text-secondary py-3 d-flex justify-content-between align-items-center">
+                <span>🤝 Fiador / Garante Solidario</span>
+                {% if inquilino.nombre_fiador %}
+                    <span class="badge bg-success-subtle text-success border border-success-subtle">Registrado</span>
+                {% else %}
+                    <span class="badge bg-light text-muted border">Opcional</span>
+                {% endif %}
+            </div>
+            
+            <div class="card-body">
+                {% if inquilino.nombre_fiador %}
+                    <h6 class="fw-bold text-dark mb-1">{{ inquilino.nombre_fiador }}</h6>
+                    <p class="text-muted small mb-3">🆔 Cédula / Pasaporte: <strong>{{ inquilino.cedula_fiador|default:"No especificada" }}</strong></p>
+                    
+                    <ul class="list-group list-group-flush small">
+                        {% if inquilino.telefono_fiador %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <span class="text-muted"><i class="fa fa-phone me-1"></i> Teléfono Fiador:</span>
+                            <a href="tel:{{ inquilino.telefono_fiador }}" class="text-decoration-none fw-bold text-dark">{{ inquilino.telefono_fiador }}</a>
+                        </li>
+                        {% endif %}
+                        {% if inquilino.telefono_fiador_secundario %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <span class="text-muted"><i class="fa fa-mobile-screen me-1"></i> Tel. Secundario:</span>
+                            <a href="tel:{{ inquilino.telefono_fiador_secundario }}" class="text-decoration-none fw-bold text-dark">{{ inquilino.telefono_fiador_secundario }}</a>
+                        </li>
+                        {% endif %}
+                        {% if inquilino.direccion_fiador %}
+                        <li class="list-group-item px-0">
+                            <span class="text-muted d-block mb-1"><i class="fa fa-map-marker-alt me-1"></i> Dirección Fiador:</span>
+                            <span class="fw-semibold">{{ inquilino.direccion_fiador }}</span>
+                        </li>
+                        {% endif %}
+                    </ul>
+                {% else %}
+                    <div class="text-center py-3 text-muted">
+                        <i class="fa-solid fa-user-shield fs-2 mb-2 text-secondary"></i>
+                        <p class="small mb-2">Este inquilino no tiene un garante solidario asignado.</p>
+                        <a href="{% url 'editar_inquilino' inquilino.id %}" class="btn btn-sm btn-outline-primary">+ Agregar Garante</a>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
