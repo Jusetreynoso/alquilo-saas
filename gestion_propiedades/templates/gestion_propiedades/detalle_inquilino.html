@@ -130,14 +130,34 @@
                                     </a>
                                 </td>
                                 <td>{{ contrato.fecha_inicio|date:"M Y" }} - {% if contrato.fecha_fin %}{{ contrato.fecha_fin|date:"M Y" }}{% else %}Presente{% endif %}</td>
-                                <td class="text-success">${{ contrato.monto_renta|dinero }}</td>
+                                <td class="text-success">
+                                    <div class="fw-bold">${{ contrato.monto_renta|dinero }}</div>
+                                    {% if contrato.cargos_adicionales.all %}
+                                        <div class="mt-1 small">
+                                            {% for c in contrato.cargos_adicionales.all %}
+                                                <span class="badge bg-light text-dark border d-inline-block mb-1" style="font-size: 0.7rem;">
+                                                    {{ c.nombre_mostrar }}: ${{ c.monto|dinero }}
+                                                </span>
+                                            {% endfor %}
+                                            <div class="text-secondary fw-semibold" style="font-size: 0.75rem;">
+                                                Total Cuota: ${{ contrato.total_cuota_mensual|dinero }}
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                </td>
                                 <td><small class="text-muted">Dep: ${{ contrato.monto_deposito|dinero }}<br>A: ${{ contrato.monto_adelanto|dinero }}</small></td>
                                 <td>
                                     {% if contrato.activo %}
                                         <div class="d-flex flex-column gap-1 align-items-center">
                                             <span class="badge bg-success w-100">Activo</span>
+                                            <a href="{% url 'gestionar_servicios_contrato' contrato.id %}?next={{ request.path }}" class="btn btn-sm btn-info text-white w-100 fw-bold" style="font-size: 0.75rem;">
+                                                ⚙️ Servicios
+                                            </a>
+                                            <a href="{% url 'editar_contrato' contrato.id %}" class="btn btn-sm btn-outline-secondary w-100" style="font-size: 0.75rem;">
+                                                ✏️ Editar
+                                            </a>
                                             <a href="{% url 'registrar_pago_anticipado' contrato.id %}" class="btn btn-sm btn-outline-success w-100" style="font-size: 0.75rem;">
-                                                💰 Recibir Adelanto
+                                                💰 Adelanto
                                             </a>
                                         </div>
                                     {% else %}
@@ -152,7 +172,7 @@
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="4" class="text-center py-5 text-muted">
+                                <td colspan="5" class="text-center py-5 text-muted">
                                     Este inquilino no tiene contratos registrados en el historial.
                                 </td>
                             </tr>

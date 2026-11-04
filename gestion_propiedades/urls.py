@@ -55,6 +55,7 @@ urlpatterns = [
     path('contrato/<int:contrato_id>/pago-anticipado/', views.registrar_pago_anticipado, name='registrar_pago_anticipado'),
     path('contrato/<int:contrato_id>/imprimir-legal/', views.imprimir_contrato_legal, name='imprimir_contrato_legal'),
     path('contrato/<int:contrato_id>/aumentar-renta/', views.registrar_aumento_renta, name='registrar_aumento_renta'),
+    path('contrato/<int:contrato_id>/servicios/', views.gestionar_servicios_contrato, name='gestionar_servicios_contrato'),
     
     # Finanzas y Pagos
     path('facturacion/', views.lista_facturas_global, name='lista_facturas_global'),

@@ -120,8 +120,13 @@
 
                 {% if contrato_activo %}
                 <div class="d-flex gap-2 flex-wrap">
-                    <a href="{% url 'crear_factura_manual' %}?contrato_id={{ contrato_activo.id }}" class="btn btn-sm btn-primary shadow-sm fw-bold">
+                    {% if request.user.is_superuser %}
+                    <a href="{% url 'crear_factura_manual' %}?contrato_id={{ contrato_activo.id }}" class="btn btn-sm btn-outline-dark shadow-sm fw-bold" title="Solo Superusuario: generar factura de inicio/extraordinaria">
                         ➕ Factura Manual
+                    </a>
+                    {% endif %}
+                    <a href="{% url 'gestionar_servicios_contrato' contrato_activo.id %}" class="btn btn-sm btn-info text-white shadow-sm fw-bold">
+                        ⚙️ Servicios Adicionales
                     </a>
                     <a href="{% url 'detalle_inquilino' contrato_activo.inquilino.id %}" class="btn btn-sm btn-outline-primary shadow-sm fw-bold">
                         👤 Perfil Inquilino
@@ -130,7 +135,7 @@
                         💰 Recibir Adelanto
                     </a>
                     <a href="{% url 'editar_contrato' contrato_activo.id %}" class="btn btn-sm btn-outline-secondary">
-                        ✏️ Editar
+                        ✏️ Editar Contrato
                     </a>
                     <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#modalAumentoRenta">
                         📈 Aumento
@@ -194,16 +199,32 @@
 
                     <p class="mb-1"><strong>Alquiler Base:</strong> ${{ contrato_activo.monto_renta|dinero }}</p>
                     {% if contrato_activo.cargos_adicionales.all %}
-                    <div class="mb-2 p-2 bg-light rounded border border-info-subtle">
-                        <small class="fw-bold text-dark d-block">⚙️ Conceptos Adicionales Recurrentes:</small>
+                    <div class="mb-2 p-3 bg-light rounded border border-info-subtle shadow-sm">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <small class="fw-bold text-dark">⚙️ Conceptos Adicionales Recurrentes:</small>
+                            <a href="{% url 'gestionar_servicios_contrato' contrato_activo.id %}" class="btn btn-sm btn-outline-info py-0 px-2 fw-bold" style="font-size: 0.75rem;">
+                                ✏️ Modificar
+                            </a>
+                        </div>
                         <ul class="mb-0 small ps-3">
                             {% for cargo in contrato_activo.cargos_adicionales.all %}
                                 <li>{{ cargo.nombre_mostrar }}: <strong>${{ cargo.monto|dinero }}</strong></li>
                             {% endfor %}
                         </ul>
-                        <div class="mt-1 pt-1 border-top small fw-bold text-secondary">
-                            Cuota Mensual Total: ${{ contrato_activo.total_cuota_mensual|dinero }}
+                        <div class="mt-2 pt-1 border-top small fw-bold text-primary d-flex justify-content-between">
+                            <span>Cuota Mensual Total:</span>
+                            <span>${{ contrato_activo.total_cuota_mensual|dinero }}</span>
                         </div>
+                    </div>
+                    {% else %}
+                    <div class="mb-2 p-2 bg-light rounded border border-dashed d-flex justify-content-between align-items-center">
+                        <div class="small text-muted">
+                            <span class="d-block fw-bold text-dark">⚙️ Servicios Adicionales:</span>
+                            Sin servicios configurados (Agua, Luz bomba, Basura, Mantenimiento, Parqueo).
+                        </div>
+                        <a href="{% url 'gestionar_servicios_contrato' contrato_activo.id %}" class="btn btn-sm btn-outline-primary py-1 px-2 fw-bold text-nowrap ms-2" style="font-size: 0.8rem;">
+                            ➕ Configurar Servicios
+                        </a>
                     </div>
                     {% endif %}
                     <p class="mb-1 text-primary"><strong>Fianza Retenida:</strong> ${{ contrato_activo.monto_deposito|dinero }} <small class="text-muted">(Adelanto: ${{ contrato_activo.monto_adelanto|dinero }})</small></p>

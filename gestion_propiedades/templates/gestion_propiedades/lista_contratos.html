@@ -98,7 +98,15 @@
                             <span class="badge bg-light text-secondary border">📂 {{ contrato.propiedad.portafolio.nombre }}</span>
                         </td>
                         {% endif %}
-                        <td class="py-3 fw-bold text-success">${{ contrato.monto_renta|dinero }}</td>
+                        <td class="py-3 text-success">
+                            <span class="fw-bold">${{ contrato.monto_renta|dinero }}</span>
+                            {% if contrato.cargos_adicionales.all %}
+                                <br>
+                                <a href="{% url 'gestionar_servicios_contrato' contrato.id %}?next={{ request.get_full_path }}" class="badge bg-info-subtle text-info border border-info-subtle text-decoration-none" title="Ver/editar servicios adicionales">
+                                    +${{ contrato.total_cargos_adicionales|dinero }} servicios
+                                </a>
+                            {% endif %}
+                        </td>
                         <td class="py-3">Día {{ contrato.dia_de_pago }} de c/mes</td>
                         <td class="py-3 small">
                             <span class="fw-semibold">{{ contrato.fecha_inicio|date:"d M Y" }}</span> <br>
@@ -114,6 +122,9 @@
                         </td>
                         <td class="py-3 text-center px-4">
                             <div class="btn-group btn-group-sm">
+                                <a href="{% url 'gestionar_servicios_contrato' contrato.id %}?next={{ request.get_full_path }}" class="btn btn-outline-info" title="Configurar Servicios Adicionales (Agua, Mantenimiento, Luz, etc.)">
+                                    <i class="fa-solid fa-gear"></i>
+                                </a>
                                 <a href="{% url 'imprimir_contrato_legal' contrato.id %}" target="_blank" class="btn btn-outline-dark" title="Imprimir Contrato">
                                     <i class="fa-solid fa-print"></i>
                                 </a>

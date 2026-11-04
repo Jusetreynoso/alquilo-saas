@@ -1018,6 +1018,73 @@ def registrar_aumento_renta(request, contrato_id):
 
 
 @login_required(login_url='/login/')
+def gestionar_servicios_contrato(request, contrato_id):
+    """
+    Vista dedicada para configurar y registrar los servicios y cargos adicionales
+    que se cobran recurrentemente a un inquilino (Agua, Luz de bomba, Mantenimiento, Basura, Parqueo, etc.).
+    """
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+    contrato = get_object_or_404(Contrato, id=contrato_id, propiedad__portafolio__in=portafolios)
+
+    next_url = request.GET.get('next') or request.POST.get('next') or ''
+
+    if request.method == 'POST':
+        cargos_cat = request.POST.getlist('cargo_categoria[]')
+        cargos_concepto = request.POST.getlist('cargo_concepto[]')
+        cargos_monto = request.POST.getlist('cargo_monto[]')
+
+        # Limpiar cargos anteriores
+        contrato.cargos_adicionales.all().delete()
+
+        servicios_creados = 0
+        for cat, con, mon in zip(cargos_cat, cargos_concepto, cargos_monto):
+            try:
+                monto_val = Decimal(str(mon).replace(',', '').strip())
+                if monto_val > 0:
+                    CargoAdicionalContrato.objects.create(
+                        contrato=contrato,
+                        categoria=cat or 'MANTENIMIENTO',
+                        concepto_personalizado=con.strip() if con else None,
+                        monto=monto_val,
+                        activo=True
+                    )
+                    servicios_creados += 1
+            except Exception:
+                pass
+
+        AuditLog.objects.create(
+            accion='EDITAR',
+            modulo='Contrato',
+            descripcion=f"Se actualizaron los servicios adicionales ({servicios_creados} registrados) para el contrato de {contrato.inquilino.nombre} en {contrato.propiedad.nombre_o_numero}. Total servicios: RD$ {contrato.total_cargos_adicionales:,.2f}",
+            usuario=request.user,
+            portafolio=contrato.propiedad.portafolio
+        )
+
+        messages.success(
+            request, 
+            f"Servicios adicionales actualizados exitosamente para {contrato.inquilino.nombre}. Cuota mensual total (renta + servicios): RD$ {contrato.total_cuota_mensual:,.2f}"
+        )
+
+        if next_url:
+            return redirect(next_url)
+        return redirect('detalle_propiedad', propiedad_id=contrato.propiedad.id)
+
+    cargos_existentes = contrato.cargos_adicionales.filter(activo=True)
+    categorias = CargoAdicionalContrato.CATEGORIA_CHOICES
+
+    context = {
+        'titulo_pagina': f'Servicios Adicionales: {contrato.inquilino.nombre}',
+        'contrato': contrato,
+        'cargos_existentes': cargos_existentes,
+        'categorias': categorias,
+        'next': next_url,
+    }
+    return render(request, 'gestion_propiedades/gestionar_servicios_contrato.html', context)
+
+
+@login_required(login_url='/login/')
 def generar_solicitud(request, propiedad_id):
     from .forms import SolicitudAdminForm
     
@@ -2173,7 +2240,15 @@ def crear_factura_manual(request):
     Módulo para generar facturas de alquiler/servicios manuales, de inicio o históricas
     (por ejemplo días anteriores a la carga de datos del cliente o cargos extraordinarios),
     con concepto y desglose personalizable.
+    RESTRINGIDO EXCLUSIVAMENTE AL SUPERADMINISTRADOR para evitar duplicidades con el cron automático.
     """
+    if not request.user.is_superuser:
+        messages.error(
+            request, 
+            "Acceso restringido. La generación manual de facturas solo está permitida para el Superadministrador para evitar duplicidades con el proceso automático de facturación."
+        )
+        return redirect('lista_facturas_global')
+
     import json
     from datetime import datetime, timedelta
 

@@ -626,9 +626,17 @@ class AlquiloTests(TestCase):
         self.assertEqual(cargo1.nombre_mostrar, 'Mantenimiento')
 
     def test_crear_factura_manual_view(self):
+        # 1. Non-superuser debe ser rechazado
         self.client.login(username='propietario1', password='password123')
-        # Probar GET
         url = reverse('crear_factura_manual')
+        res_denied = self.client.get(url + f'?contrato_id={self.contrato1.id}')
+        self.assertEqual(res_denied.status_code, 302) # Redirige con mensaje de error
+        self.assertRedirects(res_denied, reverse('lista_facturas_global'))
+
+        # 2. Superuser sí tiene acceso para onboarding y facturación extraordinaria
+        self.user1.is_superuser = True
+        self.user1.save()
+
         res_get = self.client.get(url + f'?contrato_id={self.contrato1.id}')
         self.assertEqual(res_get.status_code, 200)
         self.assertIn('Generar Factura Manual / Días Anteriores', res_get.content.decode('utf-8'))
@@ -655,6 +663,33 @@ class AlquiloTests(TestCase):
         self.assertEqual(factura.monto_base, Decimal('6200.00'))
         self.assertEqual(factura.detalles_servicios.count(), 2)
         self.assertEqual(factura.estado, 'ATRASADA') # Porque vencimiento (2026-10-25) es anterior a hoy
+
+        # Restaurar usuario
+        self.user1.is_superuser = False
+        self.user1.save()
+
+    def test_gestionar_servicios_contrato_view(self):
+        self.client.login(username='propietario1', password='password123')
+        url = reverse('gestionar_servicios_contrato', args=[self.contrato1.id])
+
+        # Probar GET
+        res_get = self.client.get(url)
+        self.assertEqual(res_get.status_code, 200)
+        self.assertIn('Servicios Adicionales Recurrentes', res_get.content.decode('utf-8'))
+
+        # Probar POST configurando Agua (500) y Luz de Bomba (350)
+        post_data = {
+            'cargo_categoria[]': ['AGUA', 'LUZ_BOMBA'],
+            'cargo_concepto[]': ['Agua potable residencial', 'Bomba sumergible'],
+            'cargo_monto[]': ['500.00', '350.00']
+        }
+        res_post = self.client.post(url, post_data)
+        self.assertEqual(res_post.status_code, 302)
+
+        self.contrato1.refresh_from_db()
+        self.assertEqual(self.contrato1.cargos_adicionales.count(), 2)
+        self.assertEqual(self.contrato1.total_cargos_adicionales, Decimal('850.00'))
+        self.assertEqual(self.contrato1.total_cuota_mensual, Decimal('10850.00'))
 
     def test_orden_abono_mora_servicios_alquiler(self):
         # Crear factura con: Alquiler 10,000, Servicios 2,000, Mora 1,000 (Total deuda: 13,000)
