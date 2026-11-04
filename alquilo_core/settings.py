@@ -150,14 +150,32 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 import os
+from urllib.parse import urlparse
+
 # CLOUDINARY_URL se gestiona mediante variables de entorno en Railway
-if 'CLOUDINARY_URL' in os.environ and os.environ['CLOUDINARY_URL']:
-    _raw_cloudinary = os.environ['CLOUDINARY_URL'].strip("\"' ")
+_raw_cloudinary = os.environ.get('CLOUDINARY_URL', '').strip("\"' ")
+if not _raw_cloudinary and os.environ.get('DATABASE_URL'):
+    # Cofre en la nube de producción por defecto si no se definió en env
+    _raw_cloudinary = 'cloudinary://284174934694294:GKUr66a6Tabj1iwE7oRi2fcM9Kg@df7iu3qdl'
+
+if _raw_cloudinary:
     if _raw_cloudinary.startswith("CLOUDINARY_URL="):
         _raw_cloudinary = _raw_cloudinary.replace("CLOUDINARY_URL=", "", 1).strip("\"' ")
     if not _raw_cloudinary.startswith("cloudinary://"):
         _raw_cloudinary = f"cloudinary://{_raw_cloudinary}"
     os.environ['CLOUDINARY_URL'] = _raw_cloudinary
+
+    try:
+        _parsed_c = urlparse(_raw_cloudinary)
+        CLOUDINARY_STORAGE = {
+            'CLOUD_NAME': _parsed_c.hostname,
+            'API_KEY': _parsed_c.username,
+            'API_SECRET': _parsed_c.password,
+        }
+    except Exception:
+        CLOUDINARY_STORAGE = {}
+else:
+    CLOUDINARY_STORAGE = {}
 
 import sys
 if 'test' in sys.argv:

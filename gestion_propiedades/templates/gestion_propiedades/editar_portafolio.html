@@ -15,8 +15,26 @@
             </div>
             <div class="card-body p-4">
                 <p class="text-muted small mb-4">Personaliza los datos de tu empresa. Estos detalles se mostrarán en los recibos de pago y notificaciones a tus inquilinos para darle un aspecto profesional y transparente a tu operativa.</p>
+                
+                {% if lista_portafolios and lista_portafolios|length > 1 %}
+                <div class="mb-4 p-3 bg-light rounded border border-primary-subtle shadow-sm">
+                    <label class="form-label text-primary fw-bold mb-1">
+                        <i class="fa-solid fa-briefcase me-1"></i> Portafolio Activo a Configurar:
+                    </label>
+                    <select class="form-select fw-semibold" onchange="window.location.href='?portafolio_id=' + this.value;">
+                        {% for p in lista_portafolios %}
+                        <option value="{{ p.id }}" {% if p.id == portafolio.id %}selected{% endif %}>
+                            {{ p.nombre }} {% if p.propietario %}({{ p.propietario.username }}){% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text small">Cambia entre los diferentes portafolios para personalizar la marca blanca de cada uno.</div>
+                </div>
+                {% endif %}
+
                 <form method="POST" enctype="multipart/form-data">
                     {% csrf_token %}
+                    <input type="hidden" name="portafolio_id" value="{{ portafolio.id }}">
                     
                     <div class="mb-3">
                         <label class="form-label text-primary fw-bold mb-1">Nombre del Portafolio o Negocio <span class="text-danger">*</span></label>
@@ -43,6 +61,12 @@
                     <div class="row">
                         <div class="col-md-8 mb-3">
                             <label class="form-label text-secondary fw-bold mb-1">Logotipo de la Empresa (Opcional)</label>
+                            {% if portafolio.logo_empresa %}
+                            <div class="mb-2 p-2 bg-white rounded border d-inline-flex align-items-center gap-2">
+                                <img src="{{ portafolio.logo_empresa.url }}" alt="Logo actual" style="max-height: 55px; border-radius: 4px;">
+                                <span class="badge bg-success-subtle text-success border border-success-subtle">✔️ Logo Actual Activo</span>
+                            </div>
+                            {% endif %}
                             {{ form.logo_empresa }}
                             <div class="form-text">Sube una imagen cuadrada JPG o PNG. Esta se imprimirá en todos los recibos y PDFs.</div>
                         </div>

@@ -1,4 +1,5 @@
 from django.shortcuts import render, get_object_or_404, redirect
+from django.urls import reverse
 from django.utils import timezone
 from django.http import HttpResponse
 from django.contrib.auth.decorators import login_required
@@ -3373,7 +3374,33 @@ def editar_portafolio(request):
     from .models import Portafolio
     from .forms import PortafolioForm
 
-    portafolio = Portafolio.objects.filter(propietario=request.user).first()
+    portafolio_id = request.GET.get('portafolio_id') or request.POST.get('portafolio_id')
+    portafolio = None
+    lista_portafolios = []
+
+    if request.user.is_superuser:
+        lista_portafolios = Portafolio.objects.all().order_by('nombre')
+        if portafolio_id and str(portafolio_id).isdigit():
+            portafolio = lista_portafolios.filter(id=int(portafolio_id)).first()
+        if not portafolio:
+            # Buscar primero el de Basora si existe o el del usuario o el primero
+            portafolio = lista_portafolios.filter(nombre__icontains='Basora').first() or \
+                         lista_portafolios.filter(propietario=request.user).first() or \
+                         lista_portafolios.first()
+    else:
+        portafolios = Portafolio.objects.filter(Q(propietario=request.user) | Q(accesos__usuario=request.user)).distinct().order_by('nombre')
+        lista_portafolios = portafolios
+        if portafolio_id and str(portafolio_id).isdigit():
+            portafolio = portafolios.filter(id=int(portafolio_id)).first()
+        if not portafolio:
+            portafolio = Portafolio.objects.filter(propietario=request.user).first()
+            if not portafolio:
+                acceso = request.user.portafolios_asignados.first()
+                if acceso:
+                    portafolio = acceso.portafolio
+                elif portafolios.exists():
+                    portafolio = portafolios.first()
+
     if not portafolio:
         messages.error(request, "No tienes permisos de Administrador para editar los datos de Marca Blanca de este portafolio.")
         return redirect('dashboard')
@@ -3381,27 +3408,34 @@ def editar_portafolio(request):
     if request.method == 'POST':
         form = PortafolioForm(request.POST, request.FILES, instance=portafolio)
         if form.is_valid():
-            p = form.save()
-            if form.cleaned_data.get('actualizar_facturas_existentes'):
-                from .models import Factura, Contrato
-                contratos = Contrato.objects.filter(propiedad__portafolio=p)
-                facturas = Factura.objects.filter(contrato__in=contratos).exclude(concepto__icontains='migrado')
-                cant_actualizadas = 0
-                for f in facturas:
-                    nuevo_concepto = p.generar_concepto_factura(f.contrato, fecha_base=f.fecha_vencimiento or f.fecha_emision, concepto_actual=f.concepto)
-                    if nuevo_concepto != f.concepto:
-                        f.concepto = nuevo_concepto
-                        f.save()
-                        cant_actualizadas += 1
-                messages.success(request, f"Ajustes de portafolio guardados. Se actualizaron {cant_actualizadas} factura(s) existentes al formato seleccionado.")
-            else:
-                messages.success(request, "Ajustes de Marca Blanca y del portafolio actualizados correctamente.")
-            return redirect('editar_portafolio')
+            try:
+                p = form.save()
+                if form.cleaned_data.get('actualizar_facturas_existentes'):
+                    from .models import Factura, Contrato
+                    contratos = Contrato.objects.filter(propiedad__portafolio=p)
+                    facturas = Factura.objects.filter(contrato__in=contratos).exclude(concepto__icontains='migrado')
+                    cant_actualizadas = 0
+                    for f in facturas:
+                        nuevo_concepto = p.generar_concepto_factura(f.contrato, fecha_base=f.fecha_vencimiento or f.fecha_emision, concepto_actual=f.concepto)
+                        if nuevo_concepto != f.concepto:
+                            f.concepto = nuevo_concepto
+                            f.save()
+                            cant_actualizadas += 1
+                    messages.success(request, f"Ajustes de portafolio guardados. Se actualizaron {cant_actualizadas} factura(s) existentes al formato seleccionado.")
+                else:
+                    messages.success(request, "Ajustes de Marca Blanca y del portafolio actualizados correctamente.")
+                return redirect(f"{reverse('editar_portafolio')}?portafolio_id={p.id}")
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Error al guardar portafolio/logo: {e}", exc_info=True)
+                messages.error(request, f"Ocurrió un inconveniente al procesar la imagen del logotipo: {str(e)}. Intenta con otra imagen.")
     else:
         form = PortafolioForm(instance=portafolio)
     
     context = {
         'form': form,
+        'portafolio': portafolio,
+        'lista_portafolios': lista_portafolios,
         'titulo_pagina': "Ajustes de Marca Blanca y Portafolio"
     }
     return render(request, 'gestion_propiedades/editar_portafolio.html', context)

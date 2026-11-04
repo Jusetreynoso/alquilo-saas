@@ -956,6 +956,14 @@ class AlquiloTests(TestCase):
         self.portafolio1.formato_concepto_factura = 'RANGO_FECHAS'
         self.portafolio1.save()
 
+        # Asignar propietario del inmueble
+        propietario_inm = PropietarioInmueble.objects.create(
+            portafolio=self.portafolio1,
+            nombre='GESTORIA TAVERAS Y ASOCIADOS S R L'
+        )
+        self.propiedad1.propietario_inmueble = propietario_inm
+        self.propiedad1.save()
+
         # 1. Factura y recibo SIN mora (Pago completo)
         factura_sin_mora = Factura.objects.create(
             contrato=self.contrato1,
@@ -982,6 +990,8 @@ class AlquiloTests(TestCase):
 
         # Verificaciones para recibo SIN mora y formato rango de fechas:
         self.assertNotIn('Mes de Cobertura:', html)
+        self.assertIn('Propietario:', html)
+        self.assertIn('GESTORIA TAVERAS Y ASOCIADOS S R L', html)
         self.assertNotIn('(con moras)', html)
         self.assertIn('Total Cuota del Período:', html)
         self.assertIn('Monto Total Recibido:', html)
@@ -1023,6 +1033,41 @@ class AlquiloTests(TestCase):
         self.assertIn('Total Cuota del Período (con mora):', html_mora)
         self.assertIn('Pago a Mora:', html_mora)
         self.assertIn('Pago a Alquiler:', html_mora)
+
+    def test_editar_portafolio_marca_blanca_con_logo(self):
+        self.client.login(username='propietario1', password='password123')
+        url = reverse('editar_portafolio')
+        
+        # Probar GET
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 200)
+        self.assertIn('Configuración de Marca Blanca', res.content.decode('utf-8'))
+
+        # Probar POST con imagen
+        from io import BytesIO
+        from PIL import Image
+        img_io = BytesIO()
+        image = Image.new('RGB', (100, 100), color='blue')
+        image.save(img_io, format='JPEG')
+        img_io.seek(0)
+        
+        logo = SimpleUploadedFile('test_logo.jpg', img_io.read(), content_type='image/jpeg')
+        post_data = {
+            'portafolio_id': self.portafolio1.id,
+            'nombre': 'Portafolio Marca Blanca Test',
+            'eslogan': 'El mejor servicio inmobiliario',
+            'formato_impresion': 'A4',
+            'formato_concepto_factura': 'RANGO_FECHAS',
+            'config_meses_deposito': 1,
+            'config_meses_adelanto': 1,
+            'logo_empresa': logo
+        }
+        res_post = self.client.post(url, post_data)
+        self.assertEqual(res_post.status_code, 302)
+        
+        self.portafolio1.refresh_from_db()
+        self.assertEqual(self.portafolio1.nombre, 'Portafolio Marca Blanca Test')
+
 
 
 
