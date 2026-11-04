@@ -340,12 +340,6 @@
             <div class="data-value">{{ contrato.propiedad.portafolio.propietario.get_full_name }}</div>
         </div>
         {% endif %}
-        {% if not factura.es_formato_rango %}
-        <div class="data-row">
-            <div class="data-label">Mes de Cobertura:</div>
-            <div class="data-value">{{ factura.fecha_vencimiento|date:"F Y"|title }}</div>
-        </div>
-        {% endif %}
         <div class="divider"></div>
         <div class="section-title">Desglose del Pago</div>
 

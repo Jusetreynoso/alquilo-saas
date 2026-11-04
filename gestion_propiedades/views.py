@@ -332,16 +332,19 @@ def mapa_propiedades_global(request):
 
 @login_required(login_url='/login/')
 def registrar_pago(request, factura_id):
-    # Buscamos la factura
-    portafolios = Portafolio.objects.filter(Q(propietario=request.user) | Q(accesos__usuario=request.user)).distinct()
-    factura = get_object_or_404(Factura, id=factura_id, contrato__propiedad__portafolio__in=portafolios)
+    # Buscamos la factura permitiendo acceso a superusuarios o miembros con permiso del portafolio
+    if request.user.is_superuser:
+        factura = get_object_or_404(Factura, id=factura_id)
+    else:
+        portafolios = Portafolio.objects.filter(Q(propietario=request.user) | Q(accesos__usuario=request.user)).distinct()
+        factura = get_object_or_404(Factura, id=factura_id, contrato__propiedad__portafolio__in=portafolios)
 
     # Si el usuario hace clic en el botón "Guardar Pago" (Método POST)
     if request.method == 'POST':
         monto_str = request.POST.get('monto', '0')
         metodo = request.POST.get('metodo_pago', 'TRANSFERENCIA')
         referencia = request.POST.get('referencia', '')
-        fecha = request.POST.get('fecha_pago')
+        fecha = request.POST.get('fecha_pago') or timezone.now().date()
         comprobante = request.FILES.get('comprobante_imagen')
 
         try:
@@ -353,21 +356,49 @@ def registrar_pago(request, factura_id):
             messages.error(request, 'El monto recibido debe ser mayor a cero.')
             return redirect('registrar_pago', factura_id=factura.id)
 
-        # 1. Creamos el Recibo de Pago (su save() imputa 1. Mora, 2. Servicios, 3. Alquiler)
-        recibo = ReciboPago.objects.create(
-            factura=factura,
-            fecha_pago=fecha,
-            monto_pagado=monto_val,
-            metodo_pago=metodo,
-            referencia_transaccion=referencia,
-            comprobante_imagen=comprobante,
-            registrado_por=request.user
-        )
+        from django.db import transaction
+        recibo = None
+        try:
+            with transaction.atomic():
+                # 1. Creamos el Recibo de Pago (su save() imputa 1. Mora, 2. Servicios, 3. Alquiler)
+                recibo = ReciboPago.objects.create(
+                    factura=factura,
+                    fecha_pago=fecha,
+                    monto_pagado=monto_val,
+                    metodo_pago=metodo,
+                    referencia_transaccion=referencia,
+                    comprobante_imagen=comprobante,
+                    registrado_por=request.user
+                )
 
-        # 2. Actualizamos la Factura evaluando si quedó completamente saldada
-        if factura.saldo_pendiente <= decimal.Decimal('0.00'):
-            factura.estado = 'PAGADA'
-        factura.save()
+                # 2. Actualizamos la Factura evaluando si quedó completamente saldada
+                if factura.saldo_pendiente <= decimal.Decimal('0.00'):
+                    factura.estado = 'PAGADA'
+                factura.save()
+        except Exception as e:
+            # Tolerancia a fallos: Si falló exclusivamente por subida del comprobante a la nube
+            if comprobante:
+                try:
+                    with transaction.atomic():
+                        recibo = ReciboPago.objects.create(
+                            factura=factura,
+                            fecha_pago=fecha,
+                            monto_pagado=monto_val,
+                            metodo_pago=metodo,
+                            referencia_transaccion=referencia,
+                            comprobante_imagen=None,
+                            registrado_por=request.user
+                        )
+                        if factura.saldo_pendiente <= decimal.Decimal('0.00'):
+                            factura.estado = 'PAGADA'
+                        factura.save()
+                    messages.warning(request, f"¡Pago registrado exitosamente! Nota: el archivo de comprobante no pudo cargarse en este momento ({str(e)}).")
+                    return redirect('detalle_propiedad', propiedad_id=factura.contrato.propiedad.id)
+                except Exception as inner_e:
+                    messages.error(request, f"Error al procesar el pago: {str(inner_e)}")
+                    return redirect('registrar_pago', factura_id=factura.id)
+            messages.error(request, f"Error al registrar el cobro: {str(e)}")
+            return redirect('registrar_pago', factura_id=factura.id)
 
         # 3. Notificación con desglose de abono
         if factura.saldo_pendiente > decimal.Decimal('0.00'):
@@ -3250,20 +3281,20 @@ def reporte_transparencia(request):
 def registrar_pago_anticipado(request, contrato_id):
     """
     Permite registrar un pago por adelantado.
-    Localiza la fecha de la última factura y genera la siguiente de forma diferida o futura.
+    Localiza la fecha de la última factura y genera la siguiente de forma diferida o futura,
+    incluyendo los servicios recurrentes activos asociados al contrato.
     """
     from django.utils import timezone
     from datetime import date, timedelta
     import calendar
     
     if request.user.is_superuser:
-        portafolios = Portafolio.objects.all().distinct()
+        contrato = get_object_or_404(Contrato, id=contrato_id)
     else:
         portafolios = Portafolio.objects.filter(
             Q(propietario=request.user) | Q(accesos__usuario=request.user)
         ).distinct()
-    
-    contrato = get_object_or_404(Contrato, id=contrato_id, propiedad__portafolio__in=portafolios)
+        contrato = get_object_or_404(Contrato, id=contrato_id, propiedad__portafolio__in=portafolios)
     
     # 1. Determinar cuál sería el próximo mes a facturar.
     ultima_factura = contrato.facturas.order_by('-fecha_emision').first()
@@ -3288,37 +3319,93 @@ def registrar_pago_anticipado(request, contrato_id):
         fecha_proxima_emision = date(prox_anio, prox_mes, ultimo_dia_mes)
         
     fecha_vencimiento_proxima = fecha_proxima_emision + timedelta(days=contrato.dias_gracia)
+    concepto_anticipada = contrato.propiedad.portafolio.generar_concepto_factura(contrato, fecha_proxima_emision, es_anticipada=True)
+
+    # 2. Servicios adicionales configurados para cobro recurrente
+    cargos_activos = list(contrato.cargos_adicionales.filter(activo=True))
+    monto_servicios = sum((decimal.Decimal(str(c.monto)) for c in cargos_activos), decimal.Decimal('0.00'))
+    monto_renta = decimal.Decimal(str(contrato.monto_renta))
+    monto_total_adelanto = monto_renta + monto_servicios
     
     if request.method == 'POST':
-        # 1. Generar la Factura "del futuro"
-        concepto_anticipada = contrato.propiedad.portafolio.generar_concepto_factura(contrato, fecha_proxima_emision, es_anticipada=True)
-        nueva_factura = Factura.objects.create(
-            contrato=contrato,
-            fecha_emision=fecha_proxima_emision,
-            fecha_vencimiento=fecha_vencimiento_proxima,
-            monto_base=contrato.monto_renta,
-            concepto=concepto_anticipada,
-            estado='PAGADA'
-        )
-        
-        # 2. Registrar el ReciboPago
         metodo = request.POST.get('metodo_pago', 'TRANSFERENCIA')
         referencia = request.POST.get('referencia', '')
-        # Si el usuario quiere, asume la fecha real de hoy como pago
-        fecha_pago = request.POST.get('fecha_pago', timezone.now().date())
+        fecha_pago = request.POST.get('fecha_pago') or timezone.now().date()
         comprobante = request.FILES.get('comprobante_imagen')
+
+        from django.db import transaction
+        nueva_factura = None
+        try:
+            with transaction.atomic():
+                nueva_factura = Factura.objects.create(
+                    contrato=contrato,
+                    fecha_emision=fecha_proxima_emision,
+                    fecha_vencimiento=fecha_vencimiento_proxima,
+                    monto_base=monto_total_adelanto,
+                    monto_renta=monto_renta,
+                    monto_servicios=monto_servicios,
+                    concepto=concepto_anticipada,
+                    estado='PAGADA'
+                )
+                for c in cargos_activos:
+                    DetalleFacturaServicio.objects.create(
+                        factura=nueva_factura,
+                        cargo_origen=c,
+                        categoria=c.categoria,
+                        concepto=c.nombre_mostrar,
+                        monto=c.monto
+                    )
+                
+                ReciboPago.objects.create(
+                    factura=nueva_factura,
+                    fecha_pago=fecha_pago,
+                    monto_pagado=monto_total_adelanto,
+                    metodo_pago=metodo,
+                    referencia_transaccion=referencia,
+                    comprobante_imagen=comprobante,
+                    registrado_por=request.user
+                )
+        except Exception as e:
+            if comprobante:
+                try:
+                    with transaction.atomic():
+                        nueva_factura = Factura.objects.create(
+                            contrato=contrato,
+                            fecha_emision=fecha_proxima_emision,
+                            fecha_vencimiento=fecha_vencimiento_proxima,
+                            monto_base=monto_total_adelanto,
+                            monto_renta=monto_renta,
+                            monto_servicios=monto_servicios,
+                            concepto=concepto_anticipada,
+                            estado='PAGADA'
+                        )
+                        for c in cargos_activos:
+                            DetalleFacturaServicio.objects.create(
+                                factura=nueva_factura,
+                                cargo_origen=c,
+                                categoria=c.categoria,
+                                concepto=c.nombre_mostrar,
+                                monto=c.monto
+                            )
+                        
+                        ReciboPago.objects.create(
+                            factura=nueva_factura,
+                            fecha_pago=fecha_pago,
+                            monto_pagado=monto_total_adelanto,
+                            metodo_pago=metodo,
+                            referencia_transaccion=referencia,
+                            comprobante_imagen=None,
+                            registrado_por=request.user
+                        )
+                    messages.warning(request, f"¡Pago anticipado registrado exitosamente! Nota: el archivo de comprobante no pudo procesarse ({str(e)}).")
+                    return redirect('detalle_inquilino', inquilino_id=contrato.inquilino.id)
+                except Exception as inner_e:
+                    messages.error(request, f"Error al generar pago anticipado: {str(inner_e)}")
+                    return redirect('registrar_pago_anticipado', contrato_id=contrato.id)
+            messages.error(request, f"Error al generar pago anticipado: {str(e)}")
+            return redirect('registrar_pago_anticipado', contrato_id=contrato.id)
         
-        ReciboPago.objects.create(
-            factura=nueva_factura,
-            fecha_pago=fecha_pago,
-            monto_pagado=contrato.monto_renta,
-            metodo_pago=metodo,
-            referencia_transaccion=referencia,
-            comprobante_imagen=comprobante,
-            registrado_por=request.user
-        )
-        
-        messages.success(request, f'Generado recibo de pago anticipado para el mes de {fecha_proxima_emision.strftime("%m/%Y")}.')
+        messages.success(request, f'¡Pago anticipado registrado exitosamente para: {nueva_factura.concepto}!')
         return redirect('detalle_inquilino', inquilino_id=contrato.inquilino.id)
         
     context = {
@@ -3326,7 +3413,11 @@ def registrar_pago_anticipado(request, contrato_id):
         'contrato': contrato,
         'fecha_proxima_emision': fecha_proxima_emision,
         'fecha_vencimiento_proxima': fecha_vencimiento_proxima,
-        'monto_renta': contrato.monto_renta,
+        'concepto_anticipada': concepto_anticipada,
+        'monto_renta': monto_renta,
+        'cargos_activos': cargos_activos,
+        'monto_servicios': monto_servicios,
+        'monto_total_adelanto': monto_total_adelanto,
     }
     return render(request, 'gestion_propiedades/pago_anticipado.html', context)
 
@@ -4152,14 +4243,30 @@ def procesar_liquidacion_propietario(request, propietario_id):
         if comprobante:
             defaults['comprobante_pago'] = comprobante
 
-        LiquidacionPropietario.objects.update_or_create(
-            propietario_inmueble=propietario,
-            periodo_mes=mes,
-            periodo_anio=anio,
-            defaults=defaults
-        )
-        
-        messages.success(request, f'Liquidación de {obtener_nombre_mes(mes)} {anio} para {propietario.nombre} registrada correctamente.')
+        try:
+            LiquidacionPropietario.objects.update_or_create(
+                propietario_inmueble=propietario,
+                periodo_mes=mes,
+                periodo_anio=anio,
+                defaults=defaults
+            )
+            messages.success(request, f'Liquidación de {obtener_nombre_mes(mes)} {anio} para {propietario.nombre} registrada correctamente.')
+        except Exception as e:
+            if comprobante:
+                defaults.pop('comprobante_pago', None)
+                try:
+                    LiquidacionPropietario.objects.update_or_create(
+                        propietario_inmueble=propietario,
+                        periodo_mes=mes,
+                        periodo_anio=anio,
+                        defaults=defaults
+                    )
+                    messages.warning(request, f'Liquidación registrada, pero hubo un problema al procesar el archivo adjunto: {str(e)}.')
+                    return redirect(f'/reportes/propietario/?propietario_id={propietario.id}&mes={mes}&anio={anio}')
+                except Exception as inner_e:
+                    messages.error(request, f'Error al registrar liquidación: {str(inner_e)}')
+                    return redirect(f'/reportes/propietario/?propietario_id={propietario.id}&mes={mes}&anio={anio}')
+            messages.error(request, f'Error al registrar liquidación: {str(e)}')
     return redirect(f'/reportes/propietario/?propietario_id={propietario.id}&mes={mes}&anio={anio}')
 
 

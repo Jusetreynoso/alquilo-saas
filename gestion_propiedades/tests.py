@@ -1111,6 +1111,65 @@ class AlquiloTests(TestCase):
         audit = AuditLog.objects.filter(modulo='Factura', descripcion__icontains='Mora condonada').first()
         self.assertIsNotNone(audit)
 
+    def test_pago_anticipado_con_servicios_recurrentes_y_concepto_limpio(self):
+        # 1. Configurar servicio recurrente en el contrato
+        CargoAdicionalContrato.objects.create(
+            contrato=self.contrato1,
+            categoria='BASURA',
+            concepto_personalizado='Basura y Mantenimiento',
+            monto=Decimal('750.00'),
+            activo=True
+        )
+
+        self.client.login(username='propietario1', password='password123')
+        url_anticipado = reverse('registrar_pago_anticipado', args=[self.contrato1.id])
+        
+        # 2. Ver pantalla de adelanto (GET)
+        res_get = self.client.get(url_anticipado)
+        self.assertEqual(res_get.status_code, 200)
+        self.assertEqual(res_get.context['monto_renta'], Decimal('10000.00'))
+        self.assertEqual(res_get.context['monto_servicios'], Decimal('750.00'))
+        self.assertEqual(res_get.context['monto_total_adelanto'], Decimal('10750.00'))
+
+        # 3. Registrar el pago anticipado (POST)
+        res_post = self.client.post(url_anticipado, {
+            'metodo_pago': 'TRANSFERENCIA',
+            'fecha_pago': date.today().strftime('%Y-%m-%d'),
+            'referencia': 'TXN-ADELANTO-123'
+        })
+        self.assertEqual(res_post.status_code, 302)
+
+        # 4. Verificar que la factura generada incluye el alquiler + servicios
+        factura_adelanto = Factura.objects.filter(contrato=self.contrato1).order_by('-id').first()
+        self.assertIsNotNone(factura_adelanto)
+        self.assertEqual(factura_adelanto.estado, 'PAGADA')
+        self.assertEqual(factura_adelanto.monto_renta, Decimal('10000.00'))
+        self.assertEqual(factura_adelanto.monto_servicios, Decimal('750.00'))
+        self.assertEqual(factura_adelanto.monto_base, Decimal('10750.00'))
+        self.assertEqual(factura_adelanto.detalles_servicios.count(), 1)
+
+        # 5. Verificar que el recibo de pago salda servicios y alquiler
+        recibo = factura_adelanto.recibos.first()
+        self.assertIsNotNone(recibo)
+        self.assertEqual(recibo.monto_pagado, Decimal('10750.00'))
+        self.assertEqual(recibo.monto_a_servicios, Decimal('750.00'))
+        self.assertEqual(recibo.monto_a_renta, Decimal('10000.00'))
+
+        # 6. Verificar que el recibo impreso no contiene "Mes de Cobertura"
+        url_recibo = reverse('imprimir_recibo', args=[recibo.id])
+        res_recibo = self.client.get(url_recibo)
+        self.assertEqual(res_recibo.status_code, 200)
+        self.assertNotIn("Mes de Cobertura:", res_recibo.content.decode('utf-8'))
+
+    def test_smart_cloudinary_storage_resource_types(self):
+        from .storage_backends import SmartCloudinaryStorage
+        storage = SmartCloudinaryStorage()
+        self.assertEqual(storage._get_resource_type('comprobantes/pago.pdf'), 'raw')
+        self.assertEqual(storage._get_resource_type('comprobantes/pago.docx'), 'raw')
+        self.assertEqual(storage._get_resource_type('fotos/fachada.png'), 'image')
+        self.assertEqual(storage._get_resource_type('fotos/sala.jpg'), 'image')
+
+
 
 
 

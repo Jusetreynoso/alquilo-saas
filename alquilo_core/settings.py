@@ -175,7 +175,11 @@ if _raw_cloudinary:
     except Exception:
         CLOUDINARY_STORAGE = {}
 else:
-    CLOUDINARY_STORAGE = {}
+    CLOUDINARY_STORAGE = {
+        'CLOUD_NAME': 'df7iu3qdl',
+        'API_KEY': '284174934694294',
+        'API_SECRET': 'GKUr66a6Tabj1iwE7oRi2fcM9Kg',
+    }
 
 import sys
 if 'test' in sys.argv:
@@ -190,7 +194,7 @@ if 'test' in sys.argv:
 else:
     STORAGES = {
         "default": {
-            "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage" if os.environ.get('CLOUDINARY_URL') else "django.core.files.storage.FileSystemStorage",
+            "BACKEND": "gestion_propiedades.storage_backends.SmartCloudinaryStorage" if os.environ.get('CLOUDINARY_URL') else "django.core.files.storage.FileSystemStorage",
         },
         "staticfiles": {
             "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",

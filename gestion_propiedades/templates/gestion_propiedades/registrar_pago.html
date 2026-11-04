@@ -22,6 +22,26 @@
             </div>
             <div class="card-body p-4">
                 
+                {% if factura.total_mora > 0 %}
+                <!-- BANNER DESTACADO PARA QUITAR / CONDONAR MORA -->
+                <div class="alert alert-warning border border-warning shadow-sm d-flex flex-column flex-md-row align-items-md-center justify-content-between p-3 mb-4 rounded-3 gap-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="fs-1 text-danger">⚠️</span>
+                        <div>
+                            <div class="fw-bold text-dark fs-6">Esta factura incluye RD$ {{ factura.total_mora|dinero }} de cargo por mora acumulada</div>
+                            <div class="small text-muted">¿El inquilino acordó una exoneración para este pago? Puedes quitar la mora para este cobro puntual:</div>
+                        </div>
+                    </div>
+                    <form action="{% url 'quitar_mora_factura' factura.id %}" method="POST" class="m-0" onsubmit="return confirm('¿Confirmas que deseas condonar/quitar la mora de RD$ {{ factura.total_mora|dinero }} para esta factura puntual?');">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <button type="submit" class="btn btn-danger fw-bold shadow-sm text-nowrap">
+                            <i class="fa-solid fa-ban me-1"></i> 🚫 Quitar / Condonar Mora
+                        </button>
+                    </form>
+                </div>
+                {% endif %}
+
                 <!-- CABECERA RESUMEN DEUDA -->
                 <div class="alert alert-primary bg-primary-subtle border-0 rounded-3 text-center mb-4 p-3">
                     <div class="mb-2">
@@ -30,7 +50,7 @@
                     <h6 class="text-muted mb-1 text-uppercase fw-bold small">Saldo Pendiente a Cobrar</h6>
                     <h1 class="fw-bold text-primary mb-1">${{ factura.saldo_pendiente|dinero }}</h1>
                     <div class="small text-muted">
-                        Factura Total (con moras): <strong>${{ factura.monto_total_con_mora|dinero }}</strong> | Ya Pagado: <strong>${{ factura.monto_pagado_total|dinero }}</strong>
+                        Factura Total{% if factura.total_mora > 0 %} (con mora incluida){% endif %}: <strong>${{ factura.monto_total_con_mora|dinero }}</strong> | Ya Pagado: <strong>${{ factura.monto_pagado_total|dinero }}</strong>
                     </div>
                 </div>
 
