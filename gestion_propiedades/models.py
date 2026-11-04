@@ -571,8 +571,6 @@ class Factura(models.Model):
 
     @property
     def total_mora(self):
-        if self.mora_exonerada:
-            return Decimal('0.00')
         return sum((Decimal(str(mora.monto)) for mora in self.moras.all()), Decimal('0.00'))
 
     # Propiedad calculada para saber el total real sumando la renta + servicios + moras acumuladas
