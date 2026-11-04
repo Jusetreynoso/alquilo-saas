@@ -40,7 +40,13 @@ class Command(BaseCommand):
         for cliente in clientes:
             suscripcion = cliente.suscripcion
             if suscripcion.estado != 'ACTIVA': continue
-            if suscripcion.fecha_proximo_pago and hoy < suscripcion.fecha_proximo_pago: continue
+
+            # REGLA: Si la cuenta está ACTIVA pero NUNCA ha recibido una FacturaSaaS (cliente recién activado),
+            # no se debe saltar por fecha_proximo_pago (que pudo quedar seteada en el trial a 45 o 60 días).
+            # Debe emitirse su cobro inicial por adelantado de inmediato.
+            tiene_facturas = FacturaSaaS.objects.filter(usuario=cliente).exists()
+            if tiene_facturas and suscripcion.fecha_proximo_pago and hoy < suscripcion.fecha_proximo_pago:
+                continue
                 
             # Cálculo financiero según el plan y tarifa escalonada
             metricas = calcular_metricas_facturacion_saas(suscripcion)

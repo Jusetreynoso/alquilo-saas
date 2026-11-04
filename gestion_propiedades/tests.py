@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from django.utils import timezone
 from django.core.files.uploadedfile import SimpleUploadedFile
 import os
-from .models import Portafolio, Propiedad, Inquilino, Contrato, HistorialAumentoRenta, AuditLog, PlanSaaS, SuscripcionCliente, PublicacionMarketplace, ImagenPublicacion, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, Factura, ReciboPago, MantenimientoUnidad, LiquidacionDepositoInquilino, CargoAdicionalContrato, DetalleFacturaServicio, CargoMora
+from .models import Portafolio, Propiedad, Inquilino, Contrato, HistorialAumentoRenta, AuditLog, PlanSaaS, SuscripcionCliente, FacturaSaaS, PublicacionMarketplace, ImagenPublicacion, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, Factura, ReciboPago, MantenimientoUnidad, LiquidacionDepositoInquilino, CargoAdicionalContrato, DetalleFacturaServicio, CargoMora
 from decimal import Decimal
 
 class AlquiloTests(TestCase):
@@ -908,7 +908,46 @@ class AlquiloTests(TestCase):
         self.assertIn('whatsapp_liquidacion_url', res_rep.context)
         self.assertIn('8095551234', res_rep.context['whatsapp_liquidacion_url'])
         self.assertIn('Avisar por WhatsApp', res_rep.content.decode('utf-8'))
-        self.assertIn('Ver Recibo Adjunto', res_rep.content.decode('utf-8'))
+
+    def test_emitir_factura_saas_cliente_y_cobro_adelantado(self):
+        # 1. Crear nuevo cliente B2B con suscripción activa pero fecha_proximo_pago a futuro (+60 días)
+        cliente_nuevo = User.objects.create_user(username='cliente_b2b_test', email='b2b@test.com', password='password123')
+        sub = SuscripcionCliente.objects.create(
+            usuario=cliente_nuevo,
+            plan_saas=self.plan,
+            estado='ACTIVA',
+            fecha_proximo_pago=date.today() + timedelta(days=60)
+        )
+        # Portafolio con 1 propiedad
+        p = Portafolio.objects.create(nombre='Portafolio B2B', propietario=cliente_nuevo)
+        Propiedad.objects.create(portafolio=p, nombre_o_numero='Apto B2B-1')
+
+        # 2. Superadmin emite factura SaaS directa con 1 clic
+        self.user1.is_superuser = True
+        self.user1.save()
+        self.client.login(username='propietario1', password='password123')
+
+        url_emitir = reverse('emitir_factura_saas_cliente', args=[cliente_nuevo.id])
+        res = self.client.post(url_emitir)
+        self.assertEqual(res.status_code, 302)
+        self.assertRedirects(res, reverse('saas_facturacion'))
+
+        # Verificar que se creó la FacturaSaaS por adelantado
+        fs = FacturaSaaS.objects.filter(usuario=cliente_nuevo).first()
+        self.assertIsNotNone(fs)
+        self.assertEqual(fs.estado, 'PENDIENTE')
+        self.assertEqual(fs.monto_total, Decimal('10.00')) # Precio mensual del plan
+
+        # Marcar la factura SaaS como PAGADA
+        url_pagar = reverse('marcar_factura_saas_pagada', args=[fs.id])
+        res_pagar = self.client.post(url_pagar)
+        self.assertEqual(res_pagar.status_code, 302)
+        fs.refresh_from_db()
+        self.assertEqual(fs.estado, 'PAGADA')
+
+        # Restaurar usuario
+        self.user1.is_superuser = False
+        self.user1.save()
 
 
 

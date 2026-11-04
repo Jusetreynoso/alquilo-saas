@@ -5,7 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login
 from django.db.models import Sum, Q, Prefetch, F, Count
 from django.contrib import messages
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import logging
 from .models import Portafolio, Propiedad, Factura, CargoMora, ReciboPago, Contrato, SolicitudAlquiler, MantenimientoUnidad, Inquilino, PlanSaaS, SuscripcionCliente, AuditLog, GastoProgramado, RegistroProceso, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, LiquidacionDepositoInquilino, HistorialPrecioPropiedad, CargoAdicionalContrato, DetalleFacturaServicio
 from .forms import NuevoClienteSaaSForm, EditarSuscripcionForm, PropiedadForm, ContratoForm, InquilinoForm, MantenimientoForm, PlanSaaSForm, PropietarioInmuebleForm, GastoGeneralPropietarioForm, LiquidacionPropietarioForm, LiquidacionDepositoForm, HistorialPrecioForm, FacturaManualForm, CargoAdicionalContratoForm
@@ -1382,7 +1382,7 @@ def reporte_financiero(request):
 # --- REPORTE DETALLADO DE MOVIMIENTOS (INGRESOS Y GASTOS CON RANGO DE FECHAS Y EXCEL) ---
 
 def _obtener_datos_movimientos_detallados(request):
-    from datetime import date, datetime
+    from datetime import date, datetime, timedelta
     import decimal
 
     if request.user.is_superuser:
@@ -2005,7 +2005,7 @@ def lista_mantenimientos_global(request):
 
 @login_required
 def cambiar_estado_mantenimiento(request, mantenimiento_id):
-    from datetime import date, datetime
+    from datetime import date, datetime, timedelta
     from decimal import Decimal
     from django.shortcuts import get_object_or_404, redirect
     from django.contrib import messages
@@ -2509,6 +2509,10 @@ def saas_master_control(request):
             estado_display = "No Instalado"
             fecha_prox = None
             
+        from .models import FacturaSaaS
+        facturas_pendientes = FacturaSaaS.objects.filter(usuario=u, estado__in=['PENDIENTE', 'VENCIDA']).count()
+        total_facturas = FacturaSaaS.objects.filter(usuario=u).count()
+
         clientes_data.append({
             'id': u.id,
             'nombre': u.get_full_name() or u.username,
@@ -2518,7 +2522,9 @@ def saas_master_control(request):
             'estado': estado,
             'estado_display': estado_display,
             'fecha_proximo_pago': fecha_prox,
-            'propiedades': props_count
+            'propiedades': props_count,
+            'facturas_pendientes': facturas_pendientes,
+            'total_facturas': total_facturas,
         })
         
     procesos = RegistroProceso.objects.all().select_related('ejecutado_por')[:15]
@@ -2594,6 +2600,32 @@ def editar_suscripcion_saas(request, cliente_id):
             if not suscripcion:
                 sub.usuario = cliente
             sub.save()
+
+            # Si la cuenta está ACTIVA y nunca ha recibido una factura SaaS por adelantado, generarla de inmediato
+            from .models import FacturaSaaS
+            if sub.estado == 'ACTIVA' and not FacturaSaaS.objects.filter(usuario=cliente).exists():
+                from .utils_saas import calcular_metricas_facturacion_saas, calcular_fecha_vencimiento_dias_habiles
+                from .utils_correo import enviar_aviso_factura_saas
+                hoy = timezone.now().date()
+                metricas = calcular_metricas_facturacion_saas(sub)
+                fecha_venc = calcular_fecha_vencimiento_dias_habiles(hoy, metricas['dias_gracia_habiles'])
+                nueva_fs = FacturaSaaS.objects.create(
+                    usuario=cliente,
+                    fecha_vencimiento=fecha_venc,
+                    monto_total=metricas['monto_total'],
+                    propiedades_cobradas=metricas['propiedades_total'],
+                    usuarios_cobrados=metricas['usuarios_extra'],
+                    estado='PENDIENTE'
+                )
+                sub.fecha_proximo_pago = hoy + timedelta(days=30)
+                sub.save()
+                try:
+                    enviar_aviso_factura_saas(nueva_fs)
+                except Exception:
+                    pass
+                messages.success(request, f"✅ Suscripción de {cliente.first_name} activada y Factura SaaS #{nueva_fs.id} generada por adelantado (${nueva_fs.monto_total} USD). Ya puedes registrar su pago.")
+                return redirect('saas_facturacion')
+
             messages.success(request, f"Suscripción de {cliente.first_name} actualizada.")
             return redirect('saas_master_control')
     else:
@@ -2709,8 +2741,10 @@ def generar_corte_saas(request):
         if suscripcion.estado != 'ACTIVA':
             continue
         
-        # Guard 2: Si ya le facturamos y no ha llegado su proxima fecha de corte, lo saltamos
-        if suscripcion.fecha_proximo_pago and hoy < suscripcion.fecha_proximo_pago:
+        # Guard 2: Si ya tiene facturas emitidas y aún no ha llegado su proxima fecha de corte, lo saltamos.
+        # Si es una cuenta recién activada que NUNCA ha tenido facturas, se le emite su cobro inicial por adelantado.
+        tiene_facturas = FacturaSaaS.objects.filter(usuario=cliente).exists()
+        if tiene_facturas and suscripcion.fecha_proximo_pago and hoy < suscripcion.fecha_proximo_pago:
             continue
             
         metricas = calcular_metricas_facturacion_saas(suscripcion)
@@ -2738,6 +2772,62 @@ def generar_corte_saas(request):
         messages.info(request, "Protección Activa: Ningún cliente necesita facturación hoy. No se duplicaron cobros.")
         
     return redirect('saas_master_control')
+
+
+@login_required(login_url='/login/')
+def emitir_factura_saas_cliente(request, cliente_id):
+    """
+    Permite al Superadmin emitir de inmediato la factura de cobro SaaS por adelantado
+    para un cliente específico (ej: cliente nuevo que acaba de activar su plan).
+    """
+    if not request.user.is_superuser:
+        messages.error(request, "Acceso denegado. Solo el Superadministrador puede emitir facturas SaaS.")
+        return redirect('dashboard')
+
+    from django.contrib.auth.models import User
+    from .models import FacturaSaaS
+    from .utils_saas import calcular_metricas_facturacion_saas, calcular_fecha_vencimiento_dias_habiles
+    from .utils_correo import enviar_aviso_factura_saas
+
+    cliente = get_object_or_404(User, id=cliente_id)
+    try:
+        suscripcion = cliente.suscripcion
+    except Exception:
+        suscripcion = None
+
+    if not suscripcion:
+        messages.error(request, f"El cliente {cliente.username} no tiene suscripción configurada.")
+        return redirect('saas_master_control')
+
+    hoy = timezone.now().date()
+    metricas = calcular_metricas_facturacion_saas(suscripcion)
+    fecha_venc = calcular_fecha_vencimiento_dias_habiles(hoy, metricas['dias_gracia_habiles'])
+
+    nueva_fs = FacturaSaaS.objects.create(
+        usuario=cliente,
+        fecha_vencimiento=fecha_venc,
+        monto_total=metricas['monto_total'],
+        propiedades_cobradas=metricas['propiedades_total'],
+        usuarios_cobrados=metricas['usuarios_extra'],
+        estado='PENDIENTE'
+    )
+
+    if suscripcion.estado != 'ACTIVA':
+        suscripcion.estado = 'ACTIVA'
+
+    suscripcion.fecha_proximo_pago = hoy + timedelta(days=30)
+    suscripcion.save()
+
+    try:
+        enviar_aviso_factura_saas(nueva_fs)
+    except Exception:
+        pass
+
+    messages.success(
+        request, 
+        f"✅ ¡Factura SaaS #{nueva_fs.id} emitida con éxito para {cliente.get_full_name() or cliente.username} por ${nueva_fs.monto_total} USD ({nueva_fs.propiedades_cobradas} propiedades cobradas)! Ya puedes registrar el pago recibido."
+    )
+    return redirect('saas_facturacion')
 
 
 @login_required(login_url='/login/')

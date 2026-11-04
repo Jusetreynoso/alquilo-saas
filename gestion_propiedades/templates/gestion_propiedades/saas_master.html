@@ -128,12 +128,27 @@
                             {{ cliente.fecha_proximo_pago|date:"d M Y"|default:"Sin definir" }}
                         </td>
                         <td class="text-center">
-                            <a href="{% url 'editar_suscripcion_saas' cliente.id %}" class="btn btn-sm btn-outline-primary fw-bold px-2" title="Editar Suscripción">
-                                ⚙️ Configurar
-                            </a>
-                            <a href="{% url 'cambiar_password' cliente.id %}" class="btn btn-sm btn-outline-warning fw-bold px-2 ms-1" title="Cambiar Contraseña">
-                                🔑 Clave
-                            </a>
+                            <div class="d-flex justify-content-center gap-1 flex-wrap">
+                                <form method="POST" action="{% url 'emitir_factura_saas_cliente' cliente.id %}" style="display:inline;" onsubmit="return confirm('¿Confirmas emitir la factura SaaS de cobro por adelantado para {{ cliente.nombre }}?');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-success fw-bold px-2 shadow-sm" title="Emitir Factura SaaS de cobro por adelantado">
+                                        ⚡ Facturar
+                                    </button>
+                                </form>
+                                <a href="{% url 'editar_suscripcion_saas' cliente.id %}" class="btn btn-sm btn-outline-primary fw-bold px-2" title="Editar Suscripción">
+                                    ⚙️ Configurar
+                                </a>
+                                <a href="{% url 'cambiar_password' cliente.id %}" class="btn btn-sm btn-outline-warning fw-bold px-2 ms-1" title="Cambiar Contraseña">
+                                    🔑 Clave
+                                </a>
+                            </div>
+                            {% if cliente.facturas_pendientes > 0 %}
+                                <div class="mt-1">
+                                    <a href="{% url 'saas_facturacion' %}" class="badge bg-warning text-dark text-decoration-none shadow-sm">
+                                        ⏳ {{ cliente.facturas_pendientes }} cobro pendiente
+                                    </a>
+                                </div>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
