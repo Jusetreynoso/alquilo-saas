@@ -92,9 +92,12 @@ def registro_publico(request):
 @login_required(login_url='/login/')
 def dashboard(request):
     limpiar_anuncios_expirados()
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
 
     total_propiedades = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False).count()
     propiedades_disponibles = Propiedad.objects.filter(portafolio__in=portafolios, estado='DISPONIBLE', is_deleted=False).count()
@@ -180,9 +183,12 @@ def dashboard(request):
 @login_required(login_url='/login/')
 def lista_propiedades(request):
     # 1. Buscamos los portafolios a los que tiene acceso el usuario
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
 
     # 2. Traemos las propiedades. 
     contratos_activos = Contrato.objects.filter(activo=True)
@@ -207,9 +213,12 @@ def lista_propiedades(request):
 @login_required(login_url='/login/')
 def detalle_propiedad(request, propiedad_id):
     # 1. Seguridad: Asegurarnos de que el usuario tenga acceso al portafolio de esta propiedad
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
     
     # Busca la propiedad, y si no existe o no es de él, da error 404
     propiedad = get_object_or_404(Propiedad, id=propiedad_id, portafolio__in=portafolios)
@@ -251,9 +260,12 @@ def registrar_cambio_precio_propiedad(request, propiedad_id):
     """
     Registra una actualización en el historial de precios de la propiedad y actualiza su canon sugerido.
     """
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
     propiedad = get_object_or_404(Propiedad, id=propiedad_id, portafolio__in=portafolios)
     
     if request.method == 'POST':
@@ -279,9 +291,12 @@ def mapa_propiedades_global(request):
     Vista global interactiva de Mapa (Leaflet.js) con todas las propiedades geolocalizadas.
     """
     import json
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
     
     propiedades_qs = Propiedad.objects.filter(
         portafolio__in=portafolios,
@@ -381,9 +396,12 @@ def registrar_pago(request, factura_id):
 
 @login_required(login_url='/login/')
 def lista_contratos(request):
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
 
     q = request.GET.get('q', '').strip()
     estado = request.GET.get('estado', 'TODOS')
@@ -620,9 +638,12 @@ def generar_facturas_masivas(request):
         return redirect('dashboard')
 
     # 1. Buscamos los portafolios del usuario
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
 
     # 2. Buscamos contratos activos
     contratos = Contrato.objects.filter(
@@ -737,9 +758,12 @@ def finalizar_contrato(request, contrato_id):
     Pantalla interactiva de Liquidación de Depósito (Finiquito) y finalización de contrato.
     Calcula facturas pendientes, permite deducciones por daños y genera la acta de finiquito.
     """
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
     
     contrato = get_object_or_404(Contrato, id=contrato_id, propiedad__portafolio__in=portafolios)
     
@@ -828,9 +852,12 @@ def imprimir_liquidacion_deposito(request, contrato_id):
     """
     Vista de impresión oficial de la Acta de Finiquito y Liquidación de Depósito.
     """
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
     
     contrato = get_object_or_404(Contrato, id=contrato_id, propiedad__portafolio__in=portafolios)
     liquidacion = get_object_or_404(LiquidacionDepositoInquilino, contrato=contrato)
@@ -1023,9 +1050,12 @@ def gestionar_servicios_contrato(request, contrato_id):
     Vista dedicada para configurar y registrar los servicios y cargos adicionales
     que se cobran recurrentemente a un inquilino (Agua, Luz de bomba, Mantenimiento, Basura, Parqueo, etc.).
     """
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
     contrato = get_object_or_404(Contrato, id=contrato_id, propiedad__portafolio__in=portafolios)
 
     next_url = request.GET.get('next') or request.POST.get('next') or ''
@@ -1199,9 +1229,12 @@ def reporte_financiero(request):
     Reporte Consolidado de Ingresos y Gastos (P&L / Flujo de Caja)
     Permite filtrar por Mes, Año, Portafolio Completo, Propietario de Inmueble o Inquilino.
     """
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
 
     # Parámetros GET
     mes = request.GET.get('mes', str(date.today().month)) # "0" para Todo el Año
@@ -1352,9 +1385,12 @@ def _obtener_datos_movimientos_detallados(request):
     from datetime import date, datetime
     import decimal
 
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
 
     hoy = date.today()
     fecha_inicio_str = request.GET.get('fecha_inicio', '').strip()
@@ -1609,9 +1645,12 @@ def _obtener_datos_estado_propiedades_propietario(request):
     - Quién está pendiente / falta de pago (🔴)
     - Gastos de mantenimiento del mes (Qué se gastó)
     """
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
 
     portafolio_id = request.GET.get('portafolio_id', 'TODOS')
     if portafolio_id != 'TODOS' and portafolio_id and str(portafolio_id).isdigit():
@@ -1803,9 +1842,12 @@ def reporte_rentabilidad(request):
     Para cada propiedad: suma de pagos recibidos - suma de mantenimientos.
     Devuelve la lista ordenada de mayor a menor rentabilidad neta.
     """
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
 
     propiedades = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False)
 
@@ -1845,9 +1887,12 @@ def reporte_ocupacion(request):
     """
     from datetime import date, timedelta
 
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
 
     hoy = date.today()
     inicio_anio = date(hoy.year, 1, 1)
@@ -2252,14 +2297,24 @@ def crear_factura_manual(request):
     import json
     from datetime import datetime, timedelta
 
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().order_by('nombre')
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct().order_by('nombre')
+
+    portafolio_id_param = request.GET.get('portafolio_id') or request.POST.get('portafolio_id') or ''
 
     contratos_qs = Contrato.objects.filter(
         propiedad__portafolio__in=portafolios,
         activo=True
-    ).select_related('propiedad', 'inquilino', 'propiedad__portafolio').prefetch_related('cargos_adicionales').order_by('propiedad__nombre_o_numero')
+    ).select_related('propiedad', 'inquilino', 'propiedad__portafolio').prefetch_related('cargos_adicionales').order_by('propiedad__portafolio__nombre', 'propiedad__nombre_o_numero')
+
+    if portafolio_id_param and portafolio_id_param != 'TODOS' and str(portafolio_id_param).isdigit():
+        contratos_filtrados = contratos_qs.filter(propiedad__portafolio_id=int(portafolio_id_param))
+    else:
+        contratos_filtrados = contratos_qs
 
     contrato_id_param = request.GET.get('contrato_id')
     propiedad_id_param = request.GET.get('propiedad_id')
@@ -2388,13 +2443,18 @@ def crear_factura_manual(request):
             'dias_gracia': c.dias_gracia,
             'inquilino': c.inquilino.nombre,
             'propiedad': c.propiedad.nombre_o_numero,
+            'portafolio_id': c.propiedad.portafolio.id,
+            'portafolio_nombre': c.propiedad.portafolio.nombre,
             'concepto_sugerido': concepto_sugerido,
             'servicios': servicios_list,
         }
 
     context = {
         'titulo_pagina': 'Generar Factura Manual / Días Anteriores',
-        'contratos': contratos_qs,
+        'contratos': contratos_filtrados,
+        'todos_contratos': contratos_qs,
+        'portafolios': portafolios,
+        'portafolio_id_param': str(portafolio_id_param),
         'contrato_seleccionado': contrato_seleccionado,
         'contratos_json': json.dumps(contratos_data),
         'hoy': date.today(),
@@ -2984,9 +3044,12 @@ def reporte_transparencia(request):
     mes = int(request.GET.get('mes', hoy.month))
     anio = int(request.GET.get('anio', hoy.year))
 
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
 
     # --- 1. EFICIENCIA DE RECAUDACIÓN ---
     debimos_cobrar = Factura.objects.filter(
@@ -3057,9 +3120,12 @@ def registrar_pago_anticipado(request, contrato_id):
     from datetime import date, timedelta
     import calendar
     
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
     
     contrato = get_object_or_404(Contrato, id=contrato_id, propiedad__portafolio__in=portafolios)
     
@@ -3134,9 +3200,12 @@ def reporte_morosos(request):
     Escanea todo el portafolio del usuario y agrupa las facturas atrasadas 
     calculando la mora total, los días de retraso y los datos de contacto.
     """
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
     
     facturas_vencidas = Factura.objects.filter(
         contrato__propiedad__portafolio__in=portafolios, 
@@ -3324,9 +3393,12 @@ def imprimir_contrato_legal(request, contrato_id):
 
 @login_required(login_url='/login/')
 def lista_propietarios(request):
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
 
     portafolio_id = request.GET.get('portafolio_id', 'TODOS')
     if portafolio_id != 'TODOS' and portafolio_id and str(portafolio_id).isdigit():
@@ -3351,9 +3423,12 @@ def lista_propietarios(request):
 
 @login_required(login_url='/login/')
 def crear_propietario(request):
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
     
     if not portafolios.exists():
         messages.error(request, "Debes tener al menos un portafolio activo.")
@@ -3391,9 +3466,12 @@ def crear_propietario(request):
 
 @login_required(login_url='/login/')
 def editar_propietario(request, propietario_id):
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
     propietario = get_object_or_404(PropietarioInmueble, id=propietario_id, portafolio__in=portafolios)
     
     if request.method == 'POST':
@@ -3422,9 +3500,12 @@ def editar_propietario(request, propietario_id):
 
 @login_required(login_url='/login/')
 def detalle_propietario(request, propietario_id):
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
     propietario = get_object_or_404(PropietarioInmueble, id=propietario_id, portafolio__in=portafolios)
     
     propiedades = propietario.propiedades.filter(is_deleted=False)
@@ -3447,9 +3528,12 @@ def detalle_propietario(request, propietario_id):
 
 @login_required(login_url='/login/')
 def lista_gastos_generales(request):
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
     
     gastos = GastoGeneralPropietario.objects.filter(
         portafolio__in=portafolios
@@ -3467,9 +3551,12 @@ def lista_gastos_generales(request):
 
 @login_required(login_url='/login/')
 def registrar_gasto_general(request):
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
     
     next_url = request.POST.get('next') or request.GET.get('next')
     
@@ -3504,9 +3591,12 @@ def registrar_gasto_general(request):
 
 @login_required(login_url='/login/')
 def eliminar_gasto_general(request, gasto_id):
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
     gasto = get_object_or_404(GastoGeneralPropietario, id=gasto_id, portafolio__in=portafolios)
     if request.method == 'POST':
         gasto.delete()
@@ -3522,9 +3612,12 @@ def reporte_propietario(request):
     Informe consolidado por Propietario de Inmuebles o propiedades seleccionadas.
     Calcula rentas cobradas, comisiones, gastos directos/generales y neto a liquidar.
     """
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
 
     portafolio_id = request.GET.get('portafolio_id', 'TODOS')
     if portafolio_id != 'TODOS' and portafolio_id and str(portafolio_id).isdigit():
@@ -3743,12 +3836,42 @@ def reporte_propietario(request):
     
     # Verificar si ya existe liquidación registrada para este propietario y periodo
     liquidacion_existente = None
+    whatsapp_liquidacion_url = None
+    mensaje_whatsapp_liquidacion = None
     if propietario_seleccionado:
         liquidacion_existente = LiquidacionPropietario.objects.filter(
             propietario_inmueble=propietario_seleccionado,
             periodo_mes=mes,
             periodo_anio=anio
         ).first()
+
+        clean_phone = ''.join(filter(str.isdigit, propietario_seleccionado.telefono or ''))
+        if len(clean_phone) == 10:
+            clean_phone = "1" + clean_phone
+
+        monto_num = liquidacion_existente.monto_neto_pagado if liquidacion_existente else neto_a_liquidar
+        monto_str = f"RD$ {monto_num:,.2f}"
+        fecha_pago_str = liquidacion_existente.fecha_pago.strftime('%d/%m/%Y') if (liquidacion_existente and liquidacion_existente.fecha_pago) else date.today().strftime('%d/%m/%Y')
+        metodo_str = liquidacion_existente.metodo_pago if (liquidacion_existente and liquidacion_existente.metodo_pago) else 'Transferencia Bancaria'
+        ref_str = f"\n🔖 *Referencia / TXN:* {liquidacion_existente.referencia_transaccion}" if (liquidacion_existente and liquidacion_existente.referencia_transaccion) else ""
+        banco_str = ""
+        if propietario_seleccionado.banco_nombre:
+            banco_str = f"\n🏦 *Cuenta Destino:* {propietario_seleccionado.banco_nombre}"
+            if propietario_seleccionado.tipo_cuenta or propietario_seleccionado.numero_cuenta:
+                banco_str += f" ({propietario_seleccionado.tipo_cuenta or 'Cuenta'} {propietario_seleccionado.numero_cuenta or ''})"
+
+        nombre_mes_texto = obtener_nombre_mes(mes)
+        mensaje_whatsapp_liquidacion = (
+            f"¡Hola, {propietario_seleccionado.nombre}! 👋\n\n"
+            f"Le informamos que hemos procesado la liquidación de sus alquileres correspondiente al período de *{nombre_mes_texto} {anio}*.\n\n"
+            f"💰 *Monto Neto Transferido:* {monto_str}\n"
+            f"📅 *Fecha de Pago:* {fecha_pago_str}\n"
+            f"💳 *Método:* {metodo_str}{ref_str}{banco_str}\n\n"
+            f"Cualquier consulta sobre el desglose de sus inmuebles estamos a su entera disposición. ¡Muchas gracias por su confianza!"
+        )
+        import urllib.parse
+        mensaje_enc = urllib.parse.quote(mensaje_whatsapp_liquidacion)
+        whatsapp_liquidacion_url = f"https://wa.me/{clean_phone}?text={mensaje_enc}" if clean_phone else f"https://wa.me/?text={mensaje_enc}"
 
     context = {
         'titulo_pagina': 'Reporte y Liquidación de Propietario',
@@ -3781,6 +3904,8 @@ def reporte_propietario(request):
         'neto_a_liquidar_mes': neto_a_liquidar_mes if 'neto_a_liquidar_mes' in locals() else decimal.Decimal('0.00'),
         'neto_a_liquidar': neto_a_liquidar,
         'liquidacion_existente': liquidacion_existente,
+        'whatsapp_liquidacion_url': whatsapp_liquidacion_url,
+        'mensaje_whatsapp_liquidacion': mensaje_whatsapp_liquidacion,
         'fecha_generacion': timezone.now(),
         'portafolios': portafolios,
         'portafolio_sel': str(portafolio_id),
@@ -3790,9 +3915,12 @@ def reporte_propietario(request):
 
 @login_required(login_url='/login/')
 def procesar_liquidacion_propietario(request, propietario_id):
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
     propietario = get_object_or_404(PropietarioInmueble, id=propietario_id, portafolio__in=portafolios)
     
     if request.method == 'POST':
@@ -3837,24 +3965,29 @@ def procesar_liquidacion_propietario(request, propietario_id):
         referencia = request.POST.get('referencia_transaccion', '')
         fecha_pago_val = request.POST.get('fecha_pago', date.today())
         notas = request.POST.get('notas', '')
-        
+        comprobante = request.FILES.get('comprobante_pago')
+
+        defaults = {
+            'monto_rentas_cobradas': total_ingresos,
+            'monto_comision': monto_comision,
+            'monto_gastos_propiedades': gastos_prop,
+            'monto_gastos_generales': gastos_gen,
+            'monto_neto_pagado': neto_pagar,
+            'estado': 'PAGADO',
+            'fecha_pago': fecha_pago_val,
+            'metodo_pago': metodo,
+            'referencia_transaccion': referencia,
+            'notas': notas,
+            'registrado_por': request.user
+        }
+        if comprobante:
+            defaults['comprobante_pago'] = comprobante
+
         LiquidacionPropietario.objects.update_or_create(
             propietario_inmueble=propietario,
             periodo_mes=mes,
             periodo_anio=anio,
-            defaults={
-                'monto_rentas_cobradas': total_ingresos,
-                'monto_comision': monto_comision,
-                'monto_gastos_propiedades': gastos_prop,
-                'monto_gastos_generales': gastos_gen,
-                'monto_neto_pagado': neto_pagar,
-                'estado': 'PAGADO',
-                'fecha_pago': fecha_pago_val,
-                'metodo_pago': metodo,
-                'referencia_transaccion': referencia,
-                'notas': notas,
-                'registrado_por': request.user
-            }
+            defaults=defaults
         )
         
         messages.success(request, f'Liquidación de {obtener_nombre_mes(mes)} {anio} para {propietario.nombre} registrada correctamente.')
@@ -3863,9 +3996,12 @@ def procesar_liquidacion_propietario(request, propietario_id):
 
 @login_required(login_url='/login/')
 def imprimir_liquidacion_propietario(request, propietario_id):
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
     propietario = get_object_or_404(PropietarioInmueble, id=propietario_id, portafolio__in=portafolios)
     
     mes = int(request.GET.get('mes', date.today().month))
@@ -3936,9 +4072,12 @@ def imprimir_estado_situacion_propietario(request, propietario_id):
     """
     Genera la vista imprimible en formato Estado de Situación de Inmuebles para compartir con el Propietario.
     """
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
     propietario = get_object_or_404(PropietarioInmueble, id=propietario_id, portafolio__in=portafolios)
     
     mes = int(request.GET.get('mes', date.today().month))
@@ -4360,9 +4499,12 @@ def respaldos_exportacion(request):
     """
     Panel de Copias de Seguridad y Exportación Masiva de Datos para el Usuario/Cliente.
     """
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
     
     total_propiedades = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False).count()
     total_propietarios = PropietarioInmueble.objects.filter(portafolio__in=portafolios, activo=True).count()
@@ -4384,9 +4526,12 @@ def exportar_datos_csv_zip(request):
     """
     Genera un archivo ZIP conteniendo archivos CSV estructurados con la información del portafolio.
     """
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
     
     zip_buffer = io.BytesIO()
     
@@ -4469,9 +4614,12 @@ def exportar_archivos_adjuntos_zip(request):
     """
     import os
     
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
     
     zip_buffer = io.BytesIO()
     count_files = 0
@@ -4509,9 +4657,12 @@ def papelera_reciclaje(request):
     """
     Centro de Recuperación / Papelera de Reciclaje para propiedades eliminadas lógicamente.
     """
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
     
     propiedades_eliminadas = Propiedad.objects.filter(
         portafolio__in=portafolios,
@@ -4531,9 +4682,12 @@ def restaurar_propiedad(request, propiedad_id):
     """
     Restaura una propiedad que fue borrada lógicamente (Soft Delete).
     """
-    portafolios = Portafolio.objects.filter(
-        Q(propietario=request.user) | Q(accesos__usuario=request.user)
-    ).distinct()
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
     propiedad = get_object_or_404(Propiedad, id=propiedad_id, portafolio__in=portafolios, is_deleted=True)
     
     if request.method == 'POST':

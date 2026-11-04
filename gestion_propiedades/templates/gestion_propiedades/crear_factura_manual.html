@@ -28,14 +28,46 @@
                 <form method="POST" id="formFacturaManual">
                     {% csrf_token %}
 
+                    <!-- FILTRO POR PORTAFOLIO / CLIENTE Y BÚSQUEDA RÁPIDA -->
+                    <div class="card bg-light border border-primary-subtle rounded-3 p-3 mb-4 shadow-sm">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-7">
+                                <label class="form-label fw-bold text-dark fs-6 mb-1">📂 Filtrar por Portafolio / Cliente</label>
+                                <select id="filtroPortafolio" class="form-select bg-white border-primary shadow-sm fw-semibold" onchange="filtrarContratos()">
+                                    <option value="TODOS">📂 Todos los Portafolios ({{ todos_contratos.count }} contratos activos)</option>
+                                    {% for p in portafolios %}
+                                        <option value="{{ p.id }}" {% if portafolio_id_param == p.id|stringformat:'s' %}selected{% endif %}>
+                                            📂 {{ p.nombre }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text small text-muted">Selecciona el cliente/portafolio (ej: Basora) para aislar sus inquilinos.</div>
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label fw-bold text-muted small mb-1">🔍 Buscar Inquilino / Propiedad</label>
+                                <input type="text" id="buscadorInquilinoInput" class="form-control bg-white shadow-sm" placeholder="Escribe nombre o número..." onkeyup="filtrarContratos()">
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- 1. SELECCIÓN DE CONTRATO / PROPIEDAD -->
                     <div class="mb-4">
-                        <label class="form-label fw-bold text-dark fs-6">🏢 Contrato / Inquilino / Propiedad <span class="text-danger">*</span></label>
-                        <select name="contrato" id="selectContrato" class="form-select form-select-lg shadow-sm" required>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label fw-bold text-dark fs-6 mb-0">🏢 Inquilino / Propiedad a Facturar <span class="text-danger">*</span></label>
+                            <span class="badge bg-secondary-subtle text-secondary border small" id="contadorContratosVisibles">
+                                {{ todos_contratos.count }} contratos disponibles
+                            </span>
+                        </div>
+                        <select name="contrato" id="selectContrato" class="form-select form-select-lg shadow-sm" required onchange="cargarDatosContrato()">
                             <option value="">--- Selecciona una propiedad / inquilino activo ---</option>
-                            {% for c in contratos %}
-                                <option value="{{ c.id }}" {% if contrato_seleccionado and contrato_seleccionado.id == c.id %}selected{% endif %}>
-                                    {{ c.propiedad.nombre_o_numero }} — Inquilino: {{ c.inquilino.nombre }} (Renta: ${{ c.monto_renta|dinero }})
+                            {% for c in todos_contratos %}
+                                <option value="{{ c.id }}" 
+                                        data-portafolio="{{ c.propiedad.portafolio.id }}"
+                                        data-portafolio-nombre="{{ c.propiedad.portafolio.nombre }}"
+                                        data-inquilino="{{ c.inquilino.nombre }}"
+                                        data-propiedad="{{ c.propiedad.nombre_o_numero }}"
+                                        {% if contrato_seleccionado and contrato_seleccionado.id == c.id %}selected{% endif %}>
+                                    [{{ c.propiedad.portafolio.nombre }}] {{ c.propiedad.nombre_o_numero }} — Inquilino: {{ c.inquilino.nombre }} (Renta: ${{ c.monto_renta|dinero }})
                                 </option>
                             {% endfor %}
                         </select>
@@ -332,7 +364,47 @@
         }
     }
 
+    function filtrarContratos() {
+        const portSelect = document.getElementById('filtroPortafolio');
+        const portId = portSelect ? portSelect.value : 'TODOS';
+        const buscador = document.getElementById('buscadorInquilinoInput');
+        const query = buscador ? buscador.value.toLowerCase().trim() : '';
+        const select = document.getElementById('selectContrato');
+        if (!select) return;
+
+        const options = select.querySelectorAll('option');
+        let visibles = 0;
+
+        options.forEach((opt, idx) => {
+            if (idx === 0) return; // placeholder
+            const optPort = opt.dataset.portafolio || '';
+            const optText = opt.text.toLowerCase();
+
+            const matchPort = (portId === 'TODOS' || optPort === portId);
+            const matchQuery = (!query || optText.includes(query));
+
+            if (matchPort && matchQuery) {
+                opt.style.display = '';
+                visibles++;
+            } else {
+                opt.style.display = 'none';
+            }
+        });
+
+        const contador = document.getElementById('contadorContratosVisibles');
+        if (contador) {
+            contador.innerText = `${visibles} contratos encontrados`;
+        }
+
+        // Si la opción seleccionada quedó oculta por el filtro, limpiar selección
+        if (select.selectedIndex > 0 && select.options[select.selectedIndex].style.display === 'none') {
+            select.value = '';
+            cargarDatosContrato();
+        }
+    }
+
     document.addEventListener("DOMContentLoaded", function() {
+        filtrarContratos();
         selectContrato.addEventListener('change', cargarDatosContrato);
         montoRentaInput.addEventListener('input', () => {
             montoRentaInput.dataset.manual = "true";

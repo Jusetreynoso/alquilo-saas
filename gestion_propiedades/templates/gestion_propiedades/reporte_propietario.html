@@ -190,12 +190,56 @@
 
         <div class="mb-4">
             {% if liquidacion_existente %}
-                <div class="alert alert-success border-0 shadow-sm d-flex align-items-center justify-content-between p-3">
-                    <div>
-                        <h5 class="fw-bold mb-1">✅ Liquidación Pagada / Transferida</h5>
-                        <span>Fecha de Pago: {{ liquidacion_existente.fecha_pago|date:"d/m/Y" }} | Método: {{ liquidacion_existente.metodo_pago }} | Ref: {{ liquidacion_existente.referencia_transaccion|default:"Sin ref." }}</span>
+                <div class="card border-0 shadow-sm bg-success-subtle border-start border-4 border-success p-3">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+                        <div>
+                            <span class="badge bg-success fs-6 px-3 py-1 mb-1">✅ LIQUIDADO / PAGADO</span>
+                            <h5 class="fw-bold mb-0 text-dark">Liquidación de Fondos Transferida</h5>
+                            <span class="small text-muted">
+                                📅 Fecha de Pago: <strong>{{ liquidacion_existente.fecha_pago|date:"d/m/Y" }}</strong> | 
+                                💳 Método: <strong>{{ liquidacion_existente.metodo_pago }}</strong>
+                                {% if liquidacion_existente.referencia_transaccion %} | 🔖 Ref: <strong>{{ liquidacion_existente.referencia_transaccion }}</strong>{% endif %}
+                            </span>
+                        </div>
+                        <div class="d-flex gap-2 flex-wrap">
+                            {% if liquidacion_existente.comprobante_pago %}
+                                <a href="{{ liquidacion_existente.comprobante_pago.url }}" target="_blank" class="btn btn-sm btn-outline-success fw-bold shadow-sm">
+                                    📎 Ver Recibo Adjunto
+                                </a>
+                            {% endif %}
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalLiquidar">
+                                ✏️ Modificar / Adjuntar Recibo
+                            </button>
+                            {% if whatsapp_liquidacion_url %}
+                                <a href="{{ whatsapp_liquidacion_url }}" target="_blank" class="btn btn-sm btn-success fw-bold shadow-sm">
+                                    📲 Avisar por WhatsApp
+                                </a>
+                            {% endif %}
+                        </div>
                     </div>
-                    <span class="badge bg-success fs-5 px-4 py-2">PAGADO</span>
+
+                    {% if liquidacion_existente.notas %}
+                        <div class="bg-white p-2 rounded small text-secondary border mb-2">
+                            <strong>Notas:</strong> {{ liquidacion_existente.notas }}
+                        </div>
+                    {% endif %}
+
+                    <!-- Vista previa del mensaje de WhatsApp -->
+                    {% if mensaje_whatsapp_liquidacion %}
+                    <div class="mt-2 pt-2 border-top border-success-subtle">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <a class="text-success small fw-bold text-decoration-none" data-bs-toggle="collapse" href="#collapseMensajeWA" role="button">
+                                💬 Ver mensaje generado para WhatsApp ▼
+                            </a>
+                            <button type="button" class="btn btn-sm btn-link py-0 text-muted" onclick="copiarMensajeWA()" title="Copiar al portapapeles">
+                                📋 Copiar Mensaje
+                            </button>
+                        </div>
+                        <div class="collapse mt-2" id="collapseMensajeWA">
+                            <div class="card card-body bg-white p-3 border small font-monospace text-dark" id="textoMensajeWA" style="white-space: pre-wrap;">{{ mensaje_whatsapp_liquidacion }}</div>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
             {% else %}
                 <div class="alert alert-warning border-0 shadow-sm d-flex align-items-center justify-content-between p-3">
@@ -204,7 +248,7 @@
                         <span>Aún no has registrado la transferencia/pago de los fondos de este mes a este propietario.</span>
                     </div>
                     <button type="button" class="btn btn-warning fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalLiquidar">
-                        Registrar Pago Ahora ↗
+                        💰 Registrar Pago Ahora ↗
                     </button>
                 </div>
             {% endif %}
@@ -382,7 +426,7 @@
                 <h5 class="modal-title fw-bold">💰 Registrar Pago de Liquidación</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form method="POST" action="{% url 'procesar_liquidacion_propietario' propietario_seleccionado.id %}">
+            <form method="POST" action="{% url 'procesar_liquidacion_propietario' propietario_seleccionado.id %}" enctype="multipart/form-data">
                 {% csrf_token %}
                 <input type="hidden" name="mes" value="{{ mes }}">
                 <input type="hidden" name="anio" value="{{ anio }}">
@@ -396,27 +440,41 @@
 
                     <div class="mb-3">
                         <label class="form-label fw-bold">Fecha del Pago / Transferencia</label>
-                        <input type="date" name="fecha_pago" class="form-control" required value="{% now 'Y-m-d' %}">
+                        <input type="date" name="fecha_pago" class="form-control" required value="{% if liquidacion_existente and liquidacion_existente.fecha_pago %}{{ liquidacion_existente.fecha_pago|date:'Y-m-d' }}{% else %}{% now 'Y-m-d' %}{% endif %}">
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label fw-bold">Método de Pago</label>
                         <select name="metodo_pago" class="form-select" required>
-                            <option value="TRANSFERENCIA">Transferencia Bancaria</option>
-                            <option value="CHEQUE">Cheque</option>
-                            <option value="EFECTIVO">Efectivo</option>
-                            <option value="OTRO">Otro Método</option>
+                            <option value="TRANSFERENCIA" {% if liquidacion_existente and liquidacion_existente.metodo_pago == 'TRANSFERENCIA' %}selected{% endif %}>Transferencia Bancaria</option>
+                            <option value="CHEQUE" {% if liquidacion_existente and liquidacion_existente.metodo_pago == 'CHEQUE' %}selected{% endif %}>Cheque</option>
+                            <option value="EFECTIVO" {% if liquidacion_existente and liquidacion_existente.metodo_pago == 'EFECTIVO' %}selected{% endif %}>Efectivo</option>
+                            <option value="OTRO" {% if liquidacion_existente and liquidacion_existente.metodo_pago == 'OTRO' %}selected{% endif %}>Otro Método</option>
                         </select>
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label fw-bold">Número de Referencia (Opcional)</label>
-                        <input type="text" name="referencia_transaccion" class="form-control" placeholder="Ej: TXN-987654321">
+                        <input type="text" name="referencia_transaccion" class="form-control" placeholder="Ej: TXN-987654321" value="{{ liquidacion_existente.referencia_transaccion|default:'' }}">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">📎 Adjuntar Recibo / Voucher de Pago (Foto o PDF)</label>
+                        <input type="file" name="comprobante_pago" class="form-control" accept="image/*,.pdf">
+                        <div class="form-text small">Sube el voucher bancario, foto o PDF del comprobante como evidencia para auditoría.</div>
+                        {% if liquidacion_existente and liquidacion_existente.comprobante_pago %}
+                            <div class="mt-2 p-2 bg-light rounded border d-flex align-items-center justify-content-between">
+                                <span class="small text-success fw-bold">📎 Comprobante ya adjunto</span>
+                                <a href="{{ liquidacion_existente.comprobante_pago.url }}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 0.8rem;">
+                                    Ver archivo actual
+                                </a>
+                            </div>
+                        {% endif %}
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label fw-bold">Notas o Comentarios (Opcional)</label>
-                        <textarea name="notas" class="form-control" rows="2" placeholder="Ej: Fondos transferidos a la cuenta del Banco Popular"></textarea>
+                        <textarea name="notas" class="form-control" rows="2" placeholder="Ej: Fondos transferidos a la cuenta del Banco Popular">{{ liquidacion_existente.notas|default:'' }}</textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -494,4 +552,24 @@
     </div>
 </div>
 {% endif %}
+
+<script>
+    function copiarMensajeWA() {
+        const el = document.getElementById('textoMensajeWA');
+        if (el) {
+            navigator.clipboard.writeText(el.innerText).then(() => {
+                alert('¡Mensaje de WhatsApp copiado al portapapeles!');
+            }).catch(err => {
+                // Fallback para navegadores antiguos
+                const textArea = document.createElement("textarea");
+                textArea.value = el.innerText;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand("copy");
+                textArea.remove();
+                alert('¡Mensaje de WhatsApp copiado al portapapeles!');
+            });
+        }
+    }
+</script>
 {% endblock %}

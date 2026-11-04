@@ -1021,6 +1021,7 @@ class LiquidacionPropietario(models.Model):
     fecha_pago = models.DateField(blank=True, null=True)
     metodo_pago = models.CharField(max_length=50, blank=True, null=True, help_text="Ej: Transferencia Bancaria, Cheque, Efectivo")
     referencia_transaccion = models.CharField(max_length=100, blank=True, null=True)
+    comprobante_pago = models.FileField(upload_to='comprobantes_liquidaciones/', blank=True, null=True, help_text="Comprobante, recibo o voucher de pago al propietario (Foto o PDF)")
     notas = models.TextField(blank=True, null=True)
     creado_en = models.DateTimeField(auto_now_add=True)
     registrado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)

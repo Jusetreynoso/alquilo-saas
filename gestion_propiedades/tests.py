@@ -641,6 +641,12 @@ class AlquiloTests(TestCase):
         self.assertEqual(res_get.status_code, 200)
         self.assertIn('Generar Factura Manual / Días Anteriores', res_get.content.decode('utf-8'))
 
+        # Probar filtro por portafolio para Superusuario
+        res_filtro = self.client.get(url + f'?portafolio_id={self.portafolio1.id}')
+        self.assertEqual(res_filtro.status_code, 200)
+        self.assertIn('portafolios', res_filtro.context)
+        self.assertIn('Filtrar por Portafolio', res_filtro.content.decode('utf-8'))
+
         # Probar POST creando factura manual para días anteriores con concepto personalizado
         post_data = {
             'contrato': self.contrato1.id,
@@ -858,6 +864,51 @@ class AlquiloTests(TestCase):
         mora = CargoMora.objects.filter(factura=factura, mes_aplicado=date.today().month, anio_aplicado=date.today().year).first()
         self.assertIsNotNone(mora)
         self.assertEqual(mora.monto, Decimal('1000.00'))
+
+    def test_liquidacion_con_comprobante_adjunto_y_whatsapp(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        # Propietario en portafolio 1
+        prop_owner = PropietarioInmueble.objects.create(
+            portafolio=self.portafolio1,
+            nombre='Propietario Don Basora',
+            telefono='809-555-1234',
+            banco_nombre='Banco Popular Dominicano',
+            tipo_cuenta='Corriente',
+            numero_cuenta='789456123'
+        )
+        self.propiedad1.propietario_inmueble = prop_owner
+        self.propiedad1.save()
+
+        self.client.login(username='propietario1', password='password123')
+        url = reverse('procesar_liquidacion_propietario', args=[prop_owner.id])
+
+        pdf_dummy = SimpleUploadedFile("comprobante_transferencia.pdf", b"%PDF-1.4 test dummy content", content_type="application/pdf")
+        post_data = {
+            'mes': 11,
+            'anio': 2026,
+            'fecha_pago': '2026-11-04',
+            'metodo_pago': 'TRANSFERENCIA',
+            'referencia_transaccion': 'TXN-BANK-9988',
+            'notas': 'Transferencia vía ACH Banco Popular',
+            'comprobante_pago': pdf_dummy
+        }
+        res = self.client.post(url, post_data)
+        self.assertEqual(res.status_code, 302)
+
+        liquidacion = LiquidacionPropietario.objects.filter(propietario_inmueble=prop_owner, periodo_mes=11, periodo_anio=2026).first()
+        self.assertIsNotNone(liquidacion)
+        self.assertEqual(liquidacion.referencia_transaccion, 'TXN-BANK-9988')
+        self.assertTrue(bool(liquidacion.comprobante_pago))
+        self.assertIn('comprobante_transferencia', liquidacion.comprobante_pago.name)
+
+        # Probar que la vista reporte_propietario genera el enlace de WhatsApp
+        url_rep = reverse('reporte_propietario') + f'?propietario_id={prop_owner.id}&mes=11&anio=2026'
+        res_rep = self.client.get(url_rep)
+        self.assertEqual(res_rep.status_code, 200)
+        self.assertIn('whatsapp_liquidacion_url', res_rep.context)
+        self.assertIn('8095551234', res_rep.context['whatsapp_liquidacion_url'])
+        self.assertIn('Avisar por WhatsApp', res_rep.content.decode('utf-8'))
+        self.assertIn('Ver Recibo Adjunto', res_rep.content.decode('utf-8'))
 
 
 
