@@ -670,6 +670,27 @@ class AlquiloTests(TestCase):
         self.assertEqual(factura.detalles_servicios.count(), 2)
         self.assertEqual(factura.estado, 'ATRASADA') # Porque vencimiento (2026-10-25) es anterior a hoy
 
+        # Probar POST creando factura manual CON MORA aplicada
+        post_data_mora = {
+            'contrato': self.contrato1.id,
+            'fecha_emision': '2026-09-01',
+            'fecha_vencimiento': '2026-09-10',
+            'monto_renta': '10000.00',
+            'concepto': 'Renta Septiembre con Mora Manual',
+            'aplicar_mora': 'on',
+            'monto_mora': '1000.00'
+        }
+        res_post_mora = self.client.post(url, post_data_mora)
+        self.assertEqual(res_post_mora.status_code, 302)
+
+        factura_mora = Factura.objects.filter(contrato=self.contrato1, concepto='Renta Septiembre con Mora Manual').first()
+        self.assertIsNotNone(factura_mora)
+        self.assertEqual(factura_mora.monto_renta, Decimal('10000.00'))
+        self.assertEqual(factura_mora.total_mora, Decimal('1000.00'))
+        self.assertEqual(factura_mora.monto_total_con_mora, Decimal('11000.00'))
+        self.assertEqual(factura_mora.moras.count(), 1)
+        self.assertEqual(factura_mora.estado, 'ATRASADA')
+
         # Restaurar usuario
         self.user1.is_superuser = False
         self.user1.save()

@@ -2459,12 +2459,23 @@ def crear_factura_manual(request):
         total_servicios = sum(item['monto'] for item in items_servicios)
         total_base = monto_renta + total_servicios
 
-        if total_base <= 0:
+        # 4. Cargo por Mora opcional
+        aplicar_mora = request.POST.get('aplicar_mora') == 'on'
+        monto_mora_str = request.POST.get('monto_mora', '0') if aplicar_mora else '0'
+        try:
+            monto_mora = decimal.Decimal(str(monto_mora_str).replace(',', '').strip())
+        except Exception:
+            monto_mora = decimal.Decimal('0.00')
+
+        if monto_mora < decimal.Decimal('0.00'):
+            monto_mora = decimal.Decimal('0.00')
+
+        if total_base <= 0 and monto_mora <= 0:
             messages.error(request, 'El monto total facturado debe ser mayor a cero.')
             return redirect(f"{request.path}?contrato_id={contrato.id}")
 
         hoy = date.today()
-        estado_inicial = 'ATRASADA' if fecha_vencimiento < hoy else 'PENDIENTE'
+        estado_inicial = 'ATRASADA' if (fecha_vencimiento < hoy or monto_mora > decimal.Decimal('0.00')) else 'PENDIENTE'
 
         nueva_factura = Factura.objects.create(
             contrato=contrato,
@@ -2486,19 +2497,36 @@ def crear_factura_manual(request):
                 monto=item['monto']
             )
 
+        if monto_mora > decimal.Decimal('0.00'):
+            CargoMora.objects.create(
+                factura=nueva_factura,
+                monto=monto_mora,
+                mes_aplicado=hoy.month,
+                anio_aplicado=hoy.year
+            )
+
+        detalle_mora_txt = f" + Mora RD$ {monto_mora:,.2f}" if monto_mora > 0 else ""
         AuditLog.objects.create(
             accion='CREAR',
             modulo='Factura',
-            descripcion=f"Generó factura manual #{nueva_factura.id} por RD$ {total_base:,.2f} ({concepto}) para inquilino {contrato.inquilino.nombre}.",
+            descripcion=f"Generó factura manual #{nueva_factura.id} por RD$ {total_base:,.2f}{detalle_mora_txt} ({concepto}) para inquilino {contrato.inquilino.nombre}.",
             usuario=request.user,
             portafolio=contrato.propiedad.portafolio
         )
 
-        messages.success(
-            request,
-            f"✅ ¡Factura #{nueva_factura.id} generada con éxito para {contrato.inquilino.nombre} por RD$ {total_base:,.2f}! "
-            f"Concepto: '{concepto}'."
-        )
+        if monto_mora > 0:
+            total_con_mora = total_base + monto_mora
+            messages.success(
+                request,
+                f"✅ ¡Factura #{nueva_factura.id} generada con éxito para {contrato.inquilino.nombre} por RD$ {total_base:,.2f} "
+                f"+ RD$ {monto_mora:,.2f} de mora (Total: RD$ {total_con_mora:,.2f})! Concepto: '{concepto}'."
+            )
+        else:
+            messages.success(
+                request,
+                f"✅ ¡Factura #{nueva_factura.id} generada con éxito para {contrato.inquilino.nombre} por RD$ {total_base:,.2f}! "
+                f"Concepto: '{concepto}'."
+            )
         return redirect('lista_facturas_global')
 
     # Datos JSON para dinamismo en UI
@@ -2518,6 +2546,7 @@ def crear_factura_manual(request):
             'monto_renta': float(c.monto_renta),
             'dia_de_pago': c.dia_de_pago,
             'dias_gracia': c.dias_gracia,
+            'porcentaje_mora': float(c.porcentaje_mora or 0.0),
             'inquilino': c.inquilino.nombre,
             'propiedad': c.propiedad.nombre_o_numero,
             'portafolio_id': c.propiedad.portafolio.id,

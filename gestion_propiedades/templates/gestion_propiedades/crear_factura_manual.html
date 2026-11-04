@@ -161,7 +161,44 @@
                         </div>
                     </div>
 
-                    <!-- 5. CONCEPTO DE LA FACTURA -->
+                    <!-- 5. RECARGO O MORA INICIAL (OPCIONAL) -->
+                    <div class="card border border-warning-subtle rounded-3 mb-4 shadow-sm bg-warning-subtle bg-opacity-10">
+                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <div>
+                                <h6 class="fw-bold mb-0 text-danger">⚠️ Cargo por Mora / Atraso (Opcional)</h6>
+                                <small class="text-muted">Aplica si esta factura manual corresponde a un atraso que ya devengó penalidad o recargo.</small>
+                            </div>
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" id="checkAplicarMora" name="aplicar_mora" onchange="toggleMoraManual()">
+                                <label class="form-check-label fw-bold text-dark small" for="checkAplicarMora">
+                                    Aplicar Mora
+                                </label>
+                            </div>
+                        </div>
+                        <div class="card-body p-3 d-none" id="moraManualContenedor">
+                            <div class="row g-3 align-items-center">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold text-dark small mb-1">Monto de Mora a Cargar (RD$)</label>
+                                    <div class="input-group input-group-lg shadow-sm">
+                                        <span class="input-group-text bg-white fw-bold text-danger">RD$</span>
+                                        <input type="number" step="0.01" min="0" name="monto_mora" id="montoMoraInput" class="form-control fw-bold fs-5 text-danger" placeholder="0.00" oninput="actualizarCalculos()">
+                                    </div>
+                                    <div class="form-text small">Ingresa el monto de mora a cargar o usa el botón para calcularlo según contrato.</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold text-muted small mb-1">Cálculo Rápido por Contrato</label>
+                                    <div>
+                                        <button type="button" class="btn btn-outline-danger fw-bold w-100 shadow-sm py-2" id="btnCalcularMoraContrato" onclick="calcularMoraSegunContrato()">
+                                            ⚡ Calcular mora según contrato (<span id="textoPorcentajeMora">0%</span>)
+                                        </button>
+                                    </div>
+                                    <small class="text-muted mt-1 d-block">Calcula la mora aplicando el % de mora del contrato sobre la renta.</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 6. CONCEPTO DE LA FACTURA -->
                     <div class="mb-4">
                         <div class="d-flex justify-content-between align-items-center mb-1">
                             <label class="form-label fw-bold text-dark fs-6 mb-0">🏷️ Concepto de la Factura <span class="text-danger">*</span></label>
@@ -178,17 +215,21 @@
                     <!-- RESUMEN FINAL DE LA FACTURA -->
                     <div class="card bg-primary-subtle border-0 rounded-3 p-4 mb-4">
                         <div class="row align-items-center text-center text-md-start">
-                            <div class="col-md-4 mb-2 mb-md-0">
+                            <div class="col-md-3 mb-2 mb-md-0">
                                 <span class="text-muted small d-block">Alquiler Puro:</span>
-                                <span class="fs-5 fw-bold text-dark" id="resumenRenta">RD$ 0.00</span>
+                                <span class="fs-6 fw-bold text-dark" id="resumenRenta">RD$ 0.00</span>
                             </div>
-                            <div class="col-md-4 mb-2 mb-md-0">
-                                <span class="text-muted small d-block">Servicios Adicionales:</span>
-                                <span class="fs-5 fw-bold text-secondary" id="resumenServicios">RD$ 0.00</span>
+                            <div class="col-md-3 mb-2 mb-md-0">
+                                <span class="text-muted small d-block">Servicios:</span>
+                                <span class="fs-6 fw-bold text-secondary" id="resumenServicios">RD$ 0.00</span>
                             </div>
-                            <div class="col-md-4">
-                                <span class="text-muted small d-block">TOTAL FACTURADO:</span>
-                                <span class="fs-3 fw-bold text-primary" id="resumenTotal">RD$ 0.00</span>
+                            <div class="col-md-3 mb-2 mb-md-0">
+                                <span class="text-muted small d-block">Mora Inicial:</span>
+                                <span class="fs-6 fw-bold text-danger" id="resumenMora">RD$ 0.00</span>
+                            </div>
+                            <div class="col-md-3">
+                                <span class="text-muted small d-block">TOTAL A COBRAR:</span>
+                                <span class="fs-4 fw-bold text-primary" id="resumenTotal">RD$ 0.00</span>
                             </div>
                         </div>
                         <div class="mt-3 pt-2 border-top border-primary-subtle text-center text-md-start small text-muted">
@@ -221,14 +262,44 @@
     const recurrentesPreview = document.getElementById('recurrentesPreview');
     const cuerpoServiciosExtra = document.getElementById('cuerpoServiciosExtra');
     const msgSinServicios = document.getElementById('msgSinServicios');
+    const checkAplicarMora = document.getElementById('checkAplicarMora');
+    const moraManualContenedor = document.getElementById('moraManualContenedor');
+    const montoMoraInput = document.getElementById('montoMoraInput');
+    const textoPorcentajeMora = document.getElementById('textoPorcentajeMora');
 
     function formatearDinero(num) {
         return num.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
+    function toggleMoraManual() {
+        if (checkAplicarMora.checked) {
+            moraManualContenedor.classList.remove('d-none');
+            if (!montoMoraInput.value || parseFloat(montoMoraInput.value) === 0) {
+                calcularMoraSegunContrato();
+            }
+        } else {
+            moraManualContenedor.classList.add('d-none');
+            montoMoraInput.value = '';
+        }
+        actualizarCalculos();
+    }
+
+    function calcularMoraSegunContrato() {
+        const contratoId = selectContrato.value;
+        const renta = parseFloat(montoRentaInput.value) || 0;
+        let pct = 0;
+        if (contratoId && contratosData[contratoId]) {
+            pct = parseFloat(contratosData[contratoId].porcentaje_mora) || 0;
+        }
+        const moraCalculada = Math.round(renta * (pct / 100) * 100) / 100;
+        montoMoraInput.value = moraCalculada.toFixed(2);
+        actualizarCalculos();
+    }
+
     function actualizarCalculos() {
         let renta = parseFloat(montoRentaInput.value) || 0;
         let servicios = 0;
+        let mora = 0;
 
         // Sumar recurrentes si está marcado
         const contratoId = selectContrato.value;
@@ -244,12 +315,18 @@
             servicios += parseFloat(input.value) || 0;
         });
 
-        const total = renta + servicios;
+        // Sumar mora si está marcada
+        if (checkAplicarMora && checkAplicarMora.checked) {
+            mora = parseFloat(montoMoraInput.value) || 0;
+        }
+
+        const total = renta + servicios + mora;
         document.getElementById('resumenRenta').innerText = 'RD$ ' + formatearDinero(renta);
         document.getElementById('resumenServicios').innerText = 'RD$ ' + formatearDinero(servicios);
+        document.getElementById('resumenMora').innerText = 'RD$ ' + formatearDinero(mora);
         document.getElementById('resumenTotal').innerText = 'RD$ ' + formatearDinero(total);
 
-        // Evaluar estado por fecha
+        // Evaluar estado por fecha o mora
         const vDate = new Date(fechaVencimiento.value);
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
@@ -257,7 +334,11 @@
         const badge = document.getElementById('estadoFacturaBadge');
         const txt = document.getElementById('estadoFacturaTexto');
 
-        if (vDate < hoy) {
+        if (mora > 0) {
+            badge.className = 'badge bg-danger me-2';
+            badge.innerText = 'Atrasada (Con Mora)';
+            txt.innerText = 'Se creará con cargo por mora aplicado e iniciará en estatus atrasada.';
+        } else if (vDate < hoy) {
             badge.className = 'badge bg-danger me-2';
             badge.innerText = 'Atrasada (Vencida)';
             txt.innerText = 'La fecha de vencimiento ya expiró. Se registrará como atrasada.';
@@ -284,6 +365,14 @@
         document.getElementById('infoDiaPago').innerText = `Día ${c.dia_de_pago} de cada mes (+${c.dias_gracia} días gracia)`;
         document.getElementById('infoContratoCard').classList.remove('d-none');
 
+        const pctMora = (c.porcentaje_mora || 0);
+        if (textoPorcentajeMora) {
+            textoPorcentajeMora.innerText = `${pctMora}%`;
+        }
+        if (checkAplicarMora && checkAplicarMora.checked && (!montoMoraInput.value || parseFloat(montoMoraInput.value) === 0)) {
+            calcularMoraSegunContrato();
+        }
+
         // Pre-llenar monto de renta si está vacío o no modificado
         if (!montoRentaInput.value || montoRentaInput.dataset.manual !== "true") {
             montoRentaInput.value = c.monto_renta.toFixed(2);
@@ -306,6 +395,9 @@
         } else {
             recurrentesPreview.classList.add('d-none');
         }
+
+        actualizarCalculos();
+    }
 
         actualizarCalculos();
     }
