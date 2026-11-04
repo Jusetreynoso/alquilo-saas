@@ -641,6 +641,13 @@
                                 <td class="py-3 text-end px-4">
                                     {% if factura.estado == 'PENDIENTE' or factura.estado == 'ATRASADA' %}
                                         <a href="{% url 'registrar_pago' factura.id %}" class="btn btn-sm btn-success shadow-sm me-1">Cobrar</a>
+                                        {% if factura.total_mora > 0 %}
+                                        <form action="{% url 'quitar_mora_factura' factura.id %}" method="POST" class="d-inline" onsubmit="return confirm('¿Quitar mora a esta factura?');">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger shadow-sm me-1" title="Quitar Mora acumulada">🚫 Mora</button>
+                                        </form>
+                                        {% endif %}
                                     {% endif %}
                                     
                                     {% for recibo in factura.recibos.all %}

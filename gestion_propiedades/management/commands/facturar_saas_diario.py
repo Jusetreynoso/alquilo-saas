@@ -191,6 +191,9 @@ class Command(BaseCommand):
                 
             # 3.2 Aplicación de Mora Matemática y Cambio a Atrasada
             elif hoy > factura.fecha_vencimiento:
+                if factura.mora_exonerada:
+                    continue
+
                 # Verificar que no se haya aplicado ya la mora en este mes calendario a esta factura
                 ya_cobrada_este_mes = CargoMora.objects.filter(
                     factura=factura,

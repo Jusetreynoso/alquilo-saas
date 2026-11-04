@@ -1068,6 +1068,50 @@ class AlquiloTests(TestCase):
         self.portafolio1.refresh_from_db()
         self.assertEqual(self.portafolio1.nombre, 'Portafolio Marca Blanca Test')
 
+    def test_quitar_mora_factura_admin_y_superadmin(self):
+        # 1. Crear factura con mora
+        factura = Factura.objects.create(
+            contrato=self.contrato1,
+            fecha_emision=date.today() - timedelta(days=20),
+            fecha_vencimiento=date.today() - timedelta(days=10),
+            monto_base=Decimal('10000.00'),
+            monto_renta=Decimal('10000.00'),
+            estado='ATRASADA',
+            concepto='Alquiler Noviembre'
+        )
+        CargoMora.objects.create(
+            factura=factura,
+            monto=Decimal('1000.00'),
+            mes_aplicado=date.today().month,
+            anio_aplicado=date.today().year
+        )
+        self.assertEqual(factura.total_mora, Decimal('1000.00'))
+        self.assertEqual(factura.monto_total_con_mora, Decimal('11000.00'))
+
+        # 2. Intentar quitar mora con usuario no autorizado
+        User.objects.create_user(username='ajeno', password='password123')
+        self.client.login(username='ajeno', password='password123')
+        url_quitar = reverse('quitar_mora_factura', args=[factura.id])
+        res_ajeno = self.client.post(url_quitar)
+        self.assertEqual(res_ajeno.status_code, 302)
+        factura.refresh_from_db()
+        self.assertEqual(factura.total_mora, Decimal('1000.00'))
+
+        # 3. Quitar mora como Administrador del Portafolio
+        self.client.login(username='propietario1', password='password123')
+        res_admin = self.client.post(url_quitar)
+        self.assertEqual(res_admin.status_code, 302)
+        factura.refresh_from_db()
+        self.assertTrue(factura.mora_exonerada)
+        self.assertEqual(factura.total_mora, Decimal('0.00'))
+        self.assertEqual(factura.moras.count(), 0)
+        self.assertEqual(factura.monto_total_con_mora, Decimal('10000.00'))
+
+        # Verificar auditoría
+        audit = AuditLog.objects.filter(modulo='Factura', descripcion__icontains='Mora condonada').first()
+        self.assertIsNotNone(audit)
+
+
 
 
 

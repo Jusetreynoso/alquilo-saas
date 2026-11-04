@@ -54,8 +54,28 @@
                                     <!-- 1. MORA -->
                                     <tr class="{% if factura.saldo_mora_pendiente > 0 %}table-warning{% endif %}">
                                         <td class="ps-3">
-                                            <div class="fw-bold text-danger">⚠️ 1. Mora Acumulada</div>
-                                            <small class="text-muted">Prioridad 1 en abonos (Sin comisión legal)</small>
+                                            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                                <div>
+                                                    <div class="fw-bold text-danger">⚠️ 1. Mora Acumulada</div>
+                                                    <small class="text-muted">Prioridad 1 en abonos (Sin comisión legal)</small>
+                                                </div>
+                                                {% if factura.total_mora > 0 %}
+                                                <form action="{% url 'quitar_mora_factura' factura.id %}" method="POST" class="d-inline" onsubmit="return confirm('¿Confirmas que deseas quitar / condonar la mora de ${{ factura.total_mora|dinero }} de esta factura? El inquilino no tendrá que pagarla.');">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger py-1 px-2 fw-bold" title="Quitar mora a esta factura">
+                                                        <i class="fa-solid fa-ban me-1"></i> Quitar Mora
+                                                    </button>
+                                                </form>
+                                                {% endif %}
+                                            </div>
+                                            {% if factura.mora_exonerada %}
+                                            <div class="mt-1">
+                                                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">
+                                                    <i class="fa-solid fa-check me-1"></i> Mora Exonerada por Administración
+                                                </span>
+                                            </div>
+                                            {% endif %}
                                         </td>
                                         <td class="text-end">${{ factura.total_mora|dinero }}</td>
                                         <td class="text-end text-success">${{ factura.pagado_mora|dinero }}</td>

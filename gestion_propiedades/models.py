@@ -540,6 +540,7 @@ class Factura(models.Model):
     monto_servicios = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Porción correspondiente a servicios adicionales")
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='PENDIENTE', db_index=True)
     concepto = models.CharField(max_length=255)
+    mora_exonerada = models.BooleanField(default=False, help_text="Indica si la mora fue exonerada/quitada manualmente por el administrador o superadmin")
     creada_en = models.DateTimeField(auto_now_add=True)
 
     @property
@@ -570,6 +571,8 @@ class Factura(models.Model):
 
     @property
     def total_mora(self):
+        if self.mora_exonerada:
+            return Decimal('0.00')
         return sum((Decimal(str(mora.monto)) for mora in self.moras.all()), Decimal('0.00'))
 
     # Propiedad calculada para saber el total real sumando la renta + servicios + moras acumuladas

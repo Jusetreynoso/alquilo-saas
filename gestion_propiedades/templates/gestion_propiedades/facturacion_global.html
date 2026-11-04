@@ -81,12 +81,25 @@
                                     {% else %}
                                         <span class="badge bg-secondary">{{ factura.estado }}</span>
                                     {% endif %}
+                                    {% if factura.mora_exonerada %}
+                                        <div class="mt-1"><span class="badge bg-light text-muted border">Mora Exonerada</span></div>
+                                    {% endif %}
                                 </td>
                                 <td class="text-center">
                                     {% if factura.estado != 'PAGADA' and factura.estado != 'ANULADA' %}
                                         <div class="d-flex flex-column gap-1 align-items-center">
                                             <a href="{% url 'registrar_pago' factura.id %}" class="btn btn-sm btn-primary w-100">Registrar Pago</a>
                                             
+                                            {% if factura.total_mora > 0 %}
+                                            <form action="{% url 'quitar_mora_factura' factura.id %}" method="POST" class="w-100" onsubmit="return confirm('¿Confirmas que deseas quitar la mora de ${{ factura.total_mora|dinero }} a esta factura?');">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger w-100 py-1" title="Quitar mora acumulada">
+                                                    🚫 Quitar Mora (${{ factura.total_mora|dinero }})
+                                                </button>
+                                            </form>
+                                            {% endif %}
+
                                             {% if factura.contrato.inquilino.telefono %}
                                                 <a href="https://wa.me/{{ factura.contrato.inquilino.telefono|cut:' ' }}?text=Hola%20{{ factura.contrato.inquilino.nombre }},%20te%20escribimos%20de%20la%20Administración.%20%0A%0ATienes%20una%20factura%20{{ factura.estado }}%20de%20tu%20local/vivienda%20{{ factura.contrato.propiedad.nombre_o_numero }}.%0AMonto%20Total%20con%20mora%20aplicable:%20RD${{ factura.total_a_pagar|floatformat:2 }}.%0AFecha%20límite:%20{{ factura.fecha_vencimiento|date:'d/M/Y' }}.%0A%0A¡Muchas%20gracias!" target="_blank" class="btn btn-sm btn-success w-100 text-start">
                                                     <i class="bi bi-whatsapp"></i> Enviar Cobro

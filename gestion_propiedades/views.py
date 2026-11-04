@@ -1,7 +1,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse
 from django.utils import timezone
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseNotAllowed
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login
 from django.db.models import Sum, Q, Prefetch, F, Count
@@ -394,6 +394,51 @@ def registrar_pago(request, factura_id):
         'factura': factura,
     }
     return render(request, 'gestion_propiedades/registrar_pago.html', context)
+
+@login_required(login_url='/login/')
+def quitar_mora_factura(request, factura_id):
+    """
+    Permite al Superadministrador o al Administrador del Portafolio quitar / condonar
+    la mora acumulada de una factura (por ejemplo, si el cliente reportó su atraso previamente).
+    """
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+
+    factura = get_object_or_404(Factura, id=factura_id)
+    portafolio = factura.contrato.propiedad.portafolio
+
+    from .models import AccesoPortafolio
+    es_superadmin = request.user.is_superuser
+    es_dueno_portafolio = portafolio.propietario == request.user
+    es_admin_portafolio = AccesoPortafolio.objects.filter(
+        portafolio=portafolio,
+        usuario=request.user,
+        rol='ADMINISTRADOR'
+    ).exists()
+
+    if not (es_superadmin or es_dueno_portafolio or es_admin_portafolio):
+        messages.error(request, "Acceso restringido: Solo el Administrador del portafolio o el Superadministrador pueden quitar o condonar cargos por mora.")
+        next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('registrar_pago', args=[factura.id])
+        return redirect(next_url)
+
+    monto_mora = factura.total_mora
+    from django.db import transaction
+    with transaction.atomic():
+        factura.moras.all().delete()
+        factura.mora_exonerada = True
+        factura.save()
+
+        AuditLog.objects.create(
+            accion='EDITAR',
+            modulo='Factura',
+            descripcion=f"Mora condonada/removida de Factura #{factura.id} ({factura.contrato.inquilino.nombre}) por {request.user.username}. Monto condonado: ${monto_mora:,.2f}",
+            usuario=request.user,
+            portafolio=portafolio
+        )
+
+    messages.success(request, f"¡Mora de RD$ {monto_mora:,.2f} quitada exitosamente para la factura #{factura.id}!")
+    next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('registrar_pago', args=[factura.id])
+    return redirect(next_url)
 
 @login_required(login_url='/login/')
 def lista_contratos(request):
@@ -1560,7 +1605,7 @@ def reporte_movimientos_detallados(request):
 
 @login_required(login_url='/login/')
 def exportar_movimientos_excel(request):
-    from django.http import HttpResponse
+    from django.http import HttpResponse, HttpResponseNotAllowed
     from .utils_excel import generar_excel_movimientos_detallados
 
     data = _obtener_datos_movimientos_detallados(request)
@@ -1815,7 +1860,7 @@ def reporte_estado_propiedades_propietario(request):
 
 @login_required(login_url='/login/')
 def exportar_estado_propiedades_excel(request):
-    from django.http import HttpResponse
+    from django.http import HttpResponse, HttpResponseNotAllowed
     from .utils_excel import generar_excel_estado_propiedades_propietario
 
     data = _obtener_datos_estado_propiedades_propietario(request)
