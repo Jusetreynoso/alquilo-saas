@@ -58,6 +58,7 @@ urlpatterns = [
     
     # Finanzas y Pagos
     path('facturacion/', views.lista_facturas_global, name='lista_facturas_global'),
+    path('facturacion/crear-manual/', views.crear_factura_manual, name='crear_factura_manual'),
     path('facturacion/generar-masivo/', views.generar_facturas_masivas, name='generar_facturas_masivas'),
     path('factura/<int:factura_id>/pagar/', views.registrar_pago, name='registrar_pago'),
     path('factura/<int:factura_id>/prorratear/', views.prorratear_factura_inicial, name='prorratear_factura_inicial'),

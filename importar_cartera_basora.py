@@ -33,7 +33,8 @@ from gestion_propiedades.models import (
     Inquilino,
     Contrato,
     PlanSaaS,
-    SuscripcionCliente
+    SuscripcionCliente,
+    CargoAdicionalContrato
 )
 
 
@@ -168,6 +169,7 @@ def ejecutar_importacion(csv_path='cartera_basora_arriaga.csv', email_cliente='l
         total_propietarios_creados = 0
         total_inquilinos_creados = 0
         total_contratos_creados = 0
+        total_cargos_creados = 0
         total_renta_acumulada = Decimal('0.00')
         total_depositos_acumulados = Decimal('0.00')
 
@@ -286,8 +288,9 @@ def ejecutar_importacion(csv_path='cartera_basora_arriaga.csv', email_cliente='l
                     texto_fiador = f"Garante/Fiador: {fiador_nom} (Doc: {fiador_doc}, Tel: {fiador_tel})"
 
                 contrato_existente = Contrato.objects.filter(propiedad=propiedad_obj, activo=True).first()
+                contrato_obj = contrato_existente
                 if not contrato_existente:
-                    Contrato.objects.create(
+                    contrato_obj = Contrato.objects.create(
                         propiedad=propiedad_obj,
                         inquilino=inquilino_obj,
                         fecha_inicio=fecha_contrato,
@@ -303,6 +306,37 @@ def ejecutar_importacion(csv_path='cartera_basora_arriaga.csv', email_cliente='l
                     )
                     total_contratos_creados += 1
 
+                # E. SERVICIOS Y CARGOS ADICIONALES RECURRENTES
+                servicio_txt = limpiar_texto(row.get('Servicio que paga adicional al alquiler', ''))
+                servicio_monto_raw = row.get('Monto que paga servicio adicional alquiler', '')
+                servicio_monto = parse_decimal(servicio_monto_raw)
+
+                if servicio_monto > Decimal('0.00') and contrato_obj:
+                    s_lower = servicio_txt.lower()
+                    if 'agua' in s_lower and 'bomba' not in s_lower:
+                        cat = 'AGUA'
+                    elif 'mantenimiento' in s_lower and 'parqueo' not in s_lower:
+                        cat = 'MANTENIMIENTO'
+                    elif 'parqueo' in s_lower and 'mantenimiento' not in s_lower:
+                        cat = 'PARQUEO'
+                    elif 'bomba' in s_lower or 'luz' in s_lower:
+                        cat = 'LUZ_BOMBA'
+                    elif 'basura' in s_lower:
+                        cat = 'BASURA'
+                    else:
+                        cat = 'OTRO'
+
+                    cargo_existente = CargoAdicionalContrato.objects.filter(contrato=contrato_obj).first()
+                    if not cargo_existente:
+                        CargoAdicionalContrato.objects.create(
+                            contrato=contrato_obj,
+                            categoria=cat,
+                            concepto_personalizado=servicio_txt if servicio_txt else 'Servicio Adicional',
+                            monto=servicio_monto,
+                            activo=True
+                        )
+                        total_cargos_creados += 1
+
         print("\n" + "=" * 70)
         print("📊 RESUMEN DE LA MIGRACIÓN")
         print("=" * 70)
@@ -310,6 +344,7 @@ def ejecutar_importacion(csv_path='cartera_basora_arriaga.csv', email_cliente='l
         print(f"👥 Total Propietarios Registrados:    {total_propietarios_creados}")
         print(f"👤 Total Inquilinos Registrados:      {total_inquilinos_creados}")
         print(f"📝 Total Contratos Activos Creados:   {total_contratos_creados}")
+        print(f"⚙️  Cargos Adicionales Asignados:     {total_cargos_creados}")
         print(f"💰 Renta Mensual de la Cartera:       RD$ {total_renta_acumulada:,.2f}")
         print(f"🛡️  Depósitos de Fianza Custodiados:  RD$ {total_depositos_acumulados:,.2f}")
         print("=" * 70)

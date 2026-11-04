@@ -7,11 +7,12 @@ from django.db.models import Sum, Q, Prefetch, F, Count
 from django.contrib import messages
 from datetime import date, datetime
 import logging
-from .models import Portafolio, Propiedad, Factura, CargoMora, ReciboPago, Contrato, SolicitudAlquiler, MantenimientoUnidad, Inquilino, PlanSaaS, SuscripcionCliente, AuditLog, GastoProgramado, RegistroProceso, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, LiquidacionDepositoInquilino, HistorialPrecioPropiedad
-from .forms import NuevoClienteSaaSForm, EditarSuscripcionForm, PropiedadForm, ContratoForm, InquilinoForm, MantenimientoForm, PlanSaaSForm, PropietarioInmuebleForm, GastoGeneralPropietarioForm, LiquidacionPropietarioForm, LiquidacionDepositoForm, HistorialPrecioForm
+from .models import Portafolio, Propiedad, Factura, CargoMora, ReciboPago, Contrato, SolicitudAlquiler, MantenimientoUnidad, Inquilino, PlanSaaS, SuscripcionCliente, AuditLog, GastoProgramado, RegistroProceso, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, LiquidacionDepositoInquilino, HistorialPrecioPropiedad, CargoAdicionalContrato, DetalleFacturaServicio
+from .forms import NuevoClienteSaaSForm, EditarSuscripcionForm, PropiedadForm, ContratoForm, InquilinoForm, MantenimientoForm, PlanSaaSForm, PropietarioInmuebleForm, GastoGeneralPropietarioForm, LiquidacionPropietarioForm, LiquidacionDepositoForm, HistorialPrecioForm, FacturaManualForm, CargoAdicionalContratoForm
 from .utils import render_to_pdf, obtener_nombre_mes
 import calendar
 import decimal
+from decimal import Decimal
 from django.db.models.functions import TruncMonth
 from .utils_rbac import propietario_requerido
 from collections import defaultdict
@@ -316,21 +317,31 @@ def mapa_propiedades_global(request):
 @login_required(login_url='/login/')
 def registrar_pago(request, factura_id):
     # Buscamos la factura
-    factura = get_object_or_404(Factura, id=factura_id)
+    portafolios = Portafolio.objects.filter(Q(propietario=request.user) | Q(accesos__usuario=request.user)).distinct()
+    factura = get_object_or_404(Factura, id=factura_id, contrato__propiedad__portafolio__in=portafolios)
 
     # Si el usuario hace clic en el botón "Guardar Pago" (Método POST)
     if request.method == 'POST':
-        monto = request.POST.get('monto')
-        metodo = request.POST.get('metodo_pago')
-        referencia = request.POST.get('referencia')
+        monto_str = request.POST.get('monto', '0')
+        metodo = request.POST.get('metodo_pago', 'TRANSFERENCIA')
+        referencia = request.POST.get('referencia', '')
         fecha = request.POST.get('fecha_pago')
         comprobante = request.FILES.get('comprobante_imagen')
 
-        # 1. Creamos el Recibo de Pago en la base de datos
-        ReciboPago.objects.create(
+        try:
+            monto_val = decimal.Decimal(str(monto_str).replace(',', ''))
+        except Exception:
+            monto_val = decimal.Decimal('0.00')
+
+        if monto_val <= decimal.Decimal('0.00'):
+            messages.error(request, 'El monto recibido debe ser mayor a cero.')
+            return redirect('registrar_pago', factura_id=factura.id)
+
+        # 1. Creamos el Recibo de Pago (su save() imputa 1. Mora, 2. Servicios, 3. Alquiler)
+        recibo = ReciboPago.objects.create(
             factura=factura,
             fecha_pago=fecha,
-            monto_pagado=monto,
+            monto_pagado=monto_val,
             metodo_pago=metodo,
             referencia_transaccion=referencia,
             comprobante_imagen=comprobante,
@@ -338,11 +349,27 @@ def registrar_pago(request, factura_id):
         )
 
         # 2. Actualizamos la Factura evaluando si quedó completamente saldada
-        if factura.saldo_pendiente <= 0:
+        if factura.saldo_pendiente <= decimal.Decimal('0.00'):
             factura.estado = 'PAGADA'
         factura.save()
 
-        # 3. Lo devolvemos al expediente de la propiedad
+        # 3. Notificación con desglose de abono
+        if factura.saldo_pendiente > decimal.Decimal('0.00'):
+            messages.success(
+                request,
+                f"💰 ¡Abono de RD$ {recibo.monto_pagado:,.2f} registrado! "
+                f"Desglose aplicado: [Mora: RD$ {recibo.monto_a_mora:,.2f} | "
+                f"Servicios: RD$ {recibo.monto_a_servicios:,.2f} | "
+                f"Alquiler: RD$ {recibo.monto_a_renta:,.2f}]. "
+                f"Saldo pendiente restante: RD$ {factura.saldo_pendiente:,.2f}."
+            )
+        else:
+            messages.success(
+                request,
+                f"🎉 ¡Factura #{factura.id} saldada completamente con RD$ {recibo.monto_pagado:,.2f}!"
+            )
+
+        # 4. Lo devolvemos al expediente de la propiedad
         return redirect('detalle_propiedad', propiedad_id=factura.contrato.propiedad.id)
 
     # Si solo está entrando a ver la pantalla (Método GET), le mostramos el formulario
@@ -528,6 +555,7 @@ def crear_contrato(request):
                     fecha_emision=nuevo_contrato.fecha_inicio,
                     fecha_vencimiento=nuevo_contrato.fecha_inicio,
                     monto_base=nuevo_contrato.deuda_renta_migrada,
+                    monto_renta=nuevo_contrato.deuda_renta_migrada,
                     estado=estado_migracion,
                     concepto=f'Balance migrado previo a Alquilo'
                 )
@@ -540,6 +568,24 @@ def crear_contrato(request):
                         anio_aplicado=nuevo_contrato.fecha_inicio.year
                     )
             # --- FIN INYECCIÓN DE DEUDA ---
+
+            # --- PROCESAR CARGOS ADICIONALES RECURRENTES ---
+            cargos_cat = request.POST.getlist('cargo_categoria[]')
+            cargos_concepto = request.POST.getlist('cargo_concepto[]')
+            cargos_monto = request.POST.getlist('cargo_monto[]')
+            for cat, con, mon in zip(cargos_cat, cargos_concepto, cargos_monto):
+                try:
+                    monto_val = decimal.Decimal(str(mon).replace(',', '').strip())
+                    if monto_val > 0:
+                        CargoAdicionalContrato.objects.create(
+                            contrato=nuevo_contrato,
+                            categoria=cat or 'MANTENIMIENTO',
+                            concepto_personalizado=con.strip() if con else None,
+                            monto=monto_val,
+                            activo=True
+                        )
+                except Exception:
+                    pass
 
             propiedad = nuevo_contrato.propiedad
             propiedad.estado = 'OCUPADO'
@@ -606,16 +652,31 @@ def generar_facturas_masivas(request):
                     ultimo_dia_mes = calendar.monthrange(hoy.year, hoy.month)[1]
                     fecha_vencimiento = date(hoy.year, hoy.month, ultimo_dia_mes)
 
-                # 4. Crear la Factura
+                # 4. Crear la Factura con renta y cargos adicionales recurrentes
                 concepto_factura = contrato.propiedad.portafolio.generar_concepto_factura(contrato, hoy)
-                Factura.objects.create(
+                cargos_activos = list(contrato.cargos_adicionales.filter(activo=True))
+                total_servicios = sum(c.monto for c in cargos_activos)
+                total_renta = contrato.monto_renta
+                total_base = total_renta + total_servicios
+
+                factura_creada = Factura.objects.create(
                     contrato=contrato,
                     fecha_emision=hoy,
                     fecha_vencimiento=fecha_vencimiento,
-                    monto_base=contrato.monto_renta,
+                    monto_base=total_base,
+                    monto_renta=total_renta,
+                    monto_servicios=total_servicios,
                     concepto=concepto_factura,
                     estado='PENDIENTE'
                 )
+                for c in cargos_activos:
+                    DetalleFacturaServicio.objects.create(
+                        factura=factura_creada,
+                        cargo_origen=c,
+                        categoria=c.categoria,
+                        concepto=c.nombre_mostrar,
+                        monto=c.monto
+                    )
                 facturas_creadas += 1
             except Exception as e:
                 errores.append(f"Error en contrato {contrato.id} ({contrato.inquilino.nombre}): {str(e)}")
@@ -863,6 +924,26 @@ def editar_contrato(request, contrato_id):
                 contrato_editado.texto_legal_generado = html
 
             contrato_editado.save()
+
+            # --- PROCESAR CARGOS ADICIONALES RECURRENTES ---
+            cargos_cat = request.POST.getlist('cargo_categoria[]')
+            cargos_concepto = request.POST.getlist('cargo_concepto[]')
+            cargos_monto = request.POST.getlist('cargo_monto[]')
+            contrato_editado.cargos_adicionales.all().delete()
+            for cat, con, mon in zip(cargos_cat, cargos_concepto, cargos_monto):
+                try:
+                    monto_val = decimal.Decimal(str(mon).replace(',', '').strip())
+                    if monto_val > 0:
+                        CargoAdicionalContrato.objects.create(
+                            contrato=contrato_editado,
+                            categoria=cat or 'MANTENIMIENTO',
+                            concepto_personalizado=con.strip() if con else None,
+                            monto=monto_val,
+                            activo=True
+                        )
+                except Exception:
+                    pass
+
             messages.success(request, 'Contrato actualizado correctamente.')
             return redirect('detalle_propiedad', propiedad_id=contrato.propiedad.id)
     else:
@@ -881,6 +962,7 @@ def editar_contrato(request, contrato_id):
         'titulo_pagina': f'Editar Contrato: {contrato.inquilino.nombre}', 
         'form': form,
         'es_contrato': True,
+        'cargos_adicionales_existentes': contrato.cargos_adicionales.filter(activo=True),
         'config_depositos': json.dumps(config_depositos)
     }
     return render(request, 'gestion_propiedades/form_generico.html', context)
@@ -2085,6 +2167,167 @@ def prorratear_factura_inicial(request, factura_id):
     return redirect('lista_facturas_global')
 
 
+@login_required(login_url='/login/')
+def crear_factura_manual(request):
+    """
+    Módulo para generar facturas de alquiler/servicios manuales, de inicio o históricas
+    (por ejemplo días anteriores a la carga de datos del cliente o cargos extraordinarios),
+    con concepto y desglose personalizable.
+    """
+    import json
+    from datetime import datetime, timedelta
+
+    portafolios = Portafolio.objects.filter(
+        Q(propietario=request.user) | Q(accesos__usuario=request.user)
+    ).distinct()
+
+    contratos_qs = Contrato.objects.filter(
+        propiedad__portafolio__in=portafolios,
+        activo=True
+    ).select_related('propiedad', 'inquilino', 'propiedad__portafolio').prefetch_related('cargos_adicionales').order_by('propiedad__nombre_o_numero')
+
+    contrato_id_param = request.GET.get('contrato_id')
+    propiedad_id_param = request.GET.get('propiedad_id')
+    contrato_seleccionado = None
+    if contrato_id_param and str(contrato_id_param).isdigit():
+        contrato_seleccionado = contratos_qs.filter(id=int(contrato_id_param)).first()
+    elif propiedad_id_param and str(propiedad_id_param).isdigit():
+        contrato_seleccionado = contratos_qs.filter(propiedad_id=int(propiedad_id_param)).first()
+
+    if request.method == 'POST':
+        contrato_id = request.POST.get('contrato')
+        contrato = get_object_or_404(contratos_qs, id=contrato_id)
+
+        fecha_emision_str = request.POST.get('fecha_emision')
+        fecha_vencimiento_str = request.POST.get('fecha_vencimiento')
+        monto_renta_str = request.POST.get('monto_renta', '0')
+        concepto = request.POST.get('concepto', '').strip()
+        incluir_cargos_recurrentes = request.POST.get('incluir_cargos_recurrentes') == 'on'
+
+        try:
+            fecha_emision = datetime.strptime(fecha_emision_str, '%Y-%m-%d').date()
+        except Exception:
+            fecha_emision = date.today()
+
+        try:
+            fecha_vencimiento = datetime.strptime(fecha_vencimiento_str, '%Y-%m-%d').date()
+        except Exception:
+            fecha_vencimiento = fecha_emision + timedelta(days=contrato.dias_gracia or 5)
+
+        try:
+            monto_renta = decimal.Decimal(str(monto_renta_str).replace(',', ''))
+        except Exception:
+            monto_renta = decimal.Decimal('0.00')
+
+        if not concepto:
+            concepto = contrato.propiedad.portafolio.generar_concepto_factura(contrato, fecha_emision)
+
+        items_servicios = []
+        if incluir_cargos_recurrentes:
+            for c in contrato.cargos_adicionales.filter(activo=True):
+                items_servicios.append({
+                    'cargo_origen': c,
+                    'categoria': c.categoria,
+                    'concepto': c.nombre_mostrar,
+                    'monto': c.monto
+                })
+
+        extra_cat = request.POST.getlist('extra_categoria[]')
+        extra_con = request.POST.getlist('extra_concepto[]')
+        extra_mon = request.POST.getlist('extra_monto[]')
+
+        for cat, con, mon in zip(extra_cat, extra_con, extra_mon):
+            try:
+                m_val = decimal.Decimal(str(mon).replace(',', '').strip())
+                if m_val > 0:
+                    items_servicios.append({
+                        'cargo_origen': None,
+                        'categoria': cat or 'OTRO',
+                        'concepto': con.strip() if con else 'Servicio Adicional',
+                        'monto': m_val
+                    })
+            except Exception:
+                pass
+
+        total_servicios = sum(item['monto'] for item in items_servicios)
+        total_base = monto_renta + total_servicios
+
+        if total_base <= 0:
+            messages.error(request, 'El monto total facturado debe ser mayor a cero.')
+            return redirect(f"{request.path}?contrato_id={contrato.id}")
+
+        hoy = date.today()
+        estado_inicial = 'ATRASADA' if fecha_vencimiento < hoy else 'PENDIENTE'
+
+        nueva_factura = Factura.objects.create(
+            contrato=contrato,
+            fecha_emision=fecha_emision,
+            fecha_vencimiento=fecha_vencimiento,
+            monto_base=total_base,
+            monto_renta=monto_renta,
+            monto_servicios=total_servicios,
+            concepto=concepto,
+            estado=estado_inicial
+        )
+
+        for item in items_servicios:
+            DetalleFacturaServicio.objects.create(
+                factura=nueva_factura,
+                cargo_origen=item['cargo_origen'],
+                categoria=item['categoria'],
+                concepto=item['concepto'],
+                monto=item['monto']
+            )
+
+        AuditLog.objects.create(
+            accion='CREAR',
+            modulo='Factura',
+            descripcion=f"Generó factura manual #{nueva_factura.id} por RD$ {total_base:,.2f} ({concepto}) para inquilino {contrato.inquilino.nombre}.",
+            usuario=request.user,
+            portafolio=contrato.propiedad.portafolio
+        )
+
+        messages.success(
+            request,
+            f"✅ ¡Factura #{nueva_factura.id} generada con éxito para {contrato.inquilino.nombre} por RD$ {total_base:,.2f}! "
+            f"Concepto: '{concepto}'."
+        )
+        return redirect('lista_facturas_global')
+
+    # Datos JSON para dinamismo en UI
+    contratos_data = {}
+    for c in contratos_qs:
+        servicios_list = [
+            {
+                'categoria': s.categoria,
+                'categoria_display': s.get_categoria_display(),
+                'concepto': s.nombre_mostrar,
+                'monto': float(s.monto)
+            }
+            for s in c.cargos_adicionales.filter(activo=True)
+        ]
+        concepto_sugerido = c.propiedad.portafolio.generar_concepto_factura(c, date.today())
+        contratos_data[str(c.id)] = {
+            'monto_renta': float(c.monto_renta),
+            'dia_de_pago': c.dia_de_pago,
+            'dias_gracia': c.dias_gracia,
+            'inquilino': c.inquilino.nombre,
+            'propiedad': c.propiedad.nombre_o_numero,
+            'concepto_sugerido': concepto_sugerido,
+            'servicios': servicios_list,
+        }
+
+    context = {
+        'titulo_pagina': 'Generar Factura Manual / Días Anteriores',
+        'contratos': contratos_qs,
+        'contrato_seleccionado': contrato_seleccionado,
+        'contratos_json': json.dumps(contratos_data),
+        'hoy': date.today(),
+        'categorias_servicios': CargoAdicionalContrato.CATEGORIA_CHOICES,
+    }
+    return render(request, 'gestion_propiedades/crear_factura_manual.html', context)
+
+
 
 # --- MÓDULO B2B SAAS ---
 
@@ -3286,10 +3529,19 @@ def reporte_propietario(request):
         total_gastos_generales = decimal.Decimal(str(gastos_gen_agg)) if gastos_gen_agg else decimal.Decimal('0.00')
         
         # Cálculo de comisión de administración si hay propietario seleccionado
+        # REGLA: Los conceptos adicionales (mantenimiento, agua, bomba, basura) y moras NO pagan comisión.
+        # La comisión de abogados/administración aplica exclusivamente sobre el Alquiler cobrado.
+        total_renta_cobrada = sum(r.monto_a_renta for r in recibos_cobrados)
+        total_servicios_cobrados = sum(r.monto_a_servicios for r in recibos_cobrados)
+        total_mora_cobrada = sum(r.monto_a_mora for r in recibos_cobrados)
+
+        if total_renta_cobrada == Decimal('0.00') and total_ingresos > Decimal('0.00'):
+            total_renta_cobrada = total_ingresos
+
         if propietario_seleccionado:
             if propietario_seleccionado.tipo_comision == 'PORCENTAJE':
                 factor = propietario_seleccionado.porcentaje_comision / decimal.Decimal('100.0')
-                monto_comision = round(total_ingresos * factor, 2)
+                monto_comision = round(total_renta_cobrada * factor, 2)
             else:
                 num_props = propiedades.count()
                 monto_comision = propietario_seleccionado.monto_comision_fijo * num_props
@@ -3443,6 +3695,9 @@ def reporte_propietario(request):
         'total_propiedades': total_propiedades,
         'porcentaje_ocupacion': round(porcentaje_ocupacion, 1),
         'recibos_cobrados': recibos_cobrados,
+        'total_renta_cobrada': total_renta_cobrada if 'total_renta_cobrada' in locals() else total_ingresos,
+        'total_servicios_cobrados': total_servicios_cobrados if 'total_servicios_cobrados' in locals() else decimal.Decimal('0.00'),
+        'total_mora_cobrada': total_mora_cobrada if 'total_mora_cobrada' in locals() else decimal.Decimal('0.00'),
         'gastos_directos_list': gastos_directos_list,
         'gastos_generales_list': gastos_generales_list,
         'contratos_activos': contratos_activos,
@@ -3477,10 +3732,13 @@ def procesar_liquidacion_propietario(request, propietario_id):
             fecha_pago__year=anio
         )
         total_ingresos = recibos.aggregate(total=Sum('monto_pagado'))['total'] or decimal.Decimal('0.00')
-        
+        total_renta_cobrada = recibos.aggregate(total=Sum('monto_a_renta'))['total'] or decimal.Decimal('0.00')
+        if total_renta_cobrada == decimal.Decimal('0.00') and total_ingresos > decimal.Decimal('0.00'):
+            total_renta_cobrada = total_ingresos
+
         if propietario.tipo_comision == 'PORCENTAJE':
             factor = propietario.porcentaje_comision / decimal.Decimal('100.0')
-            monto_comision = round(total_ingresos * factor, 2)
+            monto_comision = round(total_renta_cobrada * factor, 2)
         else:
             num_props = propiedades.count()
             monto_comision = propietario.monto_comision_fijo * num_props

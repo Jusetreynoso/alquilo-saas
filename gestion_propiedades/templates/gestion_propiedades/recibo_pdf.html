@@ -338,16 +338,46 @@
             <div class="data-value">${{ factura.monto_total_con_mora|dinero }}</div>
         </div>
         
-        <div class="data-row" style="color:#27ae60;">
+        <div class="data-row" style="color:#27ae60; font-weight: bold;">
             <div class="data-label">Monto Abonado (Este Recibo):</div>
             <div class="data-value">${{ recibo.monto_pagado|dinero }}</div>
         </div>
         
+        {% if recibo.monto_a_mora > 0 or recibo.monto_a_servicios > 0 or recibo.monto_a_renta > 0 %}
+        <div style="background-color: #f8f9fa; border-radius: 4px; padding: 6px 10px; margin: 6px 0; border: 1px dashed #dcdcdc;">
+            <div style="font-size: 11px; text-transform: uppercase; font-weight: 700; color: #666; margin-bottom: 4px;">Aplicación de este Abono:</div>
+            {% if recibo.monto_a_mora > 0 %}
+            <div class="data-row" style="padding: 2px 0; font-size: 12px;">
+                <div class="data-label">1. Descuento a Mora:</div>
+                <div class="data-value">${{ recibo.monto_a_mora|dinero }}</div>
+            </div>
+            {% endif %}
+            {% if recibo.monto_a_servicios > 0 %}
+            <div class="data-row" style="padding: 2px 0; font-size: 12px;">
+                <div class="data-label">2. Descuento a Servicios:</div>
+                <div class="data-value">${{ recibo.monto_a_servicios|dinero }}</div>
+            </div>
+            {% endif %}
+            {% if recibo.monto_a_renta > 0 %}
+            <div class="data-row" style="padding: 2px 0; font-size: 12px;">
+                <div class="data-label">3. Descuento a Alquiler:</div>
+                <div class="data-value">${{ recibo.monto_a_renta|dinero }}</div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+        
         {% if factura.saldo_pendiente > 0 %}
         <div class="data-row" style="color:#e74c3c;">
-            <div class="data-label">Balance Pendiente:</div>
+            <div class="data-label">Balance Pendiente Total:</div>
             <div class="data-value">${{ factura.saldo_pendiente|dinero }}</div>
         </div>
+        {% if factura.saldo_renta_pendiente > 0 %}
+        <div class="data-row" style="color:#d35400; font-size: 12px;">
+            <div class="data-label">Saldo Pendiente de Alquiler:</div>
+            <div class="data-value">${{ factura.saldo_renta_pendiente|dinero }}</div>
+        </div>
+        {% endif %}
         {% endif %}
         
         {% if factura.concepto %}

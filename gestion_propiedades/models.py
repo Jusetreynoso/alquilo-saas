@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from decimal import Decimal
 import uuid
 from datetime import date
 
@@ -478,8 +479,50 @@ class Contrato(models.Model):
             models.Index(fields=['propiedad', 'activo'], name='cont_prop_act_idx'),
         ]
 
+    @property
+    def total_cargos_adicionales(self):
+        cargos = self.cargos_adicionales.filter(activo=True)
+        return sum((c.monto for c in cargos), Decimal('0.00'))
+
+    @property
+    def total_cuota_mensual(self):
+        renta = Decimal(str(self.monto_renta)) if self.monto_renta else Decimal('0.00')
+        return renta + self.total_cargos_adicionales
+
     def __str__(self):
         return f"{self.propiedad} - {self.inquilino.nombre}"
+
+
+class CargoAdicionalContrato(models.Model):
+    CATEGORIA_CHOICES = [
+        ('MANTENIMIENTO', 'Mantenimiento'),
+        ('AGUA', 'Agua'),
+        ('LUZ_BOMBA', 'Energía eléctrica bomba'),
+        ('PARQUEO', 'Parqueo'),
+        ('BASURA', 'Basura'),
+        ('OTRO', 'Otro / Personalizado'),
+    ]
+
+    contrato = models.ForeignKey(Contrato, on_delete=models.CASCADE, related_name='cargos_adicionales')
+    categoria = models.CharField(max_length=50, choices=CATEGORIA_CHOICES, default='MANTENIMIENTO')
+    concepto_personalizado = models.CharField(max_length=150, blank=True, null=True, help_text="Nombre específico si es personalizado o detalle")
+    monto = models.DecimalField(max_digits=10, decimal_places=2)
+    activo = models.BooleanField(default=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Cargo Adicional de Contrato'
+        verbose_name_plural = 'Cargos Adicionales de Contrato'
+
+    @property
+    def nombre_mostrar(self):
+        if self.concepto_personalizado and self.concepto_personalizado.strip():
+            return self.concepto_personalizado.strip()
+        return self.get_categoria_display()
+
+    def __str__(self):
+        return f"{self.nombre_mostrar} (${self.monto}) - Contrato #{self.contrato_id}"
+
 
 class Factura(models.Model):
     ESTADO_CHOICES = [
@@ -492,25 +535,78 @@ class Factura(models.Model):
     contrato = models.ForeignKey(Contrato, on_delete=models.CASCADE, related_name='facturas')
     fecha_emision = models.DateField(db_index=True)
     fecha_vencimiento = models.DateField(db_index=True, help_text="Fecha en la que terminan los días de gracia")
-    monto_base = models.DecimalField(max_digits=10, decimal_places=2, help_text="Monto original de la renta facturada")
+    monto_base = models.DecimalField(max_digits=10, decimal_places=2, help_text="Monto original total facturado (renta + servicios)")
+    monto_renta = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Porción correspondiente al alquiler puro")
+    monto_servicios = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Porción correspondiente a servicios adicionales")
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='PENDIENTE', db_index=True)
     concepto = models.CharField(max_length=255)
     creada_en = models.DateTimeField(auto_now_add=True)
 
-    # Propiedad calculada para saber el total real sumando la renta + moras acumuladas
+    @property
+    def total_renta(self):
+        if self.monto_renta and self.monto_renta > Decimal('0.00'):
+            return Decimal(str(self.monto_renta))
+        monto_base = Decimal(str(self.monto_base)) if self.monto_base else Decimal('0.00')
+        return max(Decimal('0.00'), monto_base - self.total_servicios)
+
+    @property
+    def total_servicios(self):
+        if self.monto_servicios and self.monto_servicios > Decimal('0.00'):
+            return Decimal(str(self.monto_servicios))
+        if hasattr(self, 'detalles_servicios') and self.detalles_servicios.exists():
+            return sum((Decimal(str(d.monto)) for d in self.detalles_servicios.all()), Decimal('0.00'))
+        return Decimal('0.00')
+
+    @property
+    def total_mora(self):
+        return sum((Decimal(str(mora.monto)) for mora in self.moras.all()), Decimal('0.00'))
+
+    # Propiedad calculada para saber el total real sumando la renta + servicios + moras acumuladas
     @property
     def monto_total_con_mora(self):
-        total_moras = sum(mora.monto for mora in self.moras.all())
-        return self.monto_base + total_moras
+        return self.total_renta + self.total_servicios + self.total_mora
 
     @property
     def monto_pagado_total(self):
         from django.db.models import Sum
-        return self.recibos.aggregate(total=Sum('monto_pagado'))['total'] or 0
+        res = self.recibos.aggregate(total=Sum('monto_pagado'))['total']
+        return Decimal(str(res)) if res is not None else Decimal('0.00')
 
     @property
     def saldo_pendiente(self):
-        return self.monto_total_con_mora - self.monto_pagado_total
+        return max(Decimal('0.00'), self.monto_total_con_mora - self.monto_pagado_total)
+
+    # --- REGLA DE ABONOS (IMPUTACIÓN DE PAGOS: 1° Mora, 2° Servicios, 3° Alquiler) ---
+    @property
+    def pagado_mora(self):
+        return min(self.monto_pagado_total, self.total_mora)
+
+    @property
+    def saldo_mora_pendiente(self):
+        return max(Decimal('0.00'), self.total_mora - self.pagado_mora)
+
+    @property
+    def pagado_servicios(self):
+        rem1 = max(Decimal('0.00'), self.monto_pagado_total - self.total_mora)
+        return min(rem1, self.total_servicios)
+
+    @property
+    def saldo_servicios_pendiente(self):
+        return max(Decimal('0.00'), self.total_servicios - self.pagado_servicios)
+
+    @property
+    def pagado_renta(self):
+        rem1 = max(Decimal('0.00'), self.monto_pagado_total - self.total_mora)
+        rem2 = max(Decimal('0.00'), rem1 - self.total_servicios)
+        return min(rem2, self.total_renta)
+
+    @property
+    def saldo_renta_pendiente(self):
+        return max(Decimal('0.00'), self.total_renta - self.pagado_renta)
+
+    @property
+    def renta_esta_saldada(self):
+        return self.saldo_renta_pendiente <= Decimal('0.00')
 
     @property
     def es_prorrateable(self):
@@ -531,6 +627,21 @@ class Factura(models.Model):
 
     def __str__(self):
         return f"Factura #{self.id} - {self.contrato.inquilino.nombre} ({self.estado})"
+
+
+class DetalleFacturaServicio(models.Model):
+    factura = models.ForeignKey(Factura, on_delete=models.CASCADE, related_name='detalles_servicios')
+    cargo_origen = models.ForeignKey(CargoAdicionalContrato, on_delete=models.SET_NULL, null=True, blank=True)
+    categoria = models.CharField(max_length=50, default='OTRO')
+    concepto = models.CharField(max_length=150)
+    monto = models.DecimalField(max_digits=10, decimal_places=2)
+
+    class Meta:
+        verbose_name = 'Detalle de Servicio en Factura'
+        verbose_name_plural = 'Detalles de Servicios en Factura'
+
+    def __str__(self):
+        return f"{self.concepto}: ${self.monto} (Factura #{self.factura_id})"
 
 class CargoMora(models.Model):
     factura = models.ForeignKey(Factura, on_delete=models.CASCADE, related_name='moras')
@@ -581,6 +692,9 @@ class ReciboPago(models.Model):
     factura = models.ForeignKey(Factura, on_delete=models.CASCADE, related_name='recibos')
     fecha_pago = models.DateField(db_index=True)
     monto_pagado = models.DecimalField(max_digits=10, decimal_places=2)
+    monto_a_mora = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Monto de este abono destinado a saldar mora")
+    monto_a_servicios = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Monto de este abono destinado a saldar servicios")
+    monto_a_renta = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Monto de este abono destinado a saldar alquiler")
     metodo_pago = models.CharField(max_length=20, choices=METODO_CHOICES, default='TRANSFERENCIA')
     referencia_transaccion = models.CharField(max_length=100, blank=True, null=True)
     comprobante_imagen = models.FileField(upload_to=ruta_comprobante_pago, blank=True, null=True, help_text="Comprobante, volante o voucher de pago (JPG, PNG o PDF)")
@@ -594,6 +708,53 @@ class ReciboPago(models.Model):
 
     def __str__(self):
         return f"Recibo #{self.id} - Factura #{self.factura.id}"
+
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        m_pagado = Decimal(str(self.monto_pagado)) if self.monto_pagado is not None else Decimal('0.00')
+        m_mora = Decimal(str(self.monto_a_mora)) if self.monto_a_mora is not None else Decimal('0.00')
+        m_serv = Decimal(str(self.monto_a_servicios)) if self.monto_a_servicios is not None else Decimal('0.00')
+        m_rent = Decimal(str(self.monto_a_renta)) if self.monto_a_renta is not None else Decimal('0.00')
+
+        if is_new and (m_mora == Decimal('0.00') and m_serv == Decimal('0.00') and m_rent == Decimal('0.00')) and m_pagado > Decimal('0.00'):
+            factura = self.factura
+            # Pagos previos registrados en la factura
+            pagos_previos = sum((Decimal(str(r.monto_pagado)) for r in factura.recibos.all()), Decimal('0.00'))
+            
+            # Mora pendiente antes de este recibo
+            mora_pagada_antes = min(pagos_previos, factura.total_mora)
+            mora_pend_antes = max(Decimal('0.00'), factura.total_mora - mora_pagada_antes)
+            
+            # Servicios pendientes antes de este recibo
+            rem1_antes = max(Decimal('0.00'), pagos_previos - factura.total_mora)
+            serv_pagados_antes = min(rem1_antes, factura.total_servicios)
+            serv_pend_antes = max(Decimal('0.00'), factura.total_servicios - serv_pagados_antes)
+            
+            # Renta pendiente antes de este recibo
+            rem2_antes = max(Decimal('0.00'), rem1_antes - factura.total_servicios)
+            renta_pagada_antes = min(rem2_antes, factura.total_renta)
+            renta_pend_antes = max(Decimal('0.00'), factura.total_renta - renta_pagada_antes)
+            
+            # Imputar monto_pagado siguiendo el orden estricto: 1. Mora, 2. Servicios, 3. Alquiler
+            P = m_pagado
+            p_mora = min(P, mora_pend_antes)
+            p_rem1 = max(Decimal('0.00'), P - p_mora)
+            
+            p_serv = min(p_rem1, serv_pend_antes)
+            p_rem2 = max(Decimal('0.00'), p_rem1 - p_serv)
+            
+            p_renta = min(p_rem2, renta_pend_antes)
+            
+            # Si aún sobra algo (ej: pago adelantado o redondeo), asignar a renta
+            sobrante = max(Decimal('0.00'), p_rem2 - p_renta)
+            if sobrante > Decimal('0.00'):
+                p_renta += sobrante
+                
+            self.monto_a_mora = p_mora
+            self.monto_a_servicios = p_serv
+            self.monto_a_renta = p_renta
+
+        super().save(*args, **kwargs)
 
 class GastoProgramado(models.Model):
     propiedad = models.ForeignKey(Propiedad, on_delete=models.CASCADE, related_name='gastos_programados')

@@ -3,14 +3,19 @@
 {% block titulo %}{{ titulo_pagina }}{% endblock %}
 
 {% block encabezado %}
-    <div class="d-flex justify-content-between align-items-center w-100">
+    <div class="d-flex justify-content-between align-items-center w-100 flex-wrap gap-2">
         <span>{{ titulo_pagina }}</span>
-        {% if request.user.is_superuser %}
-        <!-- Botón para correr la facturación masiva si es necesario -->
-        <a href="{% url 'generar_facturas_masivas' %}" class="btn btn-warning fw-bold text-dark">
-            ⚡ Correr Facturación Masiva
-        </a>
-        {% endif %}
+        <div class="d-flex gap-2">
+            <a href="{% url 'crear_factura_manual' %}" class="btn btn-primary fw-bold shadow-sm">
+                ➕ Nueva Factura Manual
+            </a>
+            {% if request.user.is_superuser %}
+            <!-- Botón para correr la facturación masiva si es necesario -->
+            <a href="{% url 'generar_facturas_masivas' %}" class="btn btn-warning fw-bold text-dark shadow-sm">
+                ⚡ Correr Facturación Masiva
+            </a>
+            {% endif %}
+        </div>
     </div>
 {% endblock %}
 

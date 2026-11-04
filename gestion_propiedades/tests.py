@@ -5,7 +5,8 @@ from datetime import date, timedelta
 from django.utils import timezone
 from django.core.files.uploadedfile import SimpleUploadedFile
 import os
-from .models import Portafolio, Propiedad, Inquilino, Contrato, HistorialAumentoRenta, AuditLog, PlanSaaS, SuscripcionCliente, PublicacionMarketplace, ImagenPublicacion, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, Factura, ReciboPago, MantenimientoUnidad, LiquidacionDepositoInquilino
+from .models import Portafolio, Propiedad, Inquilino, Contrato, HistorialAumentoRenta, AuditLog, PlanSaaS, SuscripcionCliente, PublicacionMarketplace, ImagenPublicacion, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, Factura, ReciboPago, MantenimientoUnidad, LiquidacionDepositoInquilino, CargoAdicionalContrato, DetalleFacturaServicio, CargoMora
+from decimal import Decimal
 
 class AlquiloTests(TestCase):
     def setUp(self):
@@ -605,5 +606,223 @@ class AlquiloTests(TestCase):
         res_print = self.client.get(url_print)
         self.assertEqual(res_print.status_code, 200)
         self.assertIn('Estado Mensual de Inmuebles por Propietario', res_print.content.decode('utf-8'))
+
+    def test_cargos_adicionales_contrato(self):
+        # 1. Agregar cargos adicionales recurrentes
+        cargo1 = CargoAdicionalContrato.objects.create(
+            contrato=self.contrato1,
+            categoria='MANTENIMIENTO',
+            monto=Decimal('2500.00'),
+            activo=True
+        )
+        cargo2 = CargoAdicionalContrato.objects.create(
+            contrato=self.contrato1,
+            categoria='AGUA',
+            monto=Decimal('300.00'),
+            activo=True
+        )
+        self.assertEqual(self.contrato1.total_cargos_adicionales, Decimal('2800.00'))
+        self.assertEqual(self.contrato1.total_cuota_mensual, Decimal('12800.00'))
+        self.assertEqual(cargo1.nombre_mostrar, 'Mantenimiento')
+
+    def test_crear_factura_manual_view(self):
+        self.client.login(username='propietario1', password='password123')
+        # Probar GET
+        url = reverse('crear_factura_manual')
+        res_get = self.client.get(url + f'?contrato_id={self.contrato1.id}')
+        self.assertEqual(res_get.status_code, 200)
+        self.assertIn('Generar Factura Manual / Días Anteriores', res_get.content.decode('utf-8'))
+
+        # Probar POST creando factura manual para días anteriores con concepto personalizado
+        post_data = {
+            'contrato': self.contrato1.id,
+            'fecha_emision': '2026-10-15',
+            'fecha_vencimiento': '2026-10-25',
+            'monto_renta': '5000.00',
+            'concepto': 'Días anteriores del 15 al 30 de Octubre 2026',
+            'extra_categoria[]': ['MANTENIMIENTO', 'AGUA'],
+            'extra_concepto[]': ['Mantenimiento proporcional', 'Cuota de agua'],
+            'extra_monto[]': ['1000.00', '200.00']
+        }
+        res_post = self.client.post(url, post_data)
+        self.assertEqual(res_post.status_code, 302)
+
+        # Verificar factura creada
+        factura = Factura.objects.filter(contrato=self.contrato1, concepto='Días anteriores del 15 al 30 de Octubre 2026').first()
+        self.assertIsNotNone(factura)
+        self.assertEqual(factura.monto_renta, Decimal('5000.00'))
+        self.assertEqual(factura.monto_servicios, Decimal('1200.00'))
+        self.assertEqual(factura.monto_base, Decimal('6200.00'))
+        self.assertEqual(factura.detalles_servicios.count(), 2)
+        self.assertEqual(factura.estado, 'ATRASADA') # Porque vencimiento (2026-10-25) es anterior a hoy
+
+    def test_orden_abono_mora_servicios_alquiler(self):
+        # Crear factura con: Alquiler 10,000, Servicios 2,000, Mora 1,000 (Total deuda: 13,000)
+        factura = Factura.objects.create(
+            contrato=self.contrato1,
+            fecha_emision=date(2026, 10, 1),
+            fecha_vencimiento=date(2026, 10, 5),
+            monto_base=Decimal('12000.00'),
+            monto_renta=Decimal('10000.00'),
+            monto_servicios=Decimal('2000.00'),
+            concepto='Factura Octubre 2026',
+            estado='ATRASADA'
+        )
+        CargoMora.objects.create(
+            factura=factura,
+            monto=Decimal('1000.00'),
+            mes_aplicado=10,
+            anio_aplicado=2026
+        )
+
+        self.assertEqual(factura.monto_total_con_mora, Decimal('13000.00'))
+        self.assertEqual(factura.saldo_mora_pendiente, Decimal('1000.00'))
+        self.assertEqual(factura.saldo_servicios_pendiente, Decimal('2000.00'))
+        self.assertEqual(factura.saldo_renta_pendiente, Decimal('10000.00'))
+
+        # ABONO 1: Inquilino abona RD$ 1,500
+        # Orden de imputación: 1. Mora (1,000), 2. Servicios (500), 3. Alquiler (0)
+        recibo1 = ReciboPago.objects.create(
+            factura=factura,
+            fecha_pago=date(2026, 10, 10),
+            monto_pagado=Decimal('1500.00'),
+            registrado_por=self.user1
+        )
+        self.assertEqual(recibo1.monto_a_mora, Decimal('1000.00'))
+        self.assertEqual(recibo1.monto_a_servicios, Decimal('500.00'))
+        self.assertEqual(recibo1.monto_a_renta, Decimal('0.00'))
+
+        # Verificación de saldos tras Abono 1
+        self.assertEqual(factura.saldo_mora_pendiente, Decimal('0.00'))
+        self.assertEqual(factura.saldo_servicios_pendiente, Decimal('1500.00'))
+        self.assertEqual(factura.saldo_renta_pendiente, Decimal('10000.00'))
+        self.assertEqual(factura.saldo_pendiente, Decimal('11500.00'))
+        self.assertFalse(factura.renta_esta_saldada)
+
+        # ABONO 2: Inquilino abona RD$ 2,000
+        # Orden de imputación: 1. Mora (0 porque ya está en 0), 2. Servicios (1,500), 3. Alquiler (500)
+        recibo2 = ReciboPago.objects.create(
+            factura=factura,
+            fecha_pago=date(2026, 10, 15),
+            monto_pagado=Decimal('2000.00'),
+            registrado_por=self.user1
+        )
+        self.assertEqual(recibo2.monto_a_mora, Decimal('0.00'))
+        self.assertEqual(recibo2.monto_a_servicios, Decimal('1500.00'))
+        self.assertEqual(recibo2.monto_a_renta, Decimal('500.00'))
+
+        # Verificación de saldos tras Abono 2
+        self.assertEqual(factura.saldo_mora_pendiente, Decimal('0.00'))
+        self.assertEqual(factura.saldo_servicios_pendiente, Decimal('0.00'))
+        self.assertEqual(factura.saldo_renta_pendiente, Decimal('9500.00'))
+        self.assertEqual(factura.saldo_pendiente, Decimal('9500.00'))
+        self.assertFalse(factura.renta_esta_saldada)
+
+        # PAGO FINAL: Inquilino salda los RD$ 9,500 restantes
+        recibo3 = ReciboPago.objects.create(
+            factura=factura,
+            fecha_pago=date(2026, 10, 20),
+            monto_pagado=Decimal('9500.00'),
+            registrado_por=self.user1
+        )
+        self.assertEqual(recibo3.monto_a_mora, Decimal('0.00'))
+        self.assertEqual(recibo3.monto_a_servicios, Decimal('0.00'))
+        self.assertEqual(recibo3.monto_a_renta, Decimal('9500.00'))
+
+        self.assertEqual(factura.saldo_renta_pendiente, Decimal('0.00'))
+        self.assertEqual(factura.saldo_pendiente, Decimal('0.00'))
+        self.assertTrue(factura.renta_esta_saldada)
+
+    def test_comision_abogados_excluye_servicios_y_mora(self):
+        # Crear propietario con 10% de comisión
+        propietario = PropietarioInmueble.objects.create(
+            portafolio=self.portafolio1,
+            nombre='Propietario Don Basora',
+            porcentaje_comision=Decimal('10.00'),
+            tipo_comision='PORCENTAJE'
+        )
+        self.propiedad1.propietario_inmueble = propietario
+        self.propiedad1.save()
+
+        # Factura: Alquiler 10,000, Servicios 3,000
+        factura = Factura.objects.create(
+            contrato=self.contrato1,
+            fecha_emision=date(2026, 11, 1),
+            fecha_vencimiento=date(2026, 11, 5),
+            monto_base=Decimal('13000.00'),
+            monto_renta=Decimal('10000.00'),
+            monto_servicios=Decimal('3000.00'),
+            concepto='Renta y Mantenimiento Noviembre 2026',
+            estado='PENDIENTE'
+        )
+
+        # Cobro completo de los 13,000
+        recibo = ReciboPago.objects.create(
+            factura=factura,
+            fecha_pago=date(2026, 11, 2),
+            monto_pagado=Decimal('13000.00'),
+            registrado_por=self.user1
+        )
+        self.assertEqual(recibo.monto_a_servicios, Decimal('3000.00'))
+        self.assertEqual(recibo.monto_a_renta, Decimal('10000.00'))
+
+        self.client.login(username='propietario1', password='password123')
+        # Procesar liquidación del propietario
+        url_liq = reverse('procesar_liquidacion_propietario', args=[propietario.id])
+        res = self.client.post(url_liq, {
+            'mes': 11,
+            'anio': 2026,
+            'metodo_pago': 'TRANSFERENCIA'
+        })
+        self.assertEqual(res.status_code, 302)
+
+        liquidacion = LiquidacionPropietario.objects.get(
+            propietario_inmueble=propietario,
+            periodo_mes=11,
+            periodo_anio=2026
+        )
+        # Total cobrado es 13,000
+        self.assertEqual(liquidacion.monto_rentas_cobradas, Decimal('13000.00'))
+        # Comisión del 10% es SOLO sobre los 10,000 de renta = 1,000 (NO sobre 13,000 que daría 1,300)
+        self.assertEqual(liquidacion.monto_comision, Decimal('1000.00'))
+        # Neto pagado al propietario: 13,000 - 1,000 = 12,000
+        self.assertEqual(liquidacion.monto_neto_pagado, Decimal('12000.00'))
+
+    def test_mora_continua_calculandose_hasta_saldar_alquiler(self):
+        from django.core.management import call_command
+        # Factura vencida donde inquilino solo pagó servicios pero debe el alquiler
+        factura = Factura.objects.create(
+            contrato=self.contrato1,
+            fecha_emision=date.today() - timedelta(days=40),
+            fecha_vencimiento=date.today() - timedelta(days=20),
+            monto_base=Decimal('12000.00'),
+            monto_renta=Decimal('10000.00'),
+            monto_servicios=Decimal('2000.00'),
+            concepto='Factura Vencida',
+            estado='PENDIENTE'
+        )
+        self.contrato1.porcentaje_mora = Decimal('10.00')
+        self.contrato1.save()
+
+        # Inquilino abonó 2,000 (cubrió los servicios, pero alquiler sigue debiéndose: 10,000)
+        ReciboPago.objects.create(
+            factura=factura,
+            fecha_pago=date.today() - timedelta(days=10),
+            monto_pagado=Decimal('2000.00'),
+            registrado_por=self.user1
+        )
+        self.assertEqual(factura.saldo_servicios_pendiente, Decimal('0.00'))
+        self.assertEqual(factura.saldo_renta_pendiente, Decimal('10000.00'))
+
+        # Ejecutamos cron de facturación diaria
+        call_command('facturar_saas_diario')
+
+        factura.refresh_from_db()
+        self.assertEqual(factura.estado, 'ATRASADA')
+        # Debe haberse generado mora sobre los 10,000 de alquiler pendiente (10% = 1,000)
+        mora = CargoMora.objects.filter(factura=factura, mes_aplicado=date.today().month, anio_aplicado=date.today().year).first()
+        self.assertIsNotNone(mora)
+        self.assertEqual(mora.monto, Decimal('1000.00'))
+
 
 

@@ -1,4 +1,5 @@
 {% extends 'gestion_propiedades/base.html' %}
+{% load filtros_dinero %}
 
 {% block titulo %}{{ titulo_pagina }}{% endblock %}
 
@@ -9,56 +10,188 @@
 
 {% block contenido %}
 <div class="row justify-content-center">
-    <div class="col-md-6 mb-4">
-        <div class="card shadow-sm border-0">
-            <div class="card-header bg-white fw-bold text-secondary py-3">
-                🏢 Propiedad: {{ factura.contrato.propiedad.nombre_o_numero }} | Inquilino: {{ factura.contrato.inquilino.nombre }}
+    <div class="col-lg-8 col-xl-7 mb-4">
+        <div class="card shadow-sm border-0 rounded-3">
+            <div class="card-header bg-white fw-bold text-secondary py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap">
+                <div>
+                    🏢 Propiedad: <span class="text-dark">{{ factura.contrato.propiedad.nombre_o_numero }}</span>
+                </div>
+                <div>
+                    👤 Inquilino: <span class="text-primary">{{ factura.contrato.inquilino.nombre }}</span>
+                </div>
             </div>
             <div class="card-body p-4">
                 
-                <div class="alert alert-info text-center">
+                <!-- CABECERA RESUMEN DEUDA -->
+                <div class="alert alert-primary bg-primary-subtle border-0 rounded-3 text-center mb-4 p-3">
                     <div class="mb-2">
                         <span class="badge bg-primary px-3 py-2 fs-6 shadow-sm">{{ factura.concepto }}</span>
                     </div>
-                    <h5 class="mb-1">Saldo Pendiente a Cobrar</h5>
-                    <h2 class="fw-bold mb-0">${{ factura.saldo_pendiente|dinero }}</h2>
-                    <small>Factura Completa: ${{ factura.monto_total_con_mora|dinero }}</small>
+                    <h6 class="text-muted mb-1 text-uppercase fw-bold small">Saldo Pendiente a Cobrar</h6>
+                    <h1 class="fw-bold text-primary mb-1">${{ factura.saldo_pendiente|dinero }}</h1>
+                    <div class="small text-muted">
+                        Factura Total (con moras): <strong>${{ factura.monto_total_con_mora|dinero }}</strong> | Ya Pagado: <strong>${{ factura.monto_pagado_total|dinero }}</strong>
+                    </div>
+                </div>
+
+                <!-- DESGLOSE DE CONCEPTOS A COBRAR -->
+                <div class="card border rounded-3 mb-4 shadow-sm">
+                    <div class="card-header bg-light py-2 px-3 fw-bold text-dark small text-uppercase">
+                        📋 Desglose de Conceptos y Estado Actual de la Deuda
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover align-middle mb-0">
+                                <thead class="table-light small">
+                                    <tr>
+                                        <th class="ps-3">Concepto a Cobrar</th>
+                                        <th class="text-end">Total</th>
+                                        <th class="text-end">Abonado</th>
+                                        <th class="text-end pe-3">Pendiente</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- 1. MORA -->
+                                    <tr class="{% if factura.saldo_mora_pendiente > 0 %}table-warning{% endif %}">
+                                        <td class="ps-3">
+                                            <div class="fw-bold text-danger">⚠️ 1. Mora Acumulada</div>
+                                            <small class="text-muted">Prioridad 1 en abonos (Sin comisión legal)</small>
+                                        </td>
+                                        <td class="text-end">${{ factura.total_mora|dinero }}</td>
+                                        <td class="text-end text-success">${{ factura.pagado_mora|dinero }}</td>
+                                        <td class="text-end pe-3 fw-bold {% if factura.saldo_mora_pendiente > 0 %}text-danger{% else %}text-muted{% endif %}">
+                                            ${{ factura.saldo_mora_pendiente|dinero }}
+                                        </td>
+                                    </tr>
+
+                                    <!-- 2. SERVICIOS -->
+                                    <tr class="{% if factura.saldo_servicios_pendiente > 0 %}table-info{% endif %}">
+                                        <td class="ps-3">
+                                            <div class="fw-bold text-secondary">⚙️ 2. Servicios / Conceptos Adicionales</div>
+                                            {% if factura.detalles_servicios.all %}
+                                                <ul class="mb-0 small text-muted ps-3">
+                                                    {% for det in factura.detalles_servicios.all %}
+                                                        <li>{{ det.concepto }} ({{ det.get_categoria_display }}): ${{ det.monto|dinero }}</li>
+                                                    {% endfor %}
+                                                </ul>
+                                            {% else %}
+                                                <small class="text-muted">Mantenimiento, agua, bomba, basura (Sin comisión legal)</small>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-end">${{ factura.total_servicios|dinero }}</td>
+                                        <td class="text-end text-success">${{ factura.pagado_servicios|dinero }}</td>
+                                        <td class="text-end pe-3 fw-bold {% if factura.saldo_servicios_pendiente > 0 %}text-secondary{% else %}text-muted{% endif %}">
+                                            ${{ factura.saldo_servicios_pendiente|dinero }}
+                                        </td>
+                                    </tr>
+
+                                    <!-- 3. ALQUILER -->
+                                    <tr class="{% if factura.saldo_renta_pendiente > 0 %}table-primary{% endif %}">
+                                        <td class="ps-3">
+                                            <div class="fw-bold text-primary">🏠 3. Alquiler / Renta Principal</div>
+                                            <small class="text-muted">Prioridad 3 en abonos (Genera comisión legal)</small>
+                                        </td>
+                                        <td class="text-end">${{ factura.total_renta|dinero }}</td>
+                                        <td class="text-end text-success">${{ factura.pagado_renta|dinero }}</td>
+                                        <td class="text-end pe-3 fw-bold {% if factura.saldo_renta_pendiente > 0 %}text-primary{% else %}text-muted{% endif %}">
+                                            ${{ factura.saldo_renta_pendiente|dinero }}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ALERTA DE REGLA DE ABONO -->
+                <div class="alert alert-warning py-2 px-3 small rounded-3 mb-4 d-flex align-items-center gap-2">
+                    <span class="fs-4">ℹ️</span>
+                    <div>
+                        <strong>Regla de Imputación de Pagos:</strong> Si el inquilino no salda la totalidad, el pago es considerado un <strong>abono</strong> y se descuenta en este orden: <strong>1. Mora ➔ 2. Servicios ➔ 3. Alquiler</strong>. La mora continuará acumulándose mientras quede saldo pendiente de alquiler.
+                    </div>
                 </div>
 
                 <form method="POST" enctype="multipart/form-data">
-                    {% csrf_token %} <div class="mb-3">
-                        <label class="form-label fw-bold">Fecha del Pago</label>
-                        <input type="date" name="fecha_pago" class="form-control" required value="{% now 'Y-m-d' %}">
+                    {% csrf_token %}
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Fecha del Pago</label>
+                            <input type="date" name="fecha_pago" class="form-control" required value="{% now 'Y-m-d' %}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Método de Pago</label>
+                            <select name="metodo_pago" class="form-select" required>
+                                <option value="TRANSFERENCIA">Transferencia Bancaria</option>
+                                <option value="EFECTIVO">Efectivo</option>
+                                <option value="CHEQUE">Cheque</option>
+                                <option value="OTRO">Otro</option>
+                            </select>
+                        </div>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Monto Recibido</label>
-                        <input type="number" step="0.01" name="monto" class="form-control" required max="{{ factura.saldo_pendiente }}" value="{{ factura.saldo_pendiente|stringformat:'.2f' }}">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label fw-bold mb-0">Monto Recibido (RD$)</label>
+                            <div class="btn-group btn-group-sm">
+                                <button type="button" class="btn btn-outline-primary py-0" onclick="llenarMonto({{ factura.saldo_pendiente|stringformat:'.2f' }})">Cobro Total</button>
+                                {% if factura.saldo_mora_pendiente > 0 %}
+                                    <button type="button" class="btn btn-outline-warning py-0" onclick="llenarMonto({{ factura.saldo_mora_pendiente|stringformat:'.2f' }})">Solo Mora</button>
+                                {% endif %}
+                                {% if factura.saldo_servicios_pendiente > 0 %}
+                                    <button type="button" class="btn btn-outline-secondary py-0" onclick="llenarMonto({{ factura.saldo_servicios_pendiente|stringformat:'.2f' }})">Solo Servicios</button>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="input-group input-group-lg shadow-sm">
+                            <span class="input-group-text bg-white fw-bold">RD$</span>
+                            <input type="number" step="0.01" min="0.01" name="monto" id="inputMontoCobro" class="form-control fw-bold fs-4 text-primary" required max="{{ factura.saldo_pendiente|stringformat:'.2f' }}" value="{{ factura.saldo_pendiente|stringformat:'.2f' }}" oninput="simularImputacion()">
+                        </div>
+                        <div class="form-text small">Puedes ingresar el total o un monto menor si el inquilino hace un abono parcial.</div>
+                    </div>
+
+                    <!-- SIMULADOR DINÁMICO DE IMPUTACIÓN -->
+                    <div class="card bg-light border p-3 rounded-3 mb-4" id="cajaSimulador">
+                        <h6 class="fw-bold text-dark small text-uppercase mb-2">💡 Distribución Inmediata de este Pago:</h6>
+                        <div class="row g-2 text-center text-md-start small">
+                            <div class="col-md-4">
+                                <span class="text-muted d-block">1. Descuento a Mora:</span>
+                                <strong class="text-danger fs-6" id="simMora">RD$ 0.00</strong>
+                            </div>
+                            <div class="col-md-4">
+                                <span class="text-muted d-block">2. Descuento a Servicios:</span>
+                                <strong class="text-secondary fs-6" id="simServicios">RD$ 0.00</strong>
+                            </div>
+                            <div class="col-md-4">
+                                <span class="text-muted d-block">3. Descuento a Alquiler:</span>
+                                <strong class="text-primary fs-6" id="simAlquiler">RD$ 0.00</strong>
+                            </div>
+                        </div>
+                        <div class="mt-2 pt-2 border-top d-flex justify-content-between align-items-center flex-wrap small">
+                            <div>
+                                Saldo de alquiler restante: <strong id="simRentaRestante" class="text-primary">RD$ 0.00</strong>
+                            </div>
+                            <div>
+                                Deuda total restante: <strong id="simTotalRestante" class="text-dark">RD$ 0.00</strong>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Método de Pago</label>
-                        <select name="metodo_pago" class="form-select" required>
-                            <option value="TRANSFERENCIA">Transferencia Bancaria</option>
-                            <option value="EFECTIVO">Efectivo</option>
-                            <option value="CHEQUE">Cheque</option>
-                            <option value="OTRO">Otro</option>
-                        </select>
-                    </div>
-
-                    <div class="mb-4">
                         <label class="form-label fw-bold">Número de Referencia (Opcional)</label>
-                        <input type="text" name="referencia" class="form-control" placeholder="Ej: TXN-123456789">
+                        <input type="text" name="referencia" class="form-control" placeholder="Ej: TXN-123456789 o Cheque #987">
                     </div>
 
                     <div class="mb-4">
                         <label class="form-label fw-bold text-primary">📎 Volante o Comprobante de Pago (Opcional)</label>
                         <input type="file" name="comprobante_imagen" class="form-control" accept="image/*,.pdf">
-                        <div class="form-text small">Sube la foto del voucher, captura de transferencia bancaria o PDF. Se archivará automáticamente en la carpeta de este apartamento.</div>
+                        <div class="form-text small">Sube la foto del voucher, captura de transferencia bancaria o PDF. Se archivará automáticamente en el expediente de este inmueble.</div>
                     </div>
 
                     <div class="d-grid">
-                        <button type="submit" class="btn btn-success btn-lg">💰 Registrar Pago</button>
+                        <button type="submit" class="btn btn-success btn-lg fw-bold shadow py-3">
+                            💰 Registrar Pago y Emitir Recibo
+                        </button>
                     </div>
                 </form>
 
@@ -66,4 +199,54 @@
         </div>
     </div>
 </div>
+
+<script>
+    const moraPendiente = {{ factura.saldo_mora_pendiente|stringformat:'.2f' }};
+    const serviciosPendiente = {{ factura.saldo_servicios_pendiente|stringformat:'.2f' }};
+    const rentaPendiente = {{ factura.saldo_renta_pendiente|stringformat:'.2f' }};
+    const saldoTotalPendiente = {{ factura.saldo_pendiente|stringformat:'.2f' }};
+
+    function formatear(num) {
+        return num.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function llenarMonto(val) {
+        const input = document.getElementById('inputMontoCobro');
+        input.value = parseFloat(val).toFixed(2);
+        simularImputacion();
+    }
+
+    function simularImputacion() {
+        const input = document.getElementById('inputMontoCobro');
+        let P = parseFloat(input.value) || 0;
+
+        // 1. Mora
+        let pMora = Math.min(P, moraPendiente);
+        let rem1 = Math.max(0, P - pMora);
+
+        // 2. Servicios
+        let pServ = Math.min(rem1, serviciosPendiente);
+        let rem2 = Math.max(0, rem1 - pServ);
+
+        // 3. Alquiler
+        let pRenta = Math.min(rem2, rentaPendiente);
+        let rem3 = Math.max(0, rem2 - pRenta);
+        if (rem3 > 0) {
+            pRenta += rem3; // excedente o redondeo
+        }
+
+        let rentaRestante = Math.max(0, rentaPendiente - pRenta);
+        let totalRestante = Math.max(0, saldoTotalPendiente - P);
+
+        document.getElementById('simMora').innerText = 'RD$ ' + formatear(pMora);
+        document.getElementById('simServicios').innerText = 'RD$ ' + formatear(pServ);
+        document.getElementById('simAlquiler').innerText = 'RD$ ' + formatear(pRenta);
+        document.getElementById('simRentaRestante').innerText = 'RD$ ' + formatear(rentaRestante);
+        document.getElementById('simTotalRestante').innerText = 'RD$ ' + formatear(totalRestante);
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        simularImputacion();
+    });
+</script>
 {% endblock %}

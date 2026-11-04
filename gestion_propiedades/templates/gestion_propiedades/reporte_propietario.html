@@ -120,9 +120,16 @@
         <div class="col-md-3">
             <div class="card bg-success text-white h-100 border-0 shadow-sm">
                 <div class="card-body">
-                    <h6 class="card-title text-white-50 text-uppercase fw-bold">1. Rentas Cobradas</h6>
+                    <h6 class="card-title text-white-50 text-uppercase fw-bold">1. Ingresos Cobrados</h6>
                     <h2 class="mb-0 fw-bold">RD${{ total_ingresos|dinero }}</h2>
                     <small>Recibos cobrados en {{ nombre_mes }}</small>
+                    <div class="small text-white-50 mt-1">Alquiler (Comisionable): <strong>RD${{ total_renta_cobrada|dinero }}</strong></div>
+                    {% if total_servicios_cobrados > 0 %}
+                    <div class="small text-white-50">Servicios (Sin com.): <strong>RD${{ total_servicios_cobrados|dinero }}</strong></div>
+                    {% endif %}
+                    {% if total_mora_cobrada > 0 %}
+                    <div class="small text-white-50">Moras (Sin com.): <strong>RD${{ total_mora_cobrada|dinero }}</strong></div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -134,7 +141,7 @@
                     <small>
                         {% if propietario_seleccionado %}
                             {% if propietario_seleccionado.tipo_comision == 'PORCENTAJE' %}
-                                {{ propietario_seleccionado.porcentaje_comision }}% de com.
+                                {{ propietario_seleccionado.porcentaje_comision }}% s/alquiler (RD${{ total_renta_cobrada|dinero }})
                             {% else %}
                                 RD${{ propietario_seleccionado.monto_comision_fijo|dinero }} / prop ({{ total_propiedades }} props)
                             {% endif %}

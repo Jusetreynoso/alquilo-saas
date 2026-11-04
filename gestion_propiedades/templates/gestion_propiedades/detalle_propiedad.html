@@ -120,8 +120,11 @@
 
                 {% if contrato_activo %}
                 <div class="d-flex gap-2 flex-wrap">
-                    <a href="{% url 'detalle_inquilino' contrato_activo.inquilino.id %}" class="btn btn-sm btn-primary shadow-sm fw-bold">
-                        👤 Ver Perfil de Inquilino
+                    <a href="{% url 'crear_factura_manual' %}?contrato_id={{ contrato_activo.id }}" class="btn btn-sm btn-primary shadow-sm fw-bold">
+                        ➕ Factura Manual
+                    </a>
+                    <a href="{% url 'detalle_inquilino' contrato_activo.inquilino.id %}" class="btn btn-sm btn-outline-primary shadow-sm fw-bold">
+                        👤 Perfil Inquilino
                     </a>
                     <a href="{% url 'registrar_pago_anticipado' contrato_activo.id %}" class="btn btn-sm btn-outline-success">
                         💰 Recibir Adelanto
@@ -189,7 +192,20 @@
                     </div>
                     {% endif %}
 
-                    <p class="mb-1"><strong>Renta:</strong> ${{ contrato_activo.monto_renta|dinero }}</p>
+                    <p class="mb-1"><strong>Alquiler Base:</strong> ${{ contrato_activo.monto_renta|dinero }}</p>
+                    {% if contrato_activo.cargos_adicionales.all %}
+                    <div class="mb-2 p-2 bg-light rounded border border-info-subtle">
+                        <small class="fw-bold text-dark d-block">⚙️ Conceptos Adicionales Recurrentes:</small>
+                        <ul class="mb-0 small ps-3">
+                            {% for cargo in contrato_activo.cargos_adicionales.all %}
+                                <li>{{ cargo.nombre_mostrar }}: <strong>${{ cargo.monto|dinero }}</strong></li>
+                            {% endfor %}
+                        </ul>
+                        <div class="mt-1 pt-1 border-top small fw-bold text-secondary">
+                            Cuota Mensual Total: ${{ contrato_activo.total_cuota_mensual|dinero }}
+                        </div>
+                    </div>
+                    {% endif %}
                     <p class="mb-1 text-primary"><strong>Fianza Retenida:</strong> ${{ contrato_activo.monto_deposito|dinero }} <small class="text-muted">(Adelanto: ${{ contrato_activo.monto_adelanto|dinero }})</small></p>
                     <div class="mb-2 p-2 bg-light rounded border border-warning-subtle">
                         <small class="fw-bold text-dark d-block">🏦 Ubicación / Custodia del Depósito:</small>

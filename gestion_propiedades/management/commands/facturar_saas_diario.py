@@ -5,7 +5,7 @@ import calendar
 import decimal
 from django.db import transaction
 from django.contrib.auth.models import User
-from gestion_propiedades.models import Propiedad, FacturaSaaS, Contrato, Factura, CargoMora, AccesoPortafolio, RegistroProceso
+from gestion_propiedades.models import Propiedad, FacturaSaaS, Contrato, Factura, CargoMora, AccesoPortafolio, RegistroProceso, CargoAdicionalContrato, DetalleFacturaServicio
 from gestion_propiedades.utils import obtener_nombre_mes
 from gestion_propiedades.utils_correo import (
     enviar_aviso_factura_saas,
@@ -114,15 +114,29 @@ class Command(BaseCommand):
                     ).exists()
                     
                     if not ya_facturado:
+                        cargos_activos = list(contrato.cargos_adicionales.filter(activo=True))
+                        monto_servicios = sum(c.monto for c in cargos_activos)
+                        monto_renta = contrato.monto_renta
+                        total_base = monto_renta + monto_servicios
                         concepto_cron = contrato.propiedad.portafolio.generar_concepto_factura(contrato, hoy)
                         nueva_fact = Factura.objects.create(
                             contrato=contrato,
                             fecha_emision=hoy,
                             fecha_vencimiento=hoy + timedelta(days=contrato.dias_gracia),
-                            monto_base=contrato.monto_renta,
+                            monto_base=total_base,
+                            monto_renta=monto_renta,
+                            monto_servicios=monto_servicios,
                             estado='PENDIENTE',
                             concepto=concepto_cron
                         )
+                        for c in cargos_activos:
+                            DetalleFacturaServicio.objects.create(
+                                factura=nueva_fact,
+                                cargo_origen=c,
+                                categoria=c.categoria,
+                                concepto=c.nombre_mostrar,
+                                monto=c.monto
+                            )
                         facturas_b2c += 1
                         
                         # Enviar estado de cuenta Inquilino
@@ -146,42 +160,61 @@ class Command(BaseCommand):
 
         # ---------------------------------------------------------
         # FASE 3: MOTOR DE MORAS Y RECORDATORIOS
+        # La mora continúa calculándose mensualmente hasta que el monto del alquiler esté saldado
         # ---------------------------------------------------------
-        facturas_pendientes = Factura.objects.filter(estado='PENDIENTE').select_related('contrato', 'contrato__inquilino')
+        facturas_pendientes = Factura.objects.filter(
+            estado__in=['PENDIENTE', 'ATRASADA']
+        ).select_related('contrato', 'contrato__inquilino')
         recordatorios = 0
         moras = 0
         
         for factura in facturas_pendientes:
             contrato = factura.contrato
             
+            # Si el saldo de alquiler ya está saldado (saldo_renta_pendiente <= 0), no se cobra más mora
+            if factura.saldo_renta_pendiente <= decimal.Decimal('0.00'):
+                if factura.saldo_pendiente <= decimal.Decimal('0.00') and factura.estado != 'PAGADA':
+                    factura.estado = 'PAGADA'
+                    factura.save()
+                continue
+                
             # 3.1 Aviso preventivo
-            if hoy == factura.fecha_vencimiento - timedelta(days=1):
+            if factura.estado == 'PENDIENTE' and hoy == factura.fecha_vencimiento - timedelta(days=1):
                 enviar_aviso_vencimiento_cercano(factura)
                 recordatorios += 1
                 
             # 3.2 Aplicación de Mora Matemática y Cambio a Atrasada
             elif hoy > factura.fecha_vencimiento:
-                with transaction.atomic():
-                    porcentaje = contrato.porcentaje_mora or decimal.Decimal('0.00')
-                    factor = porcentaje / decimal.Decimal('100.0')
-                    monto_castigo = round(factura.monto_base * factor, 2)
-                    
-                    mora_obj = None
-                    if monto_castigo > 0:
-                        mora_obj = CargoMora.objects.create(
-                            factura=factura,
-                            monto=monto_castigo,
-                            mes_aplicado=hoy.month,
-                            anio_aplicado=hoy.year
-                        )
-                    
-                    factura.estado = 'ATRASADA'
-                    factura.save()
-                    moras += 1
-                    
-                    # Avisamos de la mala noticia
-                    if mora_obj:
-                        enviar_aviso_mora_aplicada(factura, mora_obj)
+                # Verificar que no se haya aplicado ya la mora en este mes calendario a esta factura
+                ya_cobrada_este_mes = CargoMora.objects.filter(
+                    factura=factura,
+                    mes_aplicado=hoy.month,
+                    anio_aplicado=hoy.year
+                ).exists()
+
+                if not ya_cobrada_este_mes:
+                    with transaction.atomic():
+                        porcentaje = contrato.porcentaje_mora or decimal.Decimal('0.00')
+                        factor = porcentaje / decimal.Decimal('100.0')
+                        # La mora se calcula sobre el saldo insoluto de alquiler pendiente
+                        monto_castigo = round(factura.saldo_renta_pendiente * factor, 2)
+                        
+                        mora_obj = None
+                        if monto_castigo > 0:
+                            mora_obj = CargoMora.objects.create(
+                                factura=factura,
+                                monto=monto_castigo,
+                                mes_aplicado=hoy.month,
+                                anio_aplicado=hoy.year
+                            )
+                        
+                        factura.estado = 'ATRASADA'
+                        factura.save()
+                        moras += 1
+                        
+                        # Avisamos de la mala noticia
+                        if mora_obj:
+                            enviar_aviso_mora_aplicada(factura, mora_obj)
 
         # ---------------------------------------------------------
         # FASE 4: CICLO DE VIDA DE CUENTAS TRIAL (B2B SaaS)

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Portafolio, Propiedad, Contrato, Factura, CargoMora, ReciboPago, MantenimientoUnidad, SuscripcionCliente, PlanSaaS, AvisoSistema, Inquilino, HistorialAumentoRenta, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, LiquidacionDepositoInquilino, HistorialPrecioPropiedad, ImagenPropiedad, SolicitudAlquiler
+from .models import Portafolio, Propiedad, Contrato, Factura, CargoMora, ReciboPago, MantenimientoUnidad, SuscripcionCliente, PlanSaaS, AvisoSistema, Inquilino, HistorialAumentoRenta, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, LiquidacionDepositoInquilino, HistorialPrecioPropiedad, ImagenPropiedad, SolicitudAlquiler, CargoAdicionalContrato, DetalleFacturaServicio
 
 # Personalizando los títulos del panel de Django para "Alquilo"
 admin.site.site_header = "Administración Alquilo"
@@ -33,18 +33,40 @@ class SolicitudAlquilerAdmin(admin.ModelAdmin):
     list_filter = ('estado', 'tiene_fiador')
     search_fields = ('nombre_completo', 'cedula', 'fiador_nombre', 'fiador_cedula')
 
+class CargoAdicionalContratoInline(admin.TabularInline):
+    model = CargoAdicionalContrato
+    extra = 1
+
+@admin.register(CargoAdicionalContrato)
+class CargoAdicionalContratoAdmin(admin.ModelAdmin):
+    list_display = ('contrato', 'categoria', 'concepto_personalizado', 'monto', 'activo')
+    list_filter = ('categoria', 'activo')
+    search_fields = ('contrato__inquilino__nombre', 'concepto_personalizado')
+
 @admin.register(Contrato)
 class ContratoAdmin(admin.ModelAdmin):
-    list_display = ('propiedad', 'inquilino', 'monto_renta', 'monto_deposito', 'dia_de_pago', 'activo')
+    list_display = ('propiedad', 'inquilino', 'monto_renta', 'total_cargos_adicionales', 'total_cuota_mensual', 'monto_deposito', 'dia_de_pago', 'activo')
     list_filter = ('activo', 'dia_de_pago')
     search_fields = ('inquilino__nombre', 'propiedad__nombre_o_numero', 'inquilino__cedula_o_pasaporte')
+    inlines = [CargoAdicionalContratoInline]
+
+class DetalleFacturaServicioInline(admin.TabularInline):
+    model = DetalleFacturaServicio
+    extra = 0
+
+@admin.register(DetalleFacturaServicio)
+class DetalleFacturaServicioAdmin(admin.ModelAdmin):
+    list_display = ('factura', 'categoria', 'concepto', 'monto')
+    list_filter = ('categoria',)
+    search_fields = ('concepto', 'factura__contrato__inquilino__nombre')
 
 @admin.register(Factura)
 class FacturaAdmin(admin.ModelAdmin):
     # Aquí llamamos a la propiedad calculada "monto_total_con_mora" para ver el monto real a cobrar
-    list_display = ('id', 'contrato', 'concepto', 'fecha_emision', 'monto_base', 'monto_total_con_mora', 'estado')
+    list_display = ('id', 'contrato', 'concepto', 'fecha_emision', 'monto_renta', 'monto_servicios', 'monto_base', 'monto_total_con_mora', 'estado')
     list_filter = ('estado', 'fecha_emision')
     search_fields = ('contrato__inquilino__nombre', 'concepto')
+    inlines = [DetalleFacturaServicioInline]
 
 @admin.register(CargoMora)
 class CargoMoraAdmin(admin.ModelAdmin):

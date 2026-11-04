@@ -1,6 +1,6 @@
 import decimal
 from django import forms
-from .models import Propiedad, Contrato, Portafolio, MantenimientoUnidad, SolicitudAlquiler, Inquilino, Factura, ReciboPago, SuscripcionCliente, PlanSaaS, GastoProgramado, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, LiquidacionDepositoInquilino, HistorialPrecioPropiedad
+from .models import Propiedad, Contrato, Portafolio, MantenimientoUnidad, SolicitudAlquiler, Inquilino, Factura, ReciboPago, SuscripcionCliente, PlanSaaS, GastoProgramado, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, LiquidacionDepositoInquilino, HistorialPrecioPropiedad, CargoAdicionalContrato, DetalleFacturaServicio
 from django.db.models import Q
 
 class PortafolioForm(forms.ModelForm):
@@ -620,4 +620,56 @@ class HistorialPrecioForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['notas'].required = False
+
+
+class CargoAdicionalContratoForm(forms.ModelForm):
+    class Meta:
+        model = CargoAdicionalContrato
+        fields = ['categoria', 'concepto_personalizado', 'monto', 'activo']
+        widgets = {
+            'categoria': forms.Select(attrs={'class': 'form-select'}),
+            'concepto_personalizado': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Bomba o Parqueo No. 4'}),
+            'monto': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'activo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+
+class FacturaManualForm(forms.ModelForm):
+    aplicar_cargos_recurrentes = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Incluir cargos adicionales recurrentes del contrato",
+        help_text="Si está marcado, se anexarán automáticamente los servicios activos (mantenimiento, agua, bomba, etc.) configurados en el contrato."
+    )
+
+    class Meta:
+        model = Factura
+        fields = [
+            'contrato', 'fecha_emision', 'fecha_vencimiento',
+            'monto_renta', 'concepto'
+        ]
+        labels = {
+            'contrato': 'Contrato / Propiedad / Inquilino',
+            'fecha_emision': 'Fecha de Emisión',
+            'fecha_vencimiento': 'Fecha Límite / Vencimiento',
+            'monto_renta': 'Monto de Alquiler / Renta',
+            'concepto': 'Concepto o Detalle de la Factura',
+        }
+        widgets = {
+            'contrato': forms.Select(attrs={'class': 'form-select', 'required': True, 'id': 'select_contrato_factura'}),
+            'fecha_emision': forms.DateInput(attrs={'class': 'form-control', 'type': 'date', 'required': True}),
+            'fecha_vencimiento': forms.DateInput(attrs={'class': 'form-control', 'type': 'date', 'required': True}),
+            'monto_renta': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'required': True, 'placeholder': '0.00'}),
+            'concepto': forms.TextInput(attrs={'class': 'form-control', 'required': True, 'placeholder': 'Ej: Días proporcionales del 15 al 30 de Octubre 2026'}),
+        }
+
+    def __init__(self, user, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        portafolios = Portafolio.objects.filter(Q(propietario=user) | Q(accesos__usuario=user)).distinct()
+        self.fields['contrato'].queryset = Contrato.objects.filter(
+            propiedad__portafolio__in=portafolios,
+            activo=True
+        ).select_related('propiedad', 'inquilino', 'propiedad__portafolio').order_by('propiedad__nombre_o_numero')
+        self.fields['contrato'].empty_label = "--- Seleccionar Contrato / Propiedad ---"
+
 
