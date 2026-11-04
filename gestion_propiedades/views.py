@@ -2459,9 +2459,8 @@ def crear_factura_manual(request):
         total_servicios = sum(item['monto'] for item in items_servicios)
         total_base = monto_renta + total_servicios
 
-        # 4. Cargo por Mora opcional
-        aplicar_mora = request.POST.get('aplicar_mora') == 'on'
-        monto_mora_str = request.POST.get('monto_mora', '0') if aplicar_mora else '0'
+        # 4. Cargo por Mora opcional (si se digita un monto mayor a 0)
+        monto_mora_str = request.POST.get('monto_mora', '0')
         try:
             monto_mora = decimal.Decimal(str(monto_mora_str).replace(',', '').strip())
         except Exception:
