@@ -949,5 +949,81 @@ class AlquiloTests(TestCase):
         self.user1.is_superuser = False
         self.user1.save()
 
+    def test_formato_recibo_ingresos_sin_mora_y_con_mora(self):
+        self.client.login(username='propietario1', password='password123')
+
+        # Configurar portafolio con formato RANGO_FECHAS
+        self.portafolio1.formato_concepto_factura = 'RANGO_FECHAS'
+        self.portafolio1.save()
+
+        # 1. Factura y recibo SIN mora (Pago completo)
+        factura_sin_mora = Factura.objects.create(
+            contrato=self.contrato1,
+            fecha_emision=date.today(),
+            fecha_vencimiento=date.today(),
+            monto_base=Decimal('7500.00'),
+            monto_renta=Decimal('7500.00'),
+            monto_servicios=Decimal('0.00'),
+            estado='PAGADA',
+            concepto='PAGO DESDE EL 3 DE OCTUBRE DEL 2026 HASTA EL 3 DE NOVIEMBRE DEL 2026'
+        )
+        recibo_sin_mora = ReciboPago.objects.create(
+            factura=factura_sin_mora,
+            monto_pagado=Decimal('7500.00'),
+            fecha_pago=date.today(),
+            registrado_por=self.user1
+        )
+        recibo_sin_mora.save()
+
+        url_recibo = reverse('imprimir_recibo', args=[recibo_sin_mora.id])
+        res = self.client.get(url_recibo)
+        self.assertEqual(res.status_code, 200)
+        html = res.content.decode('utf-8')
+
+        # Verificaciones para recibo SIN mora y formato rango de fechas:
+        self.assertNotIn('Mes de Cobertura:', html)
+        self.assertNotIn('(con moras)', html)
+        self.assertIn('Total Cuota del Período:', html)
+        self.assertIn('Monto Total Recibido:', html)
+        self.assertNotIn('Descuento a Alquiler', html)
+        self.assertNotIn('Aplicación de este Abono', html)
+
+        # 2. Factura y recibo CON mora
+        factura_con_mora = Factura.objects.create(
+            contrato=self.contrato1,
+            fecha_emision=date.today(),
+            fecha_vencimiento=date.today(),
+            monto_base=Decimal('7500.00'),
+            monto_renta=Decimal('7500.00'),
+            monto_servicios=Decimal('0.00'),
+            estado='PAGADA',
+            concepto='PAGO DESDE EL 3 DE NOVIEMBRE DEL 2026 HASTA EL 3 DE DICIEMBRE DEL 2026'
+        )
+        CargoMora.objects.create(
+            factura=factura_con_mora,
+            monto=Decimal('750.00'),
+            mes_aplicado=11,
+            anio_aplicado=2026
+        )
+        recibo_con_mora = ReciboPago.objects.create(
+            factura=factura_con_mora,
+            monto_pagado=Decimal('8250.00'),
+            fecha_pago=date.today(),
+            registrado_por=self.user1
+        )
+        recibo_con_mora.save()
+
+        url_recibo_mora = reverse('imprimir_recibo', args=[recibo_con_mora.id])
+        res_mora = self.client.get(url_recibo_mora)
+        self.assertEqual(res_mora.status_code, 200)
+        html_mora = res_mora.content.decode('utf-8')
+
+        # Verificaciones para recibo CON mora:
+        self.assertIn('Cargo por Mora:', html_mora)
+        self.assertIn('Total Cuota del Período (con mora):', html_mora)
+        self.assertIn('Pago a Mora:', html_mora)
+        self.assertIn('Pago a Alquiler:', html_mora)
+
+
 
 

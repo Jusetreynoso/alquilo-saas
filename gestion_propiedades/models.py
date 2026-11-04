@@ -543,6 +543,17 @@ class Factura(models.Model):
     creada_en = models.DateTimeField(auto_now_add=True)
 
     @property
+    def es_formato_rango(self):
+        try:
+            if hasattr(self, 'contrato') and self.contrato.propiedad.portafolio.formato_concepto_factura == 'RANGO_FECHAS':
+                return True
+        except Exception:
+            pass
+        if self.concepto and 'HASTA' in self.concepto.upper():
+            return True
+        return False
+
+    @property
     def total_renta(self):
         if self.monto_renta and self.monto_renta > Decimal('0.00'):
             return Decimal(str(self.monto_renta))
