@@ -100,8 +100,8 @@
                                             </form>
                                             {% endif %}
 
-                                            {% if factura.contrato.inquilino.telefono %}
-                                                <a href="https://wa.me/{{ factura.contrato.inquilino.telefono|cut:' ' }}?text=Hola%20{{ factura.contrato.inquilino.nombre }},%20te%20escribimos%20de%20la%20Administración.%20%0A%0ATienes%20una%20factura%20{{ factura.estado }}%20de%20tu%20local/vivienda%20{{ factura.contrato.propiedad.nombre_o_numero }}.%0AMonto%20Total%20con%20mora%20aplicable:%20RD${{ factura.total_a_pagar|floatformat:2 }}.%0AFecha%20límite:%20{{ factura.fecha_vencimiento|date:'d/M/Y' }}.%0A%0A¡Muchas%20gracias!" target="_blank" class="btn btn-sm btn-success w-100 text-start">
+                                            {% if factura.contrato.inquilino.telefono and factura.whatsapp_cobro_url %}
+                                                <a href="{{ factura.whatsapp_cobro_url }}" target="_blank" class="btn btn-sm btn-success w-100 text-start" title="Enviar recordatorio de cobro por WhatsApp a {{ factura.contrato.inquilino.nombre }}">
                                                     <i class="bi bi-whatsapp"></i> Enviar Cobro
                                                 </a>
                                             {% endif %}

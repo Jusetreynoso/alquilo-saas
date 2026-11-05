@@ -373,6 +373,26 @@ class Inquilino(models.Model):
             models.Index(fields=['nombre'], name='inq_nombre_idx'),
         ]
 
+    @property
+    def telefono_whatsapp(self):
+        """
+        Retorna el número limpio para WhatsApp en formato internacional E.164 sin símbolos ni espacios.
+        Para números de 10 dígitos (formato RD: 809/829/849 o EEUU/Canadá), antepone el prefijo 1.
+        Ej: '(829) 702-0221' -> '18297020221'
+        """
+        if not self.telefono:
+            return ""
+        digits = ''.join(filter(str.isdigit, str(self.telefono)))
+        if not digits:
+            return ""
+        if len(digits) == 10:
+            return "1" + digits
+        if len(digits) == 11 and digits.startswith('1'):
+            return digits
+        if digits.startswith('00'):
+            return digits[2:]
+        return digits
+
     def __str__(self):
         return self.nombre
 
@@ -630,6 +650,56 @@ class Factura(models.Model):
             diferencia = self.fecha_emision - self.contrato.fecha_inicio
             return diferencia.days <= 45
         return False
+
+    @property
+    def mensaje_whatsapp_cobro(self):
+        """
+        Genera el mensaje formateado para cobro vía WhatsApp.
+        """
+        try:
+            inquilino = self.contrato.inquilino if self.contrato else None
+            nombre_inq = inquilino.nombre if inquilino else 'Estimado(a) Inquilino(a)'
+            propiedad_nom = self.contrato.propiedad.nombre_o_numero if (self.contrato and self.contrato.propiedad) else 'su inmueble'
+            portafolio_nom = self.contrato.propiedad.portafolio.nombre if (self.contrato and self.contrato.propiedad and self.contrato.propiedad.portafolio) else 'la Administración'
+            
+            # Monto total pendiente actual (saldo pendiente o total con mora)
+            monto_pendiente = self.saldo_pendiente if self.saldo_pendiente > Decimal('0.00') else self.monto_total_con_mora
+            
+            estado_texto = "ATRASADA" if self.estado == 'ATRASADA' else "PENDIENTE"
+            detalle_mora = f" (incluye RD$ {self.total_mora:,.2f} de mora)" if self.total_mora > Decimal('0.00') else ""
+            fecha_venc_str = self.fecha_vencimiento.strftime('%d/%m/%Y') if self.fecha_vencimiento else ''
+
+            mensaje = (
+                f"¡Hola, {nombre_inq}! 👋\n"
+                f"Te escribimos de *{portafolio_nom}*.\n\n"
+                f"Te recordamos que tienes una factura *{estado_texto}* de tu inmueble *{propiedad_nom}*.\n\n"
+                f"📋 *Concepto:* {self.concepto}\n"
+                f"💰 *Monto a Pagar:* RD$ {monto_pendiente:,.2f}{detalle_mora}\n"
+                f"📅 *Fecha Límite:* {fecha_venc_str}\n\n"
+                f"Por favor, envíanos el comprobante una vez realizado el pago o comunícate con nosotros si ya lo efectuaste. ¡Muchas gracias!"
+            )
+            return mensaje
+        except Exception:
+            return ""
+
+    @property
+    def whatsapp_cobro_url(self):
+        """
+        Genera el enlace seguro wa.me con el teléfono limpio y el mensaje prellenado URL-encoded.
+        """
+        try:
+            inquilino = self.contrato.inquilino if self.contrato else None
+            clean_phone = inquilino.telefono_whatsapp if inquilino else ''
+            mensaje = self.mensaje_whatsapp_cobro
+            if not mensaje:
+                return ""
+            import urllib.parse
+            mensaje_enc = urllib.parse.quote(mensaje)
+            if clean_phone:
+                return f"https://wa.me/{clean_phone}?text={mensaje_enc}"
+            return f"https://wa.me/?text={mensaje_enc}"
+        except Exception:
+            return ""
 
     class Meta:
         indexes = [
