@@ -8,8 +8,10 @@ from django.db.models import Sum, Q, Prefetch, F, Count
 from django.contrib import messages
 from datetime import date, datetime, timedelta
 import logging
-from .models import Portafolio, Propiedad, Factura, CargoMora, ReciboPago, Contrato, SolicitudAlquiler, MantenimientoUnidad, Inquilino, PlanSaaS, SuscripcionCliente, AuditLog, GastoProgramado, RegistroProceso, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, LiquidacionDepositoInquilino, HistorialPrecioPropiedad, CargoAdicionalContrato, DetalleFacturaServicio
-from .forms import NuevoClienteSaaSForm, EditarSuscripcionForm, PropiedadForm, ContratoForm, InquilinoForm, MantenimientoForm, PlanSaaSForm, PropietarioInmuebleForm, GastoGeneralPropietarioForm, LiquidacionPropietarioForm, LiquidacionDepositoForm, HistorialPrecioForm, FacturaManualForm, CargoAdicionalContratoForm
+import os
+from django.conf import settings
+from .models import Portafolio, Propiedad, Factura, CargoMora, ReciboPago, Contrato, SolicitudAlquiler, MantenimientoUnidad, Inquilino, PlanSaaS, SuscripcionCliente, AuditLog, GastoProgramado, RegistroProceso, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, LiquidacionDepositoInquilino, HistorialPrecioPropiedad, CargoAdicionalContrato, DetalleFacturaServicio, RecordatorioPagoPropietario
+from .forms import NuevoClienteSaaSForm, EditarSuscripcionForm, PropiedadForm, ContratoForm, InquilinoForm, MantenimientoForm, PlanSaaSForm, PropietarioInmuebleForm, GastoGeneralPropietarioForm, LiquidacionPropietarioForm, LiquidacionDepositoForm, HistorialPrecioForm, FacturaManualForm, CargoAdicionalContratoForm, RecordatorioPagoPropietarioForm
 from .utils import render_to_pdf, obtener_nombre_mes
 import calendar
 import decimal
@@ -168,6 +170,12 @@ def dashboard(request):
 
     recordatorios_vencimiento_contratos.sort(key=lambda x: x['dias_restantes'])
 
+    recordatorios_pagos_propietarios = RecordatorioPagoPropietario.objects.filter(
+        portafolio__in=portafolios,
+        estado='PENDIENTE',
+        fecha_recordatorio__lte=hoy + timedelta(days=7)
+    ).select_related('propietario').order_by('fecha_recordatorio')[:5]
+
     context = {
         'titulo_pagina': 'Resumen de Portafolio',
         'total_propiedades': total_propiedades,
@@ -177,6 +185,7 @@ def dashboard(request):
         'facturas_pendientes': facturas_pendientes,
         'recordatorios_gastos': recordatorios_gastos,
         'recordatorios_vencimiento_contratos': recordatorios_vencimiento_contratos,
+        'recordatorios_pagos_propietarios': recordatorios_pagos_propietarios,
     }
     
     return render(request, 'gestion_propiedades/dashboard.html', context)
@@ -3824,6 +3833,7 @@ def detalle_propietario(request, propietario_id):
     contratos = Contrato.objects.filter(propiedad__in=propiedades, activo=True).select_related('propiedad', 'inquilino')
     gastos_generales = GastoGeneralPropietario.objects.filter(propietario_inmueble=propietario).order_by('-fecha')[:10]
     liquidaciones = LiquidacionPropietario.objects.filter(propietario_inmueble=propietario).order_by('-periodo_anio', '-periodo_mes')[:12]
+    recordatorios = propietario.recordatorios_pago.all().order_by('fecha_recordatorio')[:10]
     
     context = {
         'titulo_pagina': f'Expediente de Propietario: {propietario.nombre}',
@@ -3831,9 +3841,171 @@ def detalle_propietario(request, propietario_id):
         'propiedades': propiedades,
         'contratos': contratos,
         'gastos_generales': gastos_generales,
-        'liquidaciones': liquidaciones
+        'liquidaciones': liquidaciones,
+        'recordatorios': recordatorios,
     }
     return render(request, 'gestion_propiedades/detalle_propietario.html', context)
+
+
+# --- MÓDULO DE RECORDATORIOS DE PAGOS A PROPIETARIOS ---
+
+@login_required(login_url='/login/')
+def lista_recordatorios_propietarios(request):
+    """
+    Sección centralizada para gestionar recordatorios de pagos y transferencias a propietarios.
+    Permite ver pagos pendientes, vencidos, programados para el mes y completados.
+    """
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
+
+    hoy = date.today()
+    propietario_id = request.GET.get('propietario_id', '')
+    filtro_estado = request.GET.get('filtro', 'PENDIENTES')
+    busqueda = request.GET.get('q', '').strip().lower()
+
+    qs = RecordatorioPagoPropietario.objects.filter(
+        portafolio__in=portafolios
+    ).select_related('propietario', 'portafolio', 'creado_por')
+
+    if propietario_id and propietario_id.isdigit():
+        qs = qs.filter(propietario_id=int(propietario_id))
+
+    if busqueda:
+        qs = qs.filter(
+            Q(titulo__icontains=busqueda) |
+            Q(propietario__nombre__icontains=busqueda) |
+            Q(notas__icontains=busqueda)
+        )
+
+    # Contadores para KPIs
+    base_qs = RecordatorioPagoPropietario.objects.filter(portafolio__in=portafolios)
+    if propietario_id and propietario_id.isdigit():
+        base_qs = base_qs.filter(propietario_id=int(propietario_id))
+
+    total_pendientes = base_qs.filter(estado='PENDIENTE').count()
+    monto_total_pendiente = base_qs.filter(estado='PENDIENTE').aggregate(total=Sum('monto_sugerido'))['total'] or decimal.Decimal('0.00')
+    vencidos_count = base_qs.filter(estado='PENDIENTE', fecha_recordatorio__lt=hoy).count()
+    hoy_proximos_count = base_qs.filter(estado='PENDIENTE', fecha_recordatorio__gte=hoy, fecha_recordatorio__lte=hoy + timedelta(days=7)).count()
+    completados_mes = base_qs.filter(estado='COMPLETADO', fecha_recordatorio__month=hoy.month, fecha_recordatorio__year=hoy.year).count()
+
+    # Aplicación del filtro seleccionado
+    if filtro_estado == 'PENDIENTES':
+        qs = qs.filter(estado='PENDIENTE')
+    elif filtro_estado == 'VENCIDOS':
+        qs = qs.filter(estado='PENDIENTE', fecha_recordatorio__lt=hoy)
+    elif filtro_estado == 'PROXIMOS':
+        qs = qs.filter(estado='PENDIENTE', fecha_recordatorio__gte=hoy, fecha_recordatorio__lte=hoy + timedelta(days=7))
+    elif filtro_estado == 'COMPLETADOS':
+        qs = qs.filter(estado='COMPLETADO')
+    elif filtro_estado == 'TODOS':
+        pass
+
+    recordatorios = list(qs.order_by('fecha_recordatorio', '-prioridad'))
+
+    # Formulario para modal de creación rápida
+    form = RecordatorioPagoPropietarioForm(portafolios=portafolios, initial={'fecha_recordatorio': hoy})
+    propietarios_list = PropietarioInmueble.objects.filter(portafolio__in=portafolios, activo=True).order_by('nombre')
+
+    context = {
+        'titulo_pagina': 'Recordatorios de Pagos a Propietarios',
+        'recordatorios': recordatorios,
+        'hoy': hoy,
+        'filtro_estado': filtro_estado,
+        'busqueda': busqueda,
+        'propietario_sel': propietario_id,
+        'propietarios_list': propietarios_list,
+        'total_pendientes': total_pendientes,
+        'monto_total_pendiente': monto_total_pendiente,
+        'vencidos_count': vencidos_count,
+        'hoy_proximos_count': hoy_proximos_count,
+        'completados_mes': completados_mes,
+        'form': form,
+    }
+    return render(request, 'gestion_propiedades/lista_recordatorios_propietarios.html', context)
+
+
+@login_required(login_url='/login/')
+def crear_recordatorio_propietario(request):
+    """Crea un recordatorio de pago a un propietario."""
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
+
+    next_url = request.POST.get('next') or request.GET.get('next')
+
+    if request.method == 'POST':
+        form = RecordatorioPagoPropietarioForm(request.POST, portafolios=portafolios)
+        if form.is_valid():
+            rec = form.save(commit=False)
+            rec.portafolio = rec.propietario.portafolio
+            rec.creado_por = request.user
+            rec.save()
+            messages.success(request, f'Recordatorio de pago para {rec.propietario.nombre} programado para el {rec.fecha_recordatorio.strftime("%d/%m/%Y")}.')
+            if next_url:
+                return redirect(next_url)
+            return redirect('lista_recordatorios_propietarios')
+        else:
+            messages.error(request, "Por favor revise los campos del formulario de recordatorio.")
+    
+    return redirect('lista_recordatorios_propietarios')
+
+
+@login_required(login_url='/login/')
+def cambiar_estado_recordatorio_propietario(request, recordatorio_id, nuevo_estado):
+    """Marca un recordatorio como COMPLETADO, PENDIENTE o DESCARTADO."""
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
+
+    recordatorio = get_object_or_404(RecordatorioPagoPropietario, id=recordatorio_id, portafolio__in=portafolios)
+    
+    estados_validos = ['PENDIENTE', 'COMPLETADO', 'DESCARTADO']
+    if nuevo_estado in estados_validos:
+        recordatorio.estado = nuevo_estado
+        recordatorio.save()
+        if nuevo_estado == 'COMPLETADO':
+            messages.success(request, f'Pago a {recordatorio.propietario.nombre} marcado como Pagado / Transferido.')
+        elif nuevo_estado == 'PENDIENTE':
+            messages.info(request, f'Recordatorio de pago a {recordatorio.propietario.nombre} devuelto a Pendiente.')
+        else:
+            messages.warning(request, f'Recordatorio descartado.')
+    
+    next_url = request.GET.get('next')
+    if next_url:
+        return redirect(next_url)
+    return redirect('lista_recordatorios_propietarios')
+
+
+@login_required(login_url='/login/')
+def eliminar_recordatorio_propietario(request, recordatorio_id):
+    """Elimina un recordatorio de pago."""
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
+
+    recordatorio = get_object_or_404(RecordatorioPagoPropietario, id=recordatorio_id, portafolio__in=portafolios)
+    if request.method == 'POST':
+        propietario_nombre = recordatorio.propietario.nombre
+        recordatorio.delete()
+        messages.success(request, f'Recordatorio de pago para {propietario_nombre} eliminado.')
+    
+    next_url = request.GET.get('next') or request.POST.get('next')
+    if next_url:
+        return redirect(next_url)
+    return redirect('lista_recordatorios_propietarios')
 
 
 # --- MÓDULO DE GASTOS GENERALES Y DEDUCCIONES ---
@@ -4375,53 +4547,63 @@ def ver_comprobante_liquidacion(request, liquidacion_id):
         propietario_inmueble__portafolio__in=portafolios
     )
 
+    fallback_url = f"/reportes/propietario/?propietario_id={liquidacion.propietario_inmueble_id}&mes={liquidacion.periodo_mes}&anio={liquidacion.periodo_anio}"
+
     if not liquidacion.comprobante_pago:
         messages.warning(request, "Esta liquidación no tiene ningún comprobante de pago adjunto.")
-        return redirect(f"/reportes/propietario/?propietario_id={liquidacion.propietario_inmueble_id}&mes={liquidacion.periodo_mes}&anio={liquidacion.periodo_anio}")
+        return redirect(fallback_url)
 
-    nombre_archivo = os.path.basename(liquidacion.comprobante_pago.name or 'comprobante')
-
-    # 1. Si tiene URL remota (Cloudinary / CDN), verificar existencia real antes de enviar al usuario
     try:
-        url_archivo = liquidacion.comprobante_pago.url
-        if url_archivo and (url_archivo.startswith('http://') or url_archivo.startswith('https://')):
-            try:
-                resp = requests.get(url_archivo, stream=True, timeout=3.5, headers={'User-Agent': 'Mozilla/5.0'})
-                if resp.status_code == 200:
-                    return redirect(url_archivo)
-                else:
-                    logger.warning(f"Comprobante remoto #{liquidacion_id} respondió HTTP {resp.status_code} ({url_archivo})")
-            except Exception as req_err:
-                logger.warning(f"Error verificando conectividad de comprobante en Cloudinary: {req_err}")
-    except Exception as e:
-        logger.warning(f"Error accediendo a la URL del comprobante #{liquidacion_id}: {e}")
+        nombre_archivo = os.path.basename(liquidacion.comprobante_pago.name or 'comprobante')
 
-    # 2. Verificar si está disponible en almacenamiento local / fallback
-    try:
-        if liquidacion.comprobante_pago.storage.exists(liquidacion.comprobante_pago.name):
-            archivo = liquidacion.comprobante_pago.open('rb')
-            content_type, _ = mimetypes.guess_type(liquidacion.comprobante_pago.name)
-            return FileResponse(archivo, content_type=content_type or 'application/octet-stream')
-    except Exception as e:
-        logger.warning(f"Error accediendo al storage local de liquidación #{liquidacion_id}: {e}")
+        # 1. Si tiene URL remota (Cloudinary / CDN), verificar existencia real antes de enviar al usuario
+        try:
+            url_archivo = liquidacion.comprobante_pago.url
+            if url_archivo and (url_archivo.startswith('http://') or url_archivo.startswith('https://')):
+                try:
+                    resp = requests.get(url_archivo, stream=True, timeout=3.5, headers={'User-Agent': 'Mozilla/5.0'})
+                    if resp.status_code == 200:
+                        return redirect(url_archivo)
+                    else:
+                        logger.warning(f"Comprobante remoto #{liquidacion_id} respondió HTTP {resp.status_code} ({url_archivo})")
+                except Exception as req_err:
+                    logger.warning(f"Error verificando conectividad de comprobante en Cloudinary: {req_err}")
+        except Exception as e:
+            logger.warning(f"Error accediendo a la URL del comprobante #{liquidacion_id}: {e}")
 
-    # 3. Comprobar si existe físicamente en MEDIA_ROOT
-    try:
-        local_path = os.path.join(settings.MEDIA_ROOT, liquidacion.comprobante_pago.name)
-        if os.path.exists(local_path):
-            archivo = open(local_path, 'rb')
-            content_type, _ = mimetypes.guess_type(local_path)
-            return FileResponse(archivo, content_type=content_type or 'application/octet-stream')
-    except Exception as e:
-        logger.warning(f"Error accediendo al archivo en MEDIA_ROOT de liquidación #{liquidacion_id}: {e}")
+        # 2. Verificar si está disponible en almacenamiento local / fallback
+        try:
+            if liquidacion.comprobante_pago.storage.exists(liquidacion.comprobante_pago.name):
+                archivo = liquidacion.comprobante_pago.open('rb')
+                content_type, _ = mimetypes.guess_type(liquidacion.comprobante_pago.name)
+                return FileResponse(archivo, content_type=content_type or 'application/octet-stream')
+        except Exception as e:
+            logger.warning(f"Error accediendo al storage local de liquidación #{liquidacion_id}: {e}")
 
-    # 4. Si el archivo no está en ningún almacenamiento, orientar amigablemente al usuario
-    messages.warning(
-        request,
-        f"El archivo del recibo adjunto '{nombre_archivo}' no se encuentra disponible en los servidores o su carga previa no se completó. "
-        "Por favor utilice el botón '✏️ Modificar / Adjuntar Recibo' para cargarlo nuevamente."
-    )
-    return redirect(f"/reportes/propietario/?propietario_id={liquidacion.propietario_inmueble_id}&mes={liquidacion.periodo_mes}&anio={liquidacion.periodo_anio}")
+        # 3. Comprobar si existe físicamente en MEDIA_ROOT
+        try:
+            local_path = os.path.join(settings.MEDIA_ROOT, liquidacion.comprobante_pago.name)
+            if os.path.exists(local_path):
+                archivo = open(local_path, 'rb')
+                content_type, _ = mimetypes.guess_type(local_path)
+                return FileResponse(archivo, content_type=content_type or 'application/octet-stream')
+        except Exception as e:
+            logger.warning(f"Error accediendo al archivo en MEDIA_ROOT de liquidación #{liquidacion_id}: {e}")
+
+        # 4. Si el archivo no está en ningún almacenamiento, orientar amigablemente al usuario
+        messages.warning(
+            request,
+            f"El archivo del recibo adjunto '{nombre_archivo}' no se encuentra disponible en los servidores o su carga previa no se completó. "
+            "Por favor utilice el botón '✏️ Modificar / Adjuntar Recibo' para cargarlo nuevamente."
+        )
+        return redirect(fallback_url)
+    except Exception as err:
+        logger.error(f"Error general en ver_comprobante_liquidacion #{liquidacion_id}: {err}", exc_info=True)
+        messages.warning(
+            request,
+            "No se pudo acceder al archivo del recibo adjunto. Por favor utilice el botón '✏️ Modificar / Adjuntar Recibo' para adjuntarlo nuevamente."
+        )
+        return redirect(fallback_url)
 
 
 @login_required(login_url='/login/')

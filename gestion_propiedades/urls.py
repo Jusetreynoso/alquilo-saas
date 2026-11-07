@@ -86,6 +86,10 @@ urlpatterns = [
     path('propietario/crear/', views.crear_propietario, name='crear_propietario'),
     path('propietario/<int:propietario_id>/', views.detalle_propietario, name='detalle_propietario'),
     path('propietario/<int:propietario_id>/editar/', views.editar_propietario, name='editar_propietario'),
+    path('recordatorios-propietarios/', views.lista_recordatorios_propietarios, name='lista_recordatorios_propietarios'),
+    path('recordatorios-propietarios/crear/', views.crear_recordatorio_propietario, name='crear_recordatorio_propietario'),
+    path('recordatorios-propietarios/<int:recordatorio_id>/cambiar-estado/<str:nuevo_estado>/', views.cambiar_estado_recordatorio_propietario, name='cambiar_estado_recordatorio_propietario'),
+    path('recordatorios-propietarios/<int:recordatorio_id>/eliminar/', views.eliminar_recordatorio_propietario, name='eliminar_recordatorio_propietario'),
 
     # Gastos Generales y Deducciones
     path('gastos-generales/', views.lista_gastos_generales, name='lista_gastos_generales'),

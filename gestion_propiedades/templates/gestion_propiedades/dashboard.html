@@ -81,6 +81,66 @@
     </div>
 </div>
 
+{% if recordatorios_pagos_propietarios %}
+<div class="card shadow-sm border-0 mb-4 mt-4">
+    <div class="card-header bg-white fw-bold text-primary py-3 d-flex justify-content-between align-items-center">
+        <span>⏰ Pagos Programados a Propietarios (Próximos o Vencidos)</span>
+        <a href="{% url 'lista_recordatorios_propietarios' %}" class="btn btn-sm btn-outline-primary fw-bold">
+            Ver Todos
+        </a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="px-4 py-3">Fecha Pago</th>
+                        <th class="py-3">Propietario / Cuenta Bancaria</th>
+                        <th class="py-3">Concepto</th>
+                        <th class="py-3 text-end">Monto</th>
+                        <th class="py-3 text-end px-4">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in recordatorios_pagos_propietarios %}
+                    <tr>
+                        <td class="px-4 py-3 fw-bold">
+                            {{ r.fecha_recordatorio|date:"d/m/Y" }}
+                            {% if r.fecha_recordatorio < hoy %}
+                                <span class="badge bg-danger ms-1">Atrasado</span>
+                            {% elif r.fecha_recordatorio == hoy %}
+                                <span class="badge bg-warning text-dark ms-1">Pagar Hoy</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3">
+                            <a href="{% url 'detalle_propietario' r.propietario.id %}" class="fw-bold text-decoration-none text-primary">
+                                🏢 {{ r.propietario.nombre }}
+                            </a>
+                            {% if r.propietario.banco_nombre %}
+                                <small class="text-muted d-block">{{ r.propietario.banco_nombre }}: {{ r.propietario.numero_cuenta }}</small>
+                            {% endif %}
+                        </td>
+                        <td class="py-3">{{ r.titulo }}</td>
+                        <td class="py-3 text-end fw-bold text-success">
+                            {% if r.monto_sugerido > 0 %}RD${{ r.monto_sugerido|dinero }}{% else %}---{% endif %}
+                        </td>
+                        <td class="py-3 text-end px-4">
+                            <a href="{% url 'cambiar_estado_recordatorio_propietario' r.id 'COMPLETADO' %}" class="btn btn-sm btn-success fw-bold me-1" title="Marcar Pagado">
+                                ✅ Pagado
+                            </a>
+                            <a href="{% url 'reporte_propietario' %}?propietario_id={{ r.propietario.id }}&mes={{ r.fecha_recordatorio.month }}&anio={{ r.fecha_recordatorio.year }}" class="btn btn-sm btn-outline-primary" title="Ver Liquidación">
+                                📊
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <div class="card shadow-sm border-0 mb-4 mt-4">
     <div class="card-header bg-white fw-bold text-primary py-3">
         📅 Recordatorio de Gastos Programados (Mantenimientos del Mes)

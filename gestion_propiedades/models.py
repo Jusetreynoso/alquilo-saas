@@ -268,6 +268,10 @@ class PropietarioInmueble(models.Model):
     tipo_cuenta = models.CharField(max_length=50, blank=True, null=True, help_text="Ej: Corriente, Ahorros")
     numero_cuenta = models.CharField(max_length=50, blank=True, null=True, help_text="Número de cuenta para liquidaciones")
     
+    # Acuerdos y Recordatorios de Pago al Propietario
+    dia_pago_acordado = models.IntegerField(default=15, blank=True, null=True, help_text="Día del mes acordado para transferirle los fondos al propietario (1-31)")
+    notas_pago = models.TextField(blank=True, null=True, help_text="Instrucciones especiales o acuerdos de pago al propietario")
+
     activo = models.BooleanField(default=True)
     creado_en = models.DateTimeField(auto_now_add=True)
 
@@ -1147,6 +1151,40 @@ class LiquidacionDepositoInquilino(models.Model):
 
     def __str__(self):
         return f"Finiquito Contrato #{self.contrato.id} - Inquilino {self.contrato.inquilino.nombre} (${self.monto_neto_devuelto})"
+
+
+class RecordatorioPagoPropietario(models.Model):
+    PRIORIDAD_CHOICES = [
+        ('BAJA', 'Baja'),
+        ('NORMAL', 'Normal'),
+        ('ALTA', 'Alta (Urgente)'),
+    ]
+    ESTADO_CHOICES = [
+        ('PENDIENTE', 'Pendiente de Pago'),
+        ('COMPLETADO', 'Pagado / Transferido'),
+        ('DESCARTADO', 'Cancelado / Descartado'),
+    ]
+
+    portafolio = models.ForeignKey(Portafolio, on_delete=models.CASCADE, related_name='recordatorios_pagos_propietarios')
+    propietario = models.ForeignKey(PropietarioInmueble, on_delete=models.CASCADE, related_name='recordatorios_pago')
+    titulo = models.CharField(max_length=200, help_text="Ej: Pago de liquidación Noviembre, Transferencia acordada día 15")
+    fecha_recordatorio = models.DateField(help_text="Fecha programada para realizar el pago")
+    monto_sugerido = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Monto a pagar al propietario")
+    prioridad = models.CharField(max_length=10, choices=PRIORIDAD_CHOICES, default='NORMAL')
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='PENDIENTE')
+    notas = models.TextField(blank=True, null=True, help_text="Instrucciones bancarias, notas o acuerdos especiales")
+    creado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['fecha_recordatorio', '-prioridad', '-creado_en']
+        verbose_name = 'Recordatorio de Pago a Propietario'
+        verbose_name_plural = 'Recordatorios de Pagos a Propietarios'
+
+    def __str__(self):
+        return f"{self.propietario.nombre} - {self.titulo} ({self.fecha_recordatorio})"
+
 
 
 

@@ -105,6 +105,9 @@
                 <button type="button" class="btn btn-outline-info text-dark fw-bold shadow-sm" onclick="abrirModalITBIS()">
                     🏛️ + Liquidar ITBIS (18%)
                 </button>
+                <a href="{% url 'lista_recordatorios_propietarios' %}?propietario_id={{ propietario_seleccionado.id }}" class="btn btn-outline-secondary fw-bold shadow-sm">
+                    ⏰ Recordatorios
+                </a>
                 <a href="{% url 'imprimir_estado_situacion_propietario' propietario_seleccionado.id %}?mes={{ mes }}&anio={{ anio }}" target="_blank" class="btn btn-outline-primary fw-bold shadow-sm">
                     📄 Estado de Situación PDF
                 </a>

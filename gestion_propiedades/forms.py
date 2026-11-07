@@ -1,6 +1,6 @@
 import decimal
 from django import forms
-from .models import Propiedad, Contrato, Portafolio, MantenimientoUnidad, SolicitudAlquiler, Inquilino, Factura, ReciboPago, SuscripcionCliente, PlanSaaS, GastoProgramado, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, LiquidacionDepositoInquilino, HistorialPrecioPropiedad, CargoAdicionalContrato, DetalleFacturaServicio
+from .models import Propiedad, Contrato, Portafolio, MantenimientoUnidad, SolicitudAlquiler, Inquilino, Factura, ReciboPago, SuscripcionCliente, PlanSaaS, GastoProgramado, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, LiquidacionDepositoInquilino, HistorialPrecioPropiedad, CargoAdicionalContrato, DetalleFacturaServicio, RecordatorioPagoPropietario
 from django.db.models import Q
 
 class PortafolioForm(forms.ModelForm):
@@ -470,7 +470,7 @@ class PropietarioInmuebleForm(forms.ModelForm):
         fields = [
             'nombre', 'cedula_o_rnc', 'telefono', 'correo', 'direccion',
             'tipo_comision', 'porcentaje_comision', 'monto_comision_fijo',
-            'banco_nombre', 'tipo_cuenta', 'numero_cuenta', 'activo'
+            'banco_nombre', 'tipo_cuenta', 'numero_cuenta', 'dia_pago_acordado', 'notas_pago', 'activo'
         ]
         widgets = {
             'nombre': forms.TextInput(attrs={'class': 'form-control', 'required': True, 'placeholder': 'Ej: Juan Pérez / Inmobiliaria S.A.'}),
@@ -484,6 +484,8 @@ class PropietarioInmuebleForm(forms.ModelForm):
             'banco_nombre': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Banco Popular'}),
             'tipo_cuenta': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Ahorros / Corriente'}),
             'numero_cuenta': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: 123456789'}),
+            'dia_pago_acordado': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 31, 'placeholder': 'Ej: 15'}),
+            'notas_pago': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Instrucciones o acuerdos especiales de pago...'}),
             'activo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
@@ -499,6 +501,8 @@ class PropietarioInmuebleForm(forms.ModelForm):
         self.fields['banco_nombre'].required = False
         self.fields['tipo_cuenta'].required = False
         self.fields['numero_cuenta'].required = False
+        self.fields['dia_pago_acordado'].required = False
+        self.fields['notas_pago'].required = False
 
         if portafolios is not None:
             self.fields['propiedades'].queryset = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False).order_by('nombre_o_numero')
@@ -515,6 +519,10 @@ class PropietarioInmuebleForm(forms.ModelForm):
     def clean_monto_comision_fijo(self):
         val = self.cleaned_data.get('monto_comision_fijo')
         return val if val is not None else decimal.Decimal('0.00')
+
+    def clean_dia_pago_acordado(self):
+        val = self.cleaned_data.get('dia_pago_acordado')
+        return val if val else 15
 
 
 class GastoGeneralPropietarioForm(forms.ModelForm):
@@ -671,5 +679,36 @@ class FacturaManualForm(forms.ModelForm):
             activo=True
         ).select_related('propiedad', 'inquilino', 'propiedad__portafolio').order_by('propiedad__nombre_o_numero')
         self.fields['contrato'].empty_label = "--- Seleccionar Contrato / Propiedad ---"
+
+
+class RecordatorioPagoPropietarioForm(forms.ModelForm):
+    class Meta:
+        model = RecordatorioPagoPropietario
+        fields = ['propietario', 'titulo', 'fecha_recordatorio', 'monto_sugerido', 'prioridad', 'notas']
+        labels = {
+            'propietario': 'Propietario a Transferir / Liquidar',
+            'titulo': 'Concepto o Motivo del Pago',
+            'fecha_recordatorio': 'Fecha Límite / Programada de Pago',
+            'monto_sugerido': 'Monto a Transferir (RD$)',
+            'prioridad': 'Prioridad',
+            'notas': 'Instrucciones Bancarias o Notas Especiales',
+        }
+        widgets = {
+            'propietario': forms.Select(attrs={'class': 'form-select', 'required': True}),
+            'titulo': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Transferir liquidación de renta de Noviembre', 'required': True}),
+            'fecha_recordatorio': forms.DateInput(attrs={'class': 'form-control', 'type': 'date', 'required': True}),
+            'monto_sugerido': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'prioridad': forms.Select(attrs={'class': 'form-select'}),
+            'notas': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Ej: Cuenta Banco Popular #123456789. Enviar volante por WhatsApp.'}),
+        }
+
+    def __init__(self, *args, portafolios=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['monto_sugerido'].required = False
+        self.fields['notas'].required = False
+        if portafolios is not None:
+            self.fields['propietario'].queryset = PropietarioInmueble.objects.filter(portafolio__in=portafolios, activo=True).order_by('nombre')
+        self.fields['propietario'].empty_label = "--- Seleccionar Propietario ---"
+
 
 
