@@ -203,7 +203,7 @@
                         </div>
                         <div class="d-flex gap-2 flex-wrap">
                             {% if liquidacion_existente.comprobante_pago %}
-                                <a href="{{ liquidacion_existente.comprobante_pago.url }}" target="_blank" class="btn btn-sm btn-outline-success fw-bold shadow-sm">
+                                <a href="{% url 'ver_comprobante_liquidacion' liquidacion_existente.id %}" target="_blank" class="btn btn-sm btn-outline-success fw-bold shadow-sm">
                                     📎 Ver Recibo Adjunto
                                 </a>
                             {% endif %}
@@ -465,7 +465,7 @@
                         {% if liquidacion_existente and liquidacion_existente.comprobante_pago %}
                             <div class="mt-2 p-2 bg-light rounded border d-flex align-items-center justify-content-between">
                                 <span class="small text-success fw-bold">📎 Comprobante ya adjunto</span>
-                                <a href="{{ liquidacion_existente.comprobante_pago.url }}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 0.8rem;">
+                                <a href="{% url 'ver_comprobante_liquidacion' liquidacion_existente.id %}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 0.8rem;">
                                     Ver archivo actual
                                 </a>
                             </div>
@@ -504,24 +504,35 @@
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label fw-bold">Concepto / Descripción del Gasto</label>
-                        <input type="text" name="concepto" class="form-control" required placeholder="Ej: Impuesto ITBIS sobre comisión, Honorario legal, etc.">
+                        <input type="text" name="concepto" id="conceptoGastoInput" class="form-control" required placeholder="Ej: Impuesto ITBIS sobre alquiler, Honorario legal, etc.">
                     </div>
 
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
                             <label class="form-label fw-bold">Categoría</label>
-                            <select name="categoria" class="form-select" required>
-                                <option value="IMPUESTOS">Impuestos / Retenciones</option>
+                            <select name="categoria" id="categoriaGastoSelect" class="form-select" required onchange="alCambiarCategoriaGasto()">
+                                <option value="ITBIS_18">🏛️ Impuesto ITBIS (18% Automático)</option>
+                                <option value="IMPUESTO_COMISION">Impuestos de Comisión / Retenciones</option>
                                 <option value="GESTION_LEGAL">Gestión Legal / Abogado</option>
                                 <option value="HONORARIOS">Honorarios Profesionales</option>
-                                <option value="REPARACIONES">Reparaciones Generales</option>
+                                <option value="REPARACION_GENERAL">Reparaciones Generales</option>
                                 <option value="PUBLICIDAD">Publicidad / Promoción</option>
                                 <option value="OTRO" selected>Otro Gasto</option>
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-bold">Monto ($)</label>
-                            <input type="number" step="0.01" name="monto" class="form-control" required placeholder="0.00">
+                            <label class="form-label fw-bold">Monto (RD$)</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white fw-bold">RD$</span>
+                                <input type="number" step="0.01" name="monto" id="montoGastoInput" class="form-control fw-bold" required placeholder="0.00">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="contenedorInfoItbis" class="alert alert-info py-2 px-3 small mb-3 d-none">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span>⚡ ITBIS 18% calculado sobre alquiler puro (RD$ {{ total_renta_cobrada|dinero }}): <strong>RD$ {{ itbis_18_calculado|dinero }}</strong></span>
+                            <button type="button" class="btn btn-sm btn-primary py-0 px-2 fw-bold" onclick="aplicarCalculoITBIS()">Aplicar RD$ {{ itbis_18_calculado|dinero }}</button>
                         </div>
                     </div>
 
@@ -570,6 +581,38 @@
                 alert('¡Mensaje de WhatsApp copiado al portapapeles!');
             });
         }
+    }
+
+    const itbis18Sugerido = {{ itbis_18_calculado|default:"0.00"|stringformat:".2f" }};
+    const nombrePeriodoActual = "{{ nombre_mes }} {{ anio }}";
+
+    function alCambiarCategoriaGasto() {
+        const sel = document.getElementById('categoriaGastoSelect');
+        const montoInp = document.getElementById('montoGastoInput');
+        const conceptoInp = document.getElementById('conceptoGastoInput');
+        const infoItbis = document.getElementById('contenedorInfoItbis');
+
+        if (sel && sel.value === 'ITBIS_18') {
+            if (montoInp) montoInp.value = itbis18Sugerido;
+            if (conceptoInp && (!conceptoInp.value || conceptoInp.value.includes('ITBIS'))) {
+                conceptoInp.value = `Impuesto ITBIS (18%) - ${nombrePeriodoActual}`;
+            }
+            if (infoItbis) infoItbis.classList.remove('d-none');
+        } else {
+            if (infoItbis) infoItbis.classList.add('d-none');
+        }
+    }
+
+    function aplicarCalculoITBIS() {
+        const sel = document.getElementById('categoriaGastoSelect');
+        const montoInp = document.getElementById('montoGastoInput');
+        const conceptoInp = document.getElementById('conceptoGastoInput');
+        const infoItbis = document.getElementById('contenedorInfoItbis');
+
+        if (sel) sel.value = 'ITBIS_18';
+        if (montoInp) montoInp.value = itbis18Sugerido;
+        if (conceptoInp) conceptoInp.value = `Impuesto ITBIS (18%) - ${nombrePeriodoActual}`;
+        if (infoItbis) infoItbis.classList.remove('d-none');
     }
 </script>
 {% endblock %}

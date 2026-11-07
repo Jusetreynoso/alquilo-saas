@@ -248,15 +248,7 @@
                                 <a href="{% url 'registrar_pago' factura.id %}" class="btn btn-sm btn-success shadow-sm">
                                     💰 Cobrar
                                 </a>
-                                {% if factura.total_mora > 0 %}
-                                <form action="{% url 'quitar_mora_factura' factura.id %}" method="POST" class="d-inline" onsubmit="return confirm('¿Confirmas quitar la mora a esta factura?');">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger shadow-sm" title="Quitar mora acumulada">
-                                        🚫 Mora
-                                    </button>
-                                </form>
-                                {% endif %}
+
                             </div>
                         </td>
                     </tr>

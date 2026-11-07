@@ -1056,8 +1056,9 @@ class RegistroProceso(models.Model):
 
 class GastoGeneralPropietario(models.Model):
     CATEGORIA_CHOICES = [
-        ('GESTION_LEGAL', 'Gestión Legal / Abogado'),
+        ('ITBIS_18', 'Impuesto ITBIS (18% sobre Renta Pura)'),
         ('IMPUESTO_COMISION', 'Impuestos de Comisión / ITBIS / Retenciones'),
+        ('GESTION_LEGAL', 'Gestión Legal / Abogado'),
         ('HONORARIOS', 'Honorarios Profesionales'),
         ('REPARACION_GENERAL', 'Gastos Generales no asignados a propiedad'),
         ('PUBLICIDAD', 'Publicidad y Mercadeo'),

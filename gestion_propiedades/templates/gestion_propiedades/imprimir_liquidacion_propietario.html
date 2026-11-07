@@ -42,16 +42,27 @@
 </div>
 
 <div class="invoice-box">
-    <!-- Encabezado del Documento -->
+    <!-- Encabezado del Documento con Logo de Portafolio -->
     <div class="row align-items-center mb-4 pb-3 border-bottom">
-        <div class="col-8">
-            <h2 class="header-title mb-1">ESTADO DE CUENTA Y LIQUIDACIÓN</h2>
-            <p class="text-muted mb-0">Gestión de Inmuebles y Administración de Alquileres</p>
-            <p class="text-secondary small">Período de Liquidación: <strong>{{ nombre_mes }} {{ anio }}</strong></p>
+        <div class="col-8 d-flex align-items-center gap-3">
+            {% if propietario.portafolio.logo_empresa %}
+                <img src="{{ propietario.portafolio.logo_empresa.url }}" alt="Logo" style="max-height: 70px; max-width: 140px; object-fit: contain;">
+            {% elif "BASORA" in propietario.portafolio.nombre|upper %}
+                {% load static %}
+                <img src="{% static 'gestion_propiedades/img/basora_logo.png' %}" alt="Logo" style="max-height: 70px; max-width: 140px; object-fit: contain;">
+            {% endif %}
+            <div>
+                <h3 class="fw-bold mb-0 text-dark">{{ propietario.portafolio.nombre|upper }}</h3>
+                <h5 class="header-title mb-0 text-primary fs-5">ESTADO DE CUENTA Y LIQUIDACIÓN</h5>
+                <small class="text-muted d-block">{{ propietario.portafolio.eslogan|default:"Gestión de Inmuebles y Administración de Alquileres" }}</small>
+                <small class="text-secondary">Período de Liquidación: <strong>{{ nombre_mes }} {{ anio }}</strong></small>
+            </div>
         </div>
         <div class="col-4 text-end">
-            <h4 class="fw-bold text-primary mb-0">ALQUILO</h4>
-            <span class="badge bg-secondary">Fecha Emisión: {{ fecha_emision|date:"d/m/Y" }}</span>
+            <span class="badge bg-secondary mb-1">Fecha Emisión: {{ fecha_emision|date:"d/m/Y" }}</span>
+            {% if propietario.portafolio.telefono_contacto %}
+                <small class="text-muted d-block">📞 {{ propietario.portafolio.telefono_contacto }}</small>
+            {% endif %}
         </div>
     </div>
 

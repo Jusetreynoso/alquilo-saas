@@ -79,6 +79,7 @@ urlpatterns = [
     path('reportes/propietario/', views.reporte_propietario, name='reporte_propietario'),
     path('reportes/propietario/liquidar/<int:propietario_id>/', views.procesar_liquidacion_propietario, name='procesar_liquidacion_propietario'),
     path('reportes/propietario/imprimir-liquidacion/<int:propietario_id>/', views.imprimir_liquidacion_propietario, name='imprimir_liquidacion_propietario'),
+    path('reportes/propietario/ver-comprobante/<int:liquidacion_id>/', views.ver_comprobante_liquidacion, name='ver_comprobante_liquidacion'),
 
     # Propietarios de Inmuebles
     path('propietarios/', views.lista_propietarios, name='lista_propietarios'),

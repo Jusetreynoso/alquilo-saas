@@ -31,16 +31,27 @@
         </button>
     </div>
 
-    <!-- Encabezado Oficial -->
+    <!-- Encabezado Oficial con Logo -->
     <div class="d-flex justify-content-between align-items-center header-title">
-        <div>
-            <h2 class="fw-bold text-primary mb-1">🏢 ESTADO DE SITUACIÓN DE INMUEBLES</h2>
-            <p class="text-muted mb-0">Reporte Consolidador de Portafolio de Propiedades</p>
+        <div class="d-flex align-items-center gap-3">
+            {% if propietario.portafolio.logo_empresa %}
+                <img src="{{ propietario.portafolio.logo_empresa.url }}" alt="Logo" style="max-height: 70px; max-width: 140px; object-fit: contain;">
+            {% elif "BASORA" in propietario.portafolio.nombre|upper %}
+                {% load static %}
+                <img src="{% static 'gestion_propiedades/img/basora_logo.png' %}" alt="Logo" style="max-height: 70px; max-width: 140px; object-fit: contain;">
+            {% endif %}
+            <div>
+                <h3 class="fw-bold mb-0 text-dark">{{ propietario.portafolio.nombre|upper }}</h3>
+                <h4 class="fw-bold text-primary mb-1">🏢 ESTADO DE SITUACIÓN DE INMUEBLES</h4>
+                <p class="text-muted mb-0 small">{{ propietario.portafolio.eslogan|default:"Reporte Consolidador de Portafolio de Propiedades" }}</p>
+            </div>
         </div>
         <div class="text-end">
-            <h5 class="fw-bold mb-0 text-dark">{{ propietario.portafolio.nombre }}</h5>
             <small class="text-muted d-block">Emisión: {{ fecha_emision|date:"d/m/Y - H:i" }}</small>
             <span class="badge bg-primary px-3 py-1">Período: {{ nombre_mes }} {{ anio }}</span>
+            {% if propietario.portafolio.telefono_contacto %}
+                <small class="text-muted d-block">📞 {{ propietario.portafolio.telefono_contacto }}</small>
+            {% endif %}
         </div>
     </div>
 

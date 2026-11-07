@@ -28,15 +28,34 @@
         </button>
     </div>
 
-    <!-- Encabezado Membretado -->
-    <div class="header-print d-flex justify-content-between align-items-center">
-        <div>
-            <h3 class="fw-bold mb-1" style="color: #1a252f;">Alquilo Software</h3>
-            <h5 class="text-muted mb-0">Estado Mensual de Inmuebles por Propietario</h5>
+    <!-- Encabezado Membretado con Logo y Marca Blanca del Portafolio -->
+    <div class="header-print d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div class="d-flex align-items-center gap-3">
+            {% if portafolio_actual.logo_empresa %}
+                <img src="{{ portafolio_actual.logo_empresa.url }}" alt="Logo" style="max-height: 75px; max-width: 140px; object-fit: contain;">
+            {% elif portafolio_actual and "BASORA" in portafolio_actual.nombre|upper %}
+                {% load static %}
+                <img src="{% static 'gestion_propiedades/img/basora_logo.png' %}" alt="Logo" style="max-height: 75px; max-width: 140px; object-fit: contain;">
+            {% endif %}
+            <div>
+                <h3 class="fw-bold mb-0 text-dark">
+                    {% if portafolio_actual %}{{ portafolio_actual.nombre|upper }}{% else %}ALQUILO SOFTWARE{% endif %}
+                </h3>
+                <h6 class="text-primary fw-bold mb-1">Estado Mensual de Inmuebles por Propietario</h6>
+                {% if portafolio_actual.eslogan %}
+                    <small class="text-muted d-block fst-italic">{{ portafolio_actual.eslogan }}</small>
+                {% endif %}
+                {% if portafolio_actual.telefono_contacto %}
+                    <small class="text-muted d-block">📞 {{ portafolio_actual.telefono_contacto }}{% if portafolio_actual.direccion_fisica %} | 📍 {{ portafolio_actual.direccion_fisica }}{% endif %}</small>
+                {% endif %}
+            </div>
         </div>
         <div class="text-end">
-            <h6 class="fw-bold mb-1">Período: {{ nombre_mes }} {{ anio }}</h6>
-            <small class="text-muted">Generado el: {% now "d/m/Y h:i A" %}</small>
+            <span class="badge bg-dark fs-6 px-3 py-2 mb-1 d-inline-block">Período: {{ nombre_mes }} {{ anio }}</span>
+            <small class="text-muted d-block">Generado el: {% now "d/m/Y h:i A" %}</small>
+            {% if propietario_sel != 'TODOS' %}
+                <small class="text-primary fw-bold d-block">Filtro: Propietario seleccionado</small>
+            {% endif %}
         </div>
     </div>
 

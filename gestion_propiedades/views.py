@@ -1610,6 +1610,14 @@ def _obtener_datos_movimientos_detallados(request):
     total_gastos = sum((m['monto'] for m in movimientos if m['tipo'] == 'GASTO'), decimal.Decimal('0.00'))
     balance_neto = total_ingresos - total_gastos
 
+    portafolio_actual = None
+    if portafolio_id != 'TODOS' and str(portafolio_id).isdigit():
+        portafolio_actual = portafolios.filter(id=int(portafolio_id)).first()
+    if not portafolio_actual and portafolios.count() == 1:
+        portafolio_actual = portafolios.first()
+    elif not portafolio_actual:
+        portafolio_actual = portafolios.first()
+
     return {
         'movimientos': movimientos,
         'total_ingresos': total_ingresos,
@@ -1618,6 +1626,7 @@ def _obtener_datos_movimientos_detallados(request):
         'fecha_inicio': fecha_inicio,
         'fecha_fin': fecha_fin,
         'portafolios': portafolios,
+        'portafolio_actual': portafolio_actual,
         'lista_propietarios': lista_propietarios,
         'lista_inquilinos': lista_inquilinos,
         'portafolio_sel': str(portafolio_id),
@@ -1868,12 +1877,25 @@ def _obtener_datos_estado_propiedades_propietario(request):
 
     totales_resumen['neto_propietario'] = totales_resumen['total_cobrado'] - totales_resumen['total_gastos']
 
+    portafolio_actual = None
+    if portafolio_id != 'TODOS' and str(portafolio_id).isdigit():
+        portafolio_actual = portafolios.filter(id=int(portafolio_id)).first()
+    elif propietario_id != 'TODOS' and str(propietario_id).isdigit():
+        prop_obj = lista_propietarios.filter(id=int(propietario_id)).first()
+        if prop_obj:
+            portafolio_actual = prop_obj.portafolio
+    if not portafolio_actual and portafolios.count() == 1:
+        portafolio_actual = portafolios.first()
+    elif not portafolio_actual:
+        portafolio_actual = portafolios.first()
+
     return {
         'reporte_propiedades': reporte_propiedades,
         'totales_resumen': totales_resumen,
         'lista_propietarios': lista_propietarios,
         'propietario_sel': str(propietario_id),
         'portafolios': portafolios,
+        'portafolio_actual': portafolio_actual,
         'portafolio_sel': str(portafolio_id),
         'mes': str(mes_num),
         'nombre_mes': obtener_nombre_mes(mes_num),
@@ -4182,6 +4204,7 @@ def reporte_propietario(request):
         'porcentaje_ocupacion': round(porcentaje_ocupacion, 1),
         'recibos_cobrados': recibos_cobrados,
         'total_renta_cobrada': total_renta_cobrada if 'total_renta_cobrada' in locals() else total_ingresos,
+        'itbis_18_calculado': round(Decimal(str(total_renta_cobrada if 'total_renta_cobrada' in locals() else total_ingresos)) * Decimal('0.18'), 2),
         'total_servicios_cobrados': total_servicios_cobrados if 'total_servicios_cobrados' in locals() else decimal.Decimal('0.00'),
         'total_mora_cobrada': total_mora_cobrada if 'total_mora_cobrada' in locals() else decimal.Decimal('0.00'),
         'gastos_directos_list': gastos_directos_list,
@@ -4296,6 +4319,57 @@ def procesar_liquidacion_propietario(request, propietario_id):
                     return redirect(f'/reportes/propietario/?propietario_id={propietario.id}&mes={mes}&anio={anio}')
             messages.error(request, f'Error al registrar liquidación: {str(e)}')
     return redirect(f'/reportes/propietario/?propietario_id={propietario.id}&mes={mes}&anio={anio}')
+
+
+@login_required(login_url='/login/')
+def ver_comprobante_liquidacion(request, liquidacion_id):
+    """
+    Sirve de forma segura y tolerante a fallos el comprobante/recibo adjunto de una liquidación.
+    Si está en Cloudinary o URL remota, redirige a la URL.
+    Si está en almacenamiento local, lo transmite directamente mediante FileResponse.
+    Si el archivo no existe físicamente, muestra una alerta amigable en vez de un 404 en blanco.
+    """
+    from django.http import FileResponse
+    import mimetypes
+
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
+
+    liquidacion = get_object_or_404(
+        LiquidacionPropietario,
+        id=liquidacion_id,
+        propietario_inmueble__portafolio__in=portafolios
+    )
+
+    if not liquidacion.comprobante_pago:
+        messages.warning(request, "Esta liquidación no tiene ningún comprobante de pago adjunto.")
+        return redirect(f"/reportes/propietario/?propietario_id={liquidacion.propietario_inmueble_id}&mes={liquidacion.periodo_mes}&anio={liquidacion.periodo_anio}")
+
+    try:
+        url_archivo = liquidacion.comprobante_pago.url
+        if url_archivo and (url_archivo.startswith('http://') or url_archivo.startswith('https://')):
+            return redirect(url_archivo)
+    except Exception:
+        pass
+
+    try:
+        if liquidacion.comprobante_pago.storage.exists(liquidacion.comprobante_pago.name):
+            archivo = liquidacion.comprobante_pago.open('rb')
+            content_type, _ = mimetypes.guess_type(liquidacion.comprobante_pago.name)
+            return FileResponse(archivo, content_type=content_type or 'application/octet-stream')
+    except Exception as e:
+        logger.warning(f"Error accediendo al archivo local de liquidacion #{liquidacion_id}: {e}")
+
+    messages.warning(
+        request,
+        "El archivo del comprobante no se encuentra disponible en el almacenamiento del servidor. "
+        "Por favor utilice el botón '✏️ Modificar / Adjuntar Recibo' para cargarlo nuevamente."
+    )
+    return redirect(f"/reportes/propietario/?propietario_id={liquidacion.propietario_inmueble_id}&mes={liquidacion.periodo_mes}&anio={liquidacion.periodo_anio}")
 
 
 @login_required(login_url='/login/')

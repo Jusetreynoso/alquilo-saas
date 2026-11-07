@@ -23,6 +23,31 @@
 {% block contenido %}
 <div class="container-fluid p-0">
 
+    <!-- Membrete de Portafolio / Marca Blanca -->
+    {% if portafolio_actual %}
+    <div class="card shadow-sm border-0 mb-4 bg-white p-3">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+            <div class="d-flex align-items-center gap-3">
+                {% if portafolio_actual.logo_empresa %}
+                    <img src="{{ portafolio_actual.logo_empresa.url }}" alt="Logo" style="max-height: 60px; max-width: 120px; object-fit: contain;">
+                {% elif "BASORA" in portafolio_actual.nombre|upper %}
+                    {% load static %}
+                    <img src="{% static 'gestion_propiedades/img/basora_logo.png' %}" alt="Logo" style="max-height: 60px; max-width: 120px; object-fit: contain;">
+                {% endif %}
+                <div>
+                    <h5 class="fw-bold mb-0 text-dark">{{ portafolio_actual.nombre|upper }}</h5>
+                    <small class="text-muted">{{ portafolio_actual.eslogan|default:"Gestión Inmobiliaria y Administración de Alquileres" }}</small>
+                </div>
+            </div>
+            <div class="text-end">
+                <span class="badge bg-secondary-subtle text-dark border fw-bold px-3 py-2">
+                    📅 Período: {{ nombre_mes }} {{ anio }}
+                </span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Tarjeta de Filtros -->
     <div class="card shadow-sm border-0 mb-4 bg-light">
         <div class="card-body py-3">
