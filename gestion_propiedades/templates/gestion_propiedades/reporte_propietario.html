@@ -102,6 +102,9 @@
                 <button type="button" class="btn btn-outline-warning text-dark fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalGastoGeneral">
                     💸 + Gasto General
                 </button>
+                <button type="button" class="btn btn-outline-info text-dark fw-bold shadow-sm" onclick="abrirModalITBIS()">
+                    🏛️ + Liquidar ITBIS (18%)
+                </button>
                 <a href="{% url 'imprimir_estado_situacion_propietario' propietario_seleccionado.id %}?mes={{ mes }}&anio={{ anio }}" target="_blank" class="btn btn-outline-primary fw-bold shadow-sm">
                     📄 Estado de Situación PDF
                 </a>
@@ -521,7 +524,7 @@
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-bold">Monto (RD$)</label>
+                            <label class="form-label fw-bold" id="labelMontoGasto">Monto (RD$)</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-white fw-bold">RD$</span>
                                 <input type="number" step="0.01" name="monto" id="montoGastoInput" class="form-control fw-bold" required placeholder="0.00">
@@ -529,10 +532,20 @@
                         </div>
                     </div>
 
-                    <div id="contenedorInfoItbis" class="alert alert-info py-2 px-3 small mb-3 d-none">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <span>⚡ ITBIS 18% calculado sobre alquiler puro (RD$ {{ total_renta_cobrada|dinero }}): <strong>RD$ {{ itbis_18_calculado|dinero }}</strong></span>
-                            <button type="button" class="btn btn-sm btn-primary py-0 px-2 fw-bold" onclick="aplicarCalculoITBIS()">Aplicar RD$ {{ itbis_18_calculado|dinero }}</button>
+                    <div id="contenedorInfoItbis" class="alert alert-success border-success py-3 px-3 mb-3 d-none shadow-sm">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="fs-4">🏛️</span>
+                            <div>
+                                <h6 class="fw-bold mb-0 text-success">Cálculo Automático de ITBIS (18%): RD$ {{ itbis_18_calculado|dinero }}</h6>
+                                <small class="text-muted">Calculado sobre <strong>RD$ {{ total_renta_cobrada|dinero }}</strong> de alquiler puro cobrado en {{ nombre_mes }} (excluye servicios y moras).</small>
+                            </div>
+                        </div>
+                        <div class="bg-white p-2 rounded border border-success-subtle small text-dark">
+                            <i class="bi bi-check-circle-fill text-success me-1"></i>
+                            <strong>¿Cómo funciona?</strong> No necesitas calcular ni digitar nada. El sistema ya colocó el monto exacto calculado (RD$ {{ itbis_18_calculado|dinero }}) en la casilla de monto. Solo haz clic abajo en <strong>"💾 Guardar Gasto"</strong> para aplicarlo a la liquidación.
+                            <div class="mt-1 text-muted" style="font-size: 0.8rem;">
+                                <em>* Si el propietario cuenta con alguna exención o retención parcial, puedes modificar el número en la casilla libremente.</em>
+                            </div>
                         </div>
                     </div>
 
@@ -583,7 +596,7 @@
         }
     }
 
-    const itbis18Sugerido = {{ itbis_18_calculado|default:"0.00"|stringformat:".2f" }};
+    const itbis18SugeridoStr = "{{ itbis_18_calculado|stringformat:'.2f' }}";
     const nombrePeriodoActual = "{{ nombre_mes }} {{ anio }}";
 
     function alCambiarCategoriaGasto() {
@@ -591,28 +604,41 @@
         const montoInp = document.getElementById('montoGastoInput');
         const conceptoInp = document.getElementById('conceptoGastoInput');
         const infoItbis = document.getElementById('contenedorInfoItbis');
+        const labelMonto = document.getElementById('labelMontoGasto');
 
         if (sel && sel.value === 'ITBIS_18') {
-            if (montoInp) montoInp.value = itbis18Sugerido;
+            if (montoInp) montoInp.value = itbis18SugeridoStr;
             if (conceptoInp && (!conceptoInp.value || conceptoInp.value.includes('ITBIS'))) {
                 conceptoInp.value = `Impuesto ITBIS (18%) - ${nombrePeriodoActual}`;
             }
             if (infoItbis) infoItbis.classList.remove('d-none');
+            if (labelMonto) labelMonto.innerHTML = 'Monto (RD$) <span class="badge bg-success ms-1">18% Automático</span>';
         } else {
             if (infoItbis) infoItbis.classList.add('d-none');
+            if (labelMonto) labelMonto.innerHTML = 'Monto (RD$)';
         }
     }
 
-    function aplicarCalculoITBIS() {
+    function abrirModalITBIS() {
+        const modalEl = document.getElementById('modalGastoGeneral');
+        if (!modalEl) return;
         const sel = document.getElementById('categoriaGastoSelect');
-        const montoInp = document.getElementById('montoGastoInput');
-        const conceptoInp = document.getElementById('conceptoGastoInput');
-        const infoItbis = document.getElementById('contenedorInfoItbis');
-
         if (sel) sel.value = 'ITBIS_18';
-        if (montoInp) montoInp.value = itbis18Sugerido;
-        if (conceptoInp) conceptoInp.value = `Impuesto ITBIS (18%) - ${nombrePeriodoActual}`;
-        if (infoItbis) infoItbis.classList.remove('d-none');
+        alCambiarCategoriaGasto();
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
     }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const modalEl = document.getElementById('modalGastoGeneral');
+        if (modalEl) {
+            modalEl.addEventListener('shown.bs.modal', function () {
+                const sel = document.getElementById('categoriaGastoSelect');
+                if (sel && sel.value === 'ITBIS_18') {
+                    alCambiarCategoriaGasto();
+                }
+            });
+        }
+    });
 </script>
 {% endblock %}

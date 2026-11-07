@@ -1655,7 +1655,8 @@ def exportar_movimientos_excel(request):
         data['total_gastos'],
         data['balance_neto'],
         data['fecha_inicio'],
-        data['fecha_fin']
+        data['fecha_fin'],
+        portafolio=data.get('portafolio_actual')
     )
 
     filename = f"Reporte_Movimientos_{data['fecha_inicio'].strftime('%Y%m%d')}_a_{data['fecha_fin'].strftime('%Y%m%d')}.xlsx"
@@ -1683,7 +1684,8 @@ def enviar_movimientos_correo(request):
                     data['total_gastos'],
                     data['balance_neto'],
                     data['fecha_inicio'],
-                    data['fecha_fin']
+                    data['fecha_fin'],
+                    portafolio=data.get('portafolio_actual')
                 )
 
                 nombre_archivo = f"Reporte_Movimientos_{data['fecha_inicio'].strftime('%Y%m%d')}_a_{data['fecha_fin'].strftime('%Y%m%d')}.xlsx"
@@ -3871,7 +3873,33 @@ def registrar_gasto_general(request):
     next_url = request.POST.get('next') or request.GET.get('next')
     
     if request.method == 'POST':
-        form = GastoGeneralPropietarioForm(request.POST, request.FILES, portafolios=portafolios)
+        post_data = request.POST.copy()
+        
+        # Soporte inteligente para cálculo automático de ITBIS 18%
+        if post_data.get('categoria') == 'ITBIS_18' and (not post_data.get('monto') or post_data.get('monto').strip() in ['', '0', '0.00']):
+            prop_id = post_data.get('propietario_inmueble')
+            mes_val = post_data.get('mes')
+            anio_val = post_data.get('anio')
+            if prop_id:
+                try:
+                    m_int = int(mes_val) if mes_val else date.today().month
+                    a_int = int(anio_val) if anio_val else date.today().year
+                    recibos = ReciboPago.objects.filter(
+                        factura__contrato__propiedad__propietario_inmueble_id=prop_id,
+                        fecha_pago__month=m_int,
+                        fecha_pago__year=a_int
+                    )
+                    renta_cobrada = recibos.aggregate(total=Sum('monto_a_renta'))['total'] or decimal.Decimal('0.00')
+                    if renta_cobrada == decimal.Decimal('0.00'):
+                        renta_cobrada = recibos.aggregate(total=Sum('monto_pagado'))['total'] or decimal.Decimal('0.00')
+                    itbis_auto = round(renta_cobrada * decimal.Decimal('0.18'), 2)
+                    post_data['monto'] = str(itbis_auto)
+                    if not post_data.get('concepto'):
+                        post_data['concepto'] = f"Impuesto ITBIS (18%) - {obtener_nombre_mes(m_int)} {a_int}"
+                except Exception as itbis_err:
+                    logger.warning(f"Error autocalculando ITBIS en backend: {itbis_err}")
+
+        form = GastoGeneralPropietarioForm(post_data, request.FILES, portafolios=portafolios)
         if form.is_valid():
             gasto = form.save(commit=False)
             gasto.portafolio = portafolios.first()
@@ -4325,12 +4353,14 @@ def procesar_liquidacion_propietario(request, propietario_id):
 def ver_comprobante_liquidacion(request, liquidacion_id):
     """
     Sirve de forma segura y tolerante a fallos el comprobante/recibo adjunto de una liquidación.
-    Si está en Cloudinary o URL remota, redirige a la URL.
+    Si está en Cloudinary o URL remota, verifica que el archivo realmente exista antes de redirigir
+    (evitando pantallas en blanco o ERR_INVALID_RESPONSE del navegador).
     Si está en almacenamiento local, lo transmite directamente mediante FileResponse.
-    Si el archivo no existe físicamente, muestra una alerta amigable en vez de un 404 en blanco.
+    Si el archivo no existe físicamente, muestra una alerta clara y amigable en vez de fallar.
     """
     from django.http import FileResponse
     import mimetypes
+    import requests
 
     if request.user.is_superuser:
         portafolios = Portafolio.objects.all().distinct()
@@ -4349,24 +4379,46 @@ def ver_comprobante_liquidacion(request, liquidacion_id):
         messages.warning(request, "Esta liquidación no tiene ningún comprobante de pago adjunto.")
         return redirect(f"/reportes/propietario/?propietario_id={liquidacion.propietario_inmueble_id}&mes={liquidacion.periodo_mes}&anio={liquidacion.periodo_anio}")
 
+    nombre_archivo = os.path.basename(liquidacion.comprobante_pago.name or 'comprobante')
+
+    # 1. Si tiene URL remota (Cloudinary / CDN), verificar existencia real antes de enviar al usuario
     try:
         url_archivo = liquidacion.comprobante_pago.url
         if url_archivo and (url_archivo.startswith('http://') or url_archivo.startswith('https://')):
-            return redirect(url_archivo)
-    except Exception:
-        pass
+            try:
+                resp = requests.get(url_archivo, stream=True, timeout=3.5, headers={'User-Agent': 'Mozilla/5.0'})
+                if resp.status_code == 200:
+                    return redirect(url_archivo)
+                else:
+                    logger.warning(f"Comprobante remoto #{liquidacion_id} respondió HTTP {resp.status_code} ({url_archivo})")
+            except Exception as req_err:
+                logger.warning(f"Error verificando conectividad de comprobante en Cloudinary: {req_err}")
+    except Exception as e:
+        logger.warning(f"Error accediendo a la URL del comprobante #{liquidacion_id}: {e}")
 
+    # 2. Verificar si está disponible en almacenamiento local / fallback
     try:
         if liquidacion.comprobante_pago.storage.exists(liquidacion.comprobante_pago.name):
             archivo = liquidacion.comprobante_pago.open('rb')
             content_type, _ = mimetypes.guess_type(liquidacion.comprobante_pago.name)
             return FileResponse(archivo, content_type=content_type or 'application/octet-stream')
     except Exception as e:
-        logger.warning(f"Error accediendo al archivo local de liquidacion #{liquidacion_id}: {e}")
+        logger.warning(f"Error accediendo al storage local de liquidación #{liquidacion_id}: {e}")
 
+    # 3. Comprobar si existe físicamente en MEDIA_ROOT
+    try:
+        local_path = os.path.join(settings.MEDIA_ROOT, liquidacion.comprobante_pago.name)
+        if os.path.exists(local_path):
+            archivo = open(local_path, 'rb')
+            content_type, _ = mimetypes.guess_type(local_path)
+            return FileResponse(archivo, content_type=content_type or 'application/octet-stream')
+    except Exception as e:
+        logger.warning(f"Error accediendo al archivo en MEDIA_ROOT de liquidación #{liquidacion_id}: {e}")
+
+    # 4. Si el archivo no está en ningún almacenamiento, orientar amigablemente al usuario
     messages.warning(
         request,
-        "El archivo del comprobante no se encuentra disponible en el almacenamiento del servidor. "
+        f"El archivo del recibo adjunto '{nombre_archivo}' no se encuentra disponible en los servidores o su carga previa no se completó. "
         "Por favor utilice el botón '✏️ Modificar / Adjuntar Recibo' para cargarlo nuevamente."
     )
     return redirect(f"/reportes/propietario/?propietario_id={liquidacion.propietario_inmueble_id}&mes={liquidacion.periodo_mes}&anio={liquidacion.periodo_anio}")
