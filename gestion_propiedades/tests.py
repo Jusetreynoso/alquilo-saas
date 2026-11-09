@@ -447,12 +447,66 @@ class AlquiloTests(TestCase):
         res_respaldos = self.client.get(reverse('respaldos_exportacion'))
         self.assertEqual(res_respaldos.status_code, 200)
         
+        # Crear registros de propietario, mantenimiento, gastos y recordatorios para asegurar que se exportan sin error 500
+        from .models import PropietarioInmueble, MantenimientoUnidad, GastoGeneralPropietario, RecordatorioPagoPropietario
+        prop_inm = PropietarioInmueble.objects.create(
+            portafolio=self.portafolio1,
+            nombre='Don Ramon',
+            telefono='809-999-9999'
+        )
+        self.propiedad1.propietario_inmueble = prop_inm
+        self.propiedad1.save()
+
+        MantenimientoUnidad.objects.create(
+            propiedad=self.propiedad1,
+            categoria='REPARACION',
+            descripcion='Reparación de fuga en baño principal',
+            costo=Decimal('1500.00')
+        )
+        GastoGeneralPropietario.objects.create(
+            portafolio=self.portafolio1,
+            concepto='Honorarios legales contrato',
+            monto=Decimal('2500.00'),
+            fecha=date.today()
+        )
+        RecordatorioPagoPropietario.objects.create(
+            portafolio=self.portafolio1,
+            propietario=prop_inm,
+            titulo='Recordatorio de Pago Quincenal',
+            fecha_recordatorio=date.today(),
+            monto_sugerido=Decimal('18000.00')
+        )
+
         # 2. Probar exportar datos en ZIP/CSV
         res_export_datos = self.client.get(reverse('exportar_datos_csv_zip'))
         self.assertEqual(res_export_datos.status_code, 200)
         self.assertEqual(res_export_datos['Content-Type'], 'application/zip')
         
-        # 3. Probar eliminar propiedad y recuperarla desde papelera
+        # Verificar contenido del zip
+        import zipfile, io
+        with zipfile.ZipFile(io.BytesIO(res_export_datos.content)) as zf:
+            nombres = zf.namelist()
+            self.assertIn('1_Propietarios.csv', nombres)
+            self.assertIn('2_Propiedades_Inmuebles.csv', nombres)
+            self.assertIn('3_Inquilinos.csv', nombres)
+            self.assertIn('4_Contratos.csv', nombres)
+            self.assertIn('5_Facturas.csv', nombres)
+            self.assertIn('6_Recibos_y_Cobros.csv', nombres)
+            self.assertIn('7_Gastos_Mantenimiento_Unidades.csv', nombres)
+            self.assertIn('8_Gastos_Generales_Deducciones.csv', nombres)
+            self.assertIn('10_Recordatorios_Pagos_Propietarios.csv', nombres)
+            mantenimiento_csv = zf.read('7_Gastos_Mantenimiento_Unidades.csv').decode('utf-8-sig')
+            self.assertIn('Reparación de fuga en baño principal', mantenimiento_csv)
+
+        # 3. Probar exportar archivos adjuntos en ZIP
+        res_export_archivos = self.client.get(reverse('exportar_archivos_adjuntos_zip'))
+        self.assertEqual(res_export_archivos.status_code, 200)
+        self.assertEqual(res_export_archivos['Content-Type'], 'application/zip')
+        with zipfile.ZipFile(io.BytesIO(res_export_archivos.content)) as zf_archivos:
+            nombres_archivos = zf_archivos.namelist()
+            self.assertTrue(len(nombres_archivos) > 0)
+
+        # 4. Probar eliminar propiedad y recuperarla desde papelera
         self.propiedad1.is_deleted = True
         self.propiedad1.save()
         

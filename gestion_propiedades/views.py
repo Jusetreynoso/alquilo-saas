@@ -5105,6 +5105,62 @@ def borrar_publicacion_marketplace(request, propiedad_id):
 import csv
 import io
 import zipfile
+import re
+import requests
+
+def _obtener_bytes_archivo(field_file):
+    """
+    Lee de forma segura el contenido binario (bytes) de un FieldFile de Django,
+    soportando almacenamiento en la nube (Cloudinary / S3 / URL HTTP)
+    y almacenamiento local en disco (FileSystemStorage / MEDIA_ROOT).
+    NUNCA invoca directamente `.path` porque en Cloudinary u otros backends
+    remotos lanza NotImplementedError provocando un error 500.
+    """
+    if not field_file or not getattr(field_file, 'name', None):
+        return None
+
+    # Método 1: Intentar leer mediante la interfaz estándar de storage de Django
+    try:
+        if hasattr(field_file, 'storage') and field_file.storage.exists(field_file.name):
+            with field_file.storage.open(field_file.name, 'rb') as f:
+                content = f.read()
+                if content:
+                    return content
+    except Exception:
+        pass
+
+    # Método 2: Intentar mediante field_file.open()
+    try:
+        with field_file.open('rb') as f:
+            content = f.read()
+            if content:
+                return content
+    except Exception:
+        pass
+
+    # Método 3: Si tiene URL remota (Cloudinary, CDN, HTTP/HTTPS)
+    try:
+        url = getattr(field_file, 'url', None)
+        if url and (str(url).startswith('http://') or str(url).startswith('https://')):
+            resp = requests.get(url, stream=True, timeout=8, headers={'User-Agent': 'Mozilla/5.0'})
+            if resp.status_code == 200 and resp.content:
+                return resp.content
+    except Exception:
+        pass
+
+    # Método 4: Comprobar físicamente en settings.MEDIA_ROOT
+    try:
+        local_path = os.path.join(settings.MEDIA_ROOT, field_file.name)
+        if os.path.exists(local_path):
+            with open(local_path, 'rb') as f:
+                content = f.read()
+                if content:
+                    return content
+    except Exception:
+        pass
+
+    return None
+
 
 @login_required(login_url='/login/')
 def respaldos_exportacion(request):
@@ -5120,7 +5176,9 @@ def respaldos_exportacion(request):
     
     total_propiedades = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False).count()
     total_propietarios = PropietarioInmueble.objects.filter(portafolio__in=portafolios, activo=True).count()
-    total_inquilinos = Inquilino.objects.filter(creado_por=request.user).count()
+    total_inquilinos = Inquilino.objects.filter(
+        Q(contratos__propiedad__portafolio__in=portafolios) | Q(creado_por=request.user)
+    ).distinct().count() if not request.user.is_superuser else Inquilino.objects.all().count()
     total_contratos = Contrato.objects.filter(propiedad__portafolio__in=portafolios, activo=True).count()
     
     context = {
@@ -5136,132 +5194,470 @@ def respaldos_exportacion(request):
 @login_required(login_url='/login/')
 def exportar_datos_csv_zip(request):
     """
-    Genera un archivo ZIP conteniendo archivos CSV estructurados con la información del portafolio.
+    Genera un archivo ZIP conteniendo archivos CSV estructurados con la totalidad de
+    las tablas operativas del portafolio (Propietarios, Inmuebles, Inquilinos, Contratos,
+    Facturación, Recibos de Cobro, Mantenimientos, Gastos Generales, Liquidaciones y Recordatorios).
+    100% compatible con Microsoft Excel, Google Sheets y formato UTF-8 universal con BOM.
     """
-    if request.user.is_superuser:
-        portafolios = Portafolio.objects.all().distinct()
-    else:
-        portafolios = Portafolio.objects.filter(
-            Q(propietario=request.user) | Q(accesos__usuario=request.user)
-        ).distinct()
-    
-    zip_buffer = io.BytesIO()
-    
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        # 1. Propietarios
-        propietarios_qs = PropietarioInmueble.objects.filter(portafolio__in=portafolios)
-        output_prop = io.StringIO()
-        writer = csv.writer(output_prop)
-        writer.writerow(['ID', 'Nombre', 'Cédula/RNC', 'Teléfono', 'Correo', 'Tipo Comisión', 'Porcentaje', 'Monto Fijo', 'Banco', 'Tipo Cuenta', 'Número Cuenta', 'Activo'])
-        for p in propietarios_qs:
-            writer.writerow([p.id, p.nombre, p.cedula_o_rnc or '', p.telefono or '', p.correo or '', p.tipo_comision, p.porcentaje_comision, p.monto_comision_fijo, p.banco_nombre or '', p.tipo_cuenta or '', p.numero_cuenta or '', 'Sí' if p.activo else 'No'])
-        zip_file.writestr('1_Propietarios.csv', output_prop.getvalue().encode('utf-8-sig'))
+    try:
+        if request.user.is_superuser:
+            portafolios = Portafolio.objects.all().distinct()
+            inquilinos_qs = Inquilino.objects.all().distinct()
+        else:
+            portafolios = Portafolio.objects.filter(
+                Q(propietario=request.user) | Q(accesos__usuario=request.user)
+            ).distinct()
+            inquilinos_qs = Inquilino.objects.filter(
+                Q(contratos__propiedad__portafolio__in=portafolios) | Q(creado_por=request.user)
+            ).distinct()
         
-        # 2. Inmuebles / Propiedades
-        propiedades_qs = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False)
-        output_inm = io.StringIO()
-        writer = csv.writer(output_inm)
-        writer.writerow(['ID', 'Nombre/Unidad', 'Residencial/Grupo', 'Propietario', 'Dirección', 'Precio Sugerido', 'Latitud', 'Longitud', 'Estado', 'Detalles'])
-        for pr in propiedades_qs:
-            prop_nombre = pr.propietario_inmueble.nombre if pr.propietario_inmueble else 'N/A'
-            writer.writerow([pr.id, pr.nombre_o_numero, pr.grupo_o_residencial or '', prop_nombre, pr.direccion_completa or '', pr.precio_alquiler_sugerido or 0.00, pr.latitud or '', pr.longitud or '', pr.get_estado_display(), pr.detalles or ''])
-        zip_file.writestr('2_Propiedades_Inmuebles.csv', output_inm.getvalue().encode('utf-8-sig'))
+        zip_buffer = io.BytesIO()
+        
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            # 1. Propietarios
+            propietarios_qs = PropietarioInmueble.objects.filter(portafolio__in=portafolios).select_related('portafolio')
+            output_prop = io.StringIO()
+            writer = csv.writer(output_prop)
+            writer.writerow([
+                'ID', 'Portafolio', 'Nombre', 'Cédula/RNC', 'Teléfono', 'Correo', 'Dirección',
+                'Tipo Comisión', 'Porcentaje Comisión (%)', 'Monto Fijo Mensual',
+                'Banco', 'Tipo Cuenta', 'Número Cuenta', 'Día Pago Acordado', 'Activo'
+            ])
+            for p in propietarios_qs:
+                port_nom = p.portafolio.nombre if p.portafolio else 'N/A'
+                tipo_com_txt = p.get_tipo_comision_display() if hasattr(p, 'get_tipo_comision_display') else p.tipo_comision
+                writer.writerow([
+                    p.id, port_nom, p.nombre, p.cedula_o_rnc or '', p.telefono or '', p.correo or '', p.direccion or '',
+                    tipo_com_txt, p.porcentaje_comision or 0.00, p.monto_comision_fijo or 0.00,
+                    p.banco_nombre or '', p.tipo_cuenta or '', p.numero_cuenta or '', p.dia_pago_acordado or '',
+                    'Sí' if p.activo else 'No'
+                ])
+            zip_file.writestr('1_Propietarios.csv', output_prop.getvalue().encode('utf-8-sig'))
+            
+            # 2. Inmuebles / Propiedades
+            propiedades_qs = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False).select_related('portafolio', 'propietario_inmueble')
+            output_inm = io.StringIO()
+            writer = csv.writer(output_inm)
+            writer.writerow(['ID', 'Portafolio', 'Nombre/Unidad', 'Residencial/Grupo', 'Propietario', 'Dirección', 'Precio Sugerido', 'Latitud', 'Longitud', 'Estado', 'Detalles'])
+            for pr in propiedades_qs:
+                prop_nombre = pr.propietario_inmueble.nombre if pr.propietario_inmueble else 'N/A'
+                port_nombre = pr.portafolio.nombre if pr.portafolio else 'N/A'
+                writer.writerow([
+                    pr.id, port_nombre, pr.nombre_o_numero, pr.grupo_o_residencial or '', prop_nombre,
+                    pr.direccion_completa or '', pr.precio_alquiler_sugerido or 0.00, pr.latitud or '',
+                    pr.longitud or '', pr.get_estado_display(), pr.detalles or ''
+                ])
+            zip_file.writestr('2_Propiedades_Inmuebles.csv', output_inm.getvalue().encode('utf-8-sig'))
 
-        # 3. Inquilinos
-        inquilinos_qs = Inquilino.objects.filter(creado_por=request.user)
-        output_inq = io.StringIO()
-        writer = csv.writer(output_inq)
-        writer.writerow(['ID', 'Nombre', 'Teléfono', 'Cédula/Pasaporte', 'Correo', 'Alertas Correo'])
-        for i in inquilinos_qs:
-            writer.writerow([i.id, i.nombre, i.telefono, i.cedula_o_pasaporte or '', i.correo or '', 'Sí' if i.recibir_alertas_correo else 'No'])
-        zip_file.writestr('3_Inquilinos.csv', output_inq.getvalue().encode('utf-8-sig'))
+            # 3. Inquilinos
+            output_inq = io.StringIO()
+            writer = csv.writer(output_inq)
+            writer.writerow([
+                'ID', 'Nombre Completo', 'Teléfono Principal', 'Teléfono Secundario',
+                'Cédula/Pasaporte', 'Correo', 'Dirección', 'Nombre Fiador',
+                'Cédula Fiador', 'Teléfono Fiador', 'Dirección Fiador', 'Alertas Correo'
+            ])
+            for i in inquilinos_qs:
+                writer.writerow([
+                    i.id, i.nombre, i.telefono or '', i.telefono_secundario or '',
+                    i.cedula_o_pasaporte or '', i.correo or '', i.direccion or '',
+                    i.nombre_fiador or '', i.cedula_fiador or '', i.telefono_fiador or '',
+                    i.direccion_fiador or '', 'Sí' if i.recibir_alertas_correo else 'No'
+                ])
+            zip_file.writestr('3_Inquilinos.csv', output_inq.getvalue().encode('utf-8-sig'))
 
-        # 4. Contratos
-        contratos_qs = Contrato.objects.filter(propiedad__portafolio__in=portafolios)
-        output_con = io.StringIO()
-        writer = csv.writer(output_con)
-        writer.writerow(['ID Contrato', 'Propiedad', 'Inquilino', 'Fecha Inicio', 'Fecha Fin', 'Monto Renta', 'Monto Depósito', 'Monto Adelanto', 'Día de Pago', 'Estado Activo'])
-        for c in contratos_qs:
-            writer.writerow([c.id, c.propiedad.nombre_o_numero, c.inquilino.nombre, c.fecha_inicio, c.fecha_fin or 'Indefinido', c.monto_renta, c.monto_deposito, c.monto_adelanto, c.dia_de_pago, 'Sí' if c.activo else 'No'])
-        zip_file.writestr('4_Contratos.csv', output_con.getvalue().encode('utf-8-sig'))
+            # 4. Contratos
+            contratos_qs = Contrato.objects.filter(propiedad__portafolio__in=portafolios).select_related('propiedad', 'inquilino')
+            output_con = io.StringIO()
+            writer = csv.writer(output_con)
+            writer.writerow([
+                'ID Contrato', 'Propiedad', 'Inquilino', 'Fecha Inicio', 'Fecha Fin',
+                'Monto Renta', 'Monto Depósito', 'Monto Adelanto', 'Custodia Depósito',
+                'Día de Pago', 'Días Gracia', 'Porcentaje Mora (%)', 'Estado Activo'
+            ])
+            for c in contratos_qs:
+                prop_nom = c.propiedad.nombre_o_numero if c.propiedad else 'N/A'
+                inq_nom = c.inquilino.nombre if c.inquilino else 'N/A'
+                cust_nom = c.get_custodia_deposito_display() if hasattr(c, 'get_custodia_deposito_display') else c.custodia_deposito
+                writer.writerow([
+                    c.id, prop_nom, inq_nom, c.fecha_inicio, c.fecha_fin or 'Indefinido',
+                    c.monto_renta, c.monto_deposito, c.monto_adelanto, cust_nom,
+                    c.dia_de_pago, c.dias_gracia, c.porcentaje_mora, 'Sí' if c.activo else 'No'
+                ])
+            zip_file.writestr('4_Contratos.csv', output_con.getvalue().encode('utf-8-sig'))
 
-        # 5. Facturas y Cobros
-        facturas_qs = Factura.objects.filter(contrato__propiedad__portafolio__in=portafolios).select_related('contrato__propiedad', 'contrato__inquilino')
-        output_fac = io.StringIO()
-        writer = csv.writer(output_fac)
-        writer.writerow(['No. Factura', 'Propiedad', 'Inquilino', 'Concepto', 'Monto Base', 'Estado', 'Fecha Emisión', 'Fecha Vencimiento'])
-        for f in facturas_qs:
-            writer.writerow([f.id, f.contrato.propiedad.nombre_o_numero, f.contrato.inquilino.nombre, f.concepto, f.monto_base, f.get_estado_display(), f.fecha_emision, f.fecha_vencimiento])
-        zip_file.writestr('5_Facturas_y_Cobros.csv', output_fac.getvalue().encode('utf-8-sig'))
+            # 5. Facturas
+            facturas_qs = Factura.objects.filter(
+                contrato__propiedad__portafolio__in=portafolios
+            ).select_related('contrato__propiedad', 'contrato__inquilino')
+            output_fac = io.StringIO()
+            writer = csv.writer(output_fac)
+            writer.writerow([
+                'No. Factura', 'ID Contrato', 'Propiedad', 'Inquilino', 'Concepto',
+                'Monto Total Facturado', 'Monto Renta Pura', 'Monto Servicios', 'Estado',
+                'Mora Exonerada', 'Fecha Emisión', 'Fecha Vencimiento'
+            ])
+            for f in facturas_qs:
+                prop_nom = f.contrato.propiedad.nombre_o_numero if (f.contrato and f.contrato.propiedad) else 'N/A'
+                inq_nom = f.contrato.inquilino.nombre if (f.contrato and f.contrato.inquilino) else 'N/A'
+                writer.writerow([
+                    f.id, f.contrato_id or '', prop_nom, inq_nom, f.concepto or '',
+                    f.monto_base, f.monto_renta, f.monto_servicios, f.get_estado_display(),
+                    'Sí' if f.mora_exonerada else 'No', f.fecha_emision, f.fecha_vencimiento
+                ])
+            zip_file.writestr('5_Facturas.csv', output_fac.getvalue().encode('utf-8-sig'))
 
-        # 6. Gastos y Mantenimientos
-        mantenimientos_qs = MantenimientoUnidad.objects.filter(propiedad__portafolio__in=portafolios)
-        output_gas = io.StringIO()
-        writer = csv.writer(output_gas)
-        writer.writerow(['ID', 'Propiedad', 'Concepto/Trabajo', 'Categoría', 'Costo', 'Estado', 'Fecha Reporte'])
-        for m in mantenimientos_qs:
-            writer.writerow([m.id, m.propiedad.nombre_o_numero, m.titulo_trabajo, m.categoria, m.costo, m.estado, m.fecha_reporte])
-        zip_file.writestr('6_Gastos_y_Mantenimientos.csv', output_gas.getvalue().encode('utf-8-sig'))
+            # 6. Recibos y Cobros Registrados
+            recibos_qs = ReciboPago.objects.filter(
+                factura__contrato__propiedad__portafolio__in=portafolios
+            ).select_related('factura__contrato__propiedad', 'factura__contrato__inquilino', 'registrado_por')
+            output_rec = io.StringIO()
+            writer = csv.writer(output_rec)
+            writer.writerow([
+                'No. Recibo', 'No. Factura', 'Propiedad', 'Inquilino', 'Fecha Pago',
+                'Monto Pagado', 'Abono Renta', 'Abono Servicios', 'Abono Mora',
+                'Método Pago', 'Referencia Transacción', 'Registrado Por', 'Fecha Registro'
+            ])
+            for r in recibos_qs:
+                f_obj = r.factura
+                c_obj = f_obj.contrato if f_obj else None
+                prop_nom = c_obj.propiedad.nombre_o_numero if (c_obj and c_obj.propiedad) else 'N/A'
+                inq_nom = c_obj.inquilino.nombre if (c_obj and c_obj.inquilino) else 'N/A'
+                user_nom = r.registrado_por.get_full_name() or r.registrado_por.username if r.registrado_por else 'Sistema'
+                metodo_txt = r.get_metodo_pago_display() if hasattr(r, 'get_metodo_pago_display') else r.metodo_pago
+                writer.writerow([
+                    r.id, r.factura_id or '', prop_nom, inq_nom, r.fecha_pago,
+                    r.monto_pagado, r.monto_a_renta, r.monto_a_servicios, r.monto_a_mora,
+                    metodo_txt, r.referencia_transaccion or '', user_nom, r.registrado_en
+                ])
+            zip_file.writestr('6_Recibos_y_Cobros.csv', output_rec.getvalue().encode('utf-8-sig'))
 
-        # 7. Liquidaciones a Propietarios
-        liq_qs = LiquidacionPropietario.objects.filter(propietario_inmueble__portafolio__in=portafolios)
-        output_liq = io.StringIO()
-        writer = csv.writer(output_liq)
-        writer.writerow(['ID', 'Propietario', 'Período', 'Rentas Cobradas', 'Comisión Admin', 'Gastos Propiedades', 'Gastos Generales', 'Neto Pagado', 'Fecha Pago', 'Método'])
-        for l in liq_qs:
-            writer.writerow([l.id, l.propietario_inmueble.nombre, f"{l.periodo_mes}/{l.periodo_anio}", l.monto_rentas_cobradas, l.monto_comision, l.monto_gastos_propiedades, l.monto_gastos_generales, l.monto_neto_pagado, l.fecha_pago, l.metodo_pago])
-        zip_file.writestr('7_Liquidaciones_Propietarios.csv', output_liq.getvalue().encode('utf-8-sig'))
+            # 7. Gastos de Mantenimiento Directos a Unidades
+            mantenimientos_qs = MantenimientoUnidad.objects.filter(
+                propiedad__portafolio__in=portafolios
+            ).select_related('propiedad')
+            output_gas = io.StringIO()
+            writer = csv.writer(output_gas)
+            writer.writerow(['ID', 'Propiedad', 'Descripción / Trabajo', 'Categoría', 'Costo', 'Estado', 'Fecha Reporte', 'Fecha Resolución'])
+            for m in mantenimientos_qs:
+                prop_nom = m.propiedad.nombre_o_numero if m.propiedad else 'N/A'
+                cat_txt = m.get_categoria_display() if hasattr(m, 'get_categoria_display') else m.categoria
+                est_txt = m.get_estado_display() if hasattr(m, 'get_estado_display') else m.estado
+                writer.writerow([
+                    m.id, prop_nom, m.descripcion or '', cat_txt, m.costo, est_txt,
+                    m.fecha_reporte, m.fecha_resolucion or ''
+                ])
+            zip_file.writestr('7_Gastos_Mantenimiento_Unidades.csv', output_gas.getvalue().encode('utf-8-sig'))
 
-    zip_buffer.seek(0)
-    fecha_str = date.today().strftime('%Y%m%d')
-    response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
-    response['Content-Disposition'] = f'attachment; filename="Alquilo_Backup_Datos_{fecha_str}.zip"'
-    return response
+            # 8. Gastos Generales y Deducciones de Propietarios
+            gastos_gen_qs = GastoGeneralPropietario.objects.filter(
+                portafolio__in=portafolios
+            ).select_related('propietario_inmueble', 'propiedad')
+            output_gen = io.StringIO()
+            writer = csv.writer(output_gen)
+            writer.writerow(['ID', 'Propietario', 'Propiedad Específica', 'Concepto / Deducción', 'Categoría', 'Monto', 'Fecha'])
+            for g in gastos_gen_qs:
+                prop_nom = g.propiedad.nombre_o_numero if g.propiedad else 'General'
+                propietario_nom = g.propietario_inmueble.nombre if g.propietario_inmueble else 'Portafolio General'
+                cat_txt = g.get_categoria_display() if hasattr(g, 'get_categoria_display') else g.categoria
+                writer.writerow([
+                    g.id, propietario_nom, prop_nom, g.concepto or '', cat_txt, g.monto, g.fecha
+                ])
+            zip_file.writestr('8_Gastos_Generales_Deducciones.csv', output_gen.getvalue().encode('utf-8-sig'))
+
+            # 9. Liquidaciones a Propietarios
+            liq_qs = LiquidacionPropietario.objects.filter(
+                propietario_inmueble__portafolio__in=portafolios
+            ).select_related('propietario_inmueble')
+            output_liq = io.StringIO()
+            writer = csv.writer(output_liq)
+            writer.writerow([
+                'ID', 'Propietario', 'Período', 'Rentas Cobradas', 'Comisión Administradora',
+                'Gastos Propiedades', 'Gastos Generales / Deducciones', 'Neto Transferido',
+                'Estado', 'Fecha Pago', 'Método', 'Referencia Transacción'
+            ])
+            for l in liq_qs:
+                propietario_nom = l.propietario_inmueble.nombre if l.propietario_inmueble else 'N/A'
+                est_txt = l.get_estado_display() if hasattr(l, 'get_estado_display') else l.estado
+                writer.writerow([
+                    l.id, propietario_nom, f"{l.periodo_mes}/{l.periodo_anio}",
+                    l.monto_rentas_cobradas, l.monto_comision, l.monto_gastos_propiedades,
+                    l.monto_gastos_generales, l.monto_neto_pagado, est_txt,
+                    l.fecha_pago or '', l.metodo_pago or '', l.referencia_transaccion or ''
+                ])
+            zip_file.writestr('9_Liquidaciones_Propietarios.csv', output_liq.getvalue().encode('utf-8-sig'))
+
+            # 10. Recordatorios de Pagos a Propietarios
+            recordatorios_qs = RecordatorioPagoPropietario.objects.filter(
+                portafolio__in=portafolios
+            ).select_related('propietario')
+            output_rec_prop = io.StringIO()
+            writer = csv.writer(output_rec_prop)
+            writer.writerow(['ID', 'Propietario', 'Título', 'Fecha Programada', 'Monto Sugerido', 'Prioridad', 'Estado', 'Notas'])
+            for rec in recordatorios_qs:
+                propietario_nom = rec.propietario.nombre if rec.propietario else 'N/A'
+                prio_txt = rec.get_prioridad_display() if hasattr(rec, 'get_prioridad_display') else rec.prioridad
+                est_txt = rec.get_estado_display() if hasattr(rec, 'get_estado_display') else rec.estado
+                writer.writerow([
+                    rec.id, propietario_nom, rec.titulo, rec.fecha_recordatorio,
+                    rec.monto_sugerido or 0.00, prio_txt, est_txt, rec.notas or ''
+                ])
+            zip_file.writestr('10_Recordatorios_Pagos_Propietarios.csv', output_rec_prop.getvalue().encode('utf-8-sig'))
+
+        zip_buffer.seek(0)
+        fecha_str = date.today().strftime('%Y%m%d')
+        response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
+        response['Content-Disposition'] = f'attachment; filename="Alquilo_Backup_Datos_{fecha_str}.zip"'
+        return response
+
+    except Exception as e:
+        logger.error(f"Error generando exportación de datos en CSV/ZIP: {e}", exc_info=True)
+        messages.error(request, f"Ocurrió un inconveniente al generar la exportación de datos: {str(e)}")
+        return redirect('respaldos_exportacion')
 
 
 @login_required(login_url='/login/')
 def exportar_archivos_adjuntos_zip(request):
     """
-    Empaqueta y descarga todos los documentos PDF e imágenes subidas en el servidor.
+    Empaqueta y descarga la totalidad de los documentos PDF e imágenes subidas en el sistema,
+    organizados en carpetas por categoría (Contratos, Fotos de Propiedades, Comprobantes de Cobro,
+    Liquidaciones, Mantenimientos y Gastos, Entregas, Solicitudes).
+    Soporta de manera segura archivos alojados en Cloudinary y en almacenamiento local.
     """
-    import os
-    
     if request.user.is_superuser:
         portafolios = Portafolio.objects.all().distinct()
     else:
         portafolios = Portafolio.objects.filter(
             Q(propietario=request.user) | Q(accesos__usuario=request.user)
         ).distinct()
-    
+
     zip_buffer = io.BytesIO()
     count_files = 0
-    
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        # Documentos de contratos
-        contratos_qs = Contrato.objects.filter(propiedad__portafolio__in=portafolios)
-        for c in contratos_qs:
-            if c.documento_contrato and os.path.exists(c.documento_contrato.path):
-                arcname = f"Contratos/Contrato_{c.id}_{c.propiedad.nombre_o_numero}_{os.path.basename(c.documento_contrato.name)}"
-                zip_file.write(c.documento_contrato.path, arcname=arcname)
-                count_files += 1
+    archivos_en_zip = set()
+
+    def limpiar_nombre_zip(texto):
+        texto_limpio = re.sub(r'[\\/*?:"<>|]', '_', str(texto or '')).strip()
+        return texto_limpio[:50] if texto_limpio else 'archivo'
+
+    def agregar_al_zip(zip_file, ruta_en_zip, field_file):
+        nonlocal count_files
+        if not field_file or not getattr(field_file, 'name', None):
+            return False
+        try:
+            data = _obtener_bytes_archivo(field_file)
+            if not data:
+                return False
+
+            base, ext = os.path.splitext(ruta_en_zip)
+            if not ext:
+                ext_orig = os.path.splitext(field_file.name)[1]
+                ext = ext_orig if ext_orig else ''
+            
+            candidato = f"{base}{ext}"
+            idx = 1
+            while candidato in archivos_en_zip:
+                candidato = f"{base}_{idx}{ext}"
+                idx += 1
+
+            archivos_en_zip.add(candidato)
+            zip_file.writestr(candidato, data)
+            count_files += 1
+            return True
+        except Exception as e:
+            logger.warning(f"No se pudo empaquetar archivo {getattr(field_file, 'name', '')}: {e}")
+            return False
+
+    try:
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            # 1. Contratos legales (PDFs)
+            contratos_qs = Contrato.objects.filter(
+                propiedad__portafolio__in=portafolios
+            ).select_related('propiedad', 'inquilino')
+            for c in contratos_qs:
+                prop_slug = limpiar_nombre_zip(c.propiedad.nombre_o_numero if c.propiedad else f"prop_{c.propiedad_id}")
+                inq_slug = limpiar_nombre_zip(c.inquilino.nombre if c.inquilino else 'inquilino')
                 
-        # Imágenes de propiedades
-        propiedades_qs = Propiedad.objects.filter(portafolio__in=portafolios)
-        for pr in propiedades_qs:
-            if pr.imagen_principal and os.path.exists(pr.imagen_principal.path):
-                arcname = f"Propiedades/Foto_{pr.id}_{pr.nombre_o_numero}_{os.path.basename(pr.imagen_principal.name)}"
-                zip_file.write(pr.imagen_principal.path, arcname=arcname)
-                count_files += 1
+                # Documento principal firmado
+                if c.documento_contrato:
+                    nombre_orig = os.path.basename(c.documento_contrato.name)
+                    agregar_al_zip(
+                        zip_file,
+                        f"1_Contratos_Legales/Contrato_{c.id}_{prop_slug}_{inq_slug}_{limpiar_nombre_zip(nombre_orig)}",
+                        c.documento_contrato
+                    )
+                
+                # Fotos de entrega del inmueble asociadas al contrato
+                for idx_f, f_entrega in enumerate([c.fotos_entrega, c.foto_entrega_2, c.foto_entrega_3, c.foto_entrega_4, c.foto_entrega_5], start=1):
+                    if f_entrega:
+                        nombre_orig = os.path.basename(f_entrega.name)
+                        agregar_al_zip(
+                            zip_file,
+                            f"2_Fotos_Entregas_Inmuebles/Entrega_Contrato_{c.id}_{prop_slug}_foto{idx_f}_{limpiar_nombre_zip(nombre_orig)}",
+                            f_entrega
+                        )
 
-    if count_files == 0:
-        messages.warning(request, 'No se encontraron archivos físicos adjuntos cargados en el servidor para exportar.')
+            # 2. Fotos de Propiedades (Fachadas y Galería)
+            propiedades_qs = Propiedad.objects.filter(
+                portafolio__in=portafolios, 
+                is_deleted=False
+            ).prefetch_related('imagenes_galeria')
+            for pr in propiedades_qs:
+                prop_slug = limpiar_nombre_zip(pr.nombre_o_numero)
+                if pr.imagen_principal:
+                    nombre_orig = os.path.basename(pr.imagen_principal.name)
+                    agregar_al_zip(
+                        zip_file,
+                        f"3_Fotos_Propiedades/Fachada_{pr.id}_{prop_slug}_{limpiar_nombre_zip(nombre_orig)}",
+                        pr.imagen_principal
+                    )
+                for img_gal in pr.imagenes_galeria.all():
+                    if img_gal.imagen:
+                        nombre_orig = os.path.basename(img_gal.imagen.name)
+                        desc_slug = limpiar_nombre_zip(img_gal.titulo_o_descripcion or f"foto_{img_gal.id}")
+                        agregar_al_zip(
+                            zip_file,
+                            f"3_Fotos_Propiedades/Galeria_{prop_slug}_{desc_slug}_{limpiar_nombre_zip(nombre_orig)}",
+                            img_gal.imagen
+                        )
+
+            # 3. Comprobantes físicos de cobros y pagos de inquilinos
+            recibos_qs = ReciboPago.objects.filter(
+                factura__contrato__propiedad__portafolio__in=portafolios
+            ).exclude(comprobante_imagen='').exclude(comprobante_imagen__isnull=True).select_related('factura__contrato__propiedad')
+            for r in recibos_qs:
+                if r.comprobante_imagen:
+                    prop_slug = limpiar_nombre_zip(r.factura.contrato.propiedad.nombre_o_numero if (r.factura and r.factura.contrato and r.factura.contrato.propiedad) else 'propiedad')
+                    nombre_orig = os.path.basename(r.comprobante_imagen.name)
+                    agregar_al_zip(
+                        zip_file,
+                        f"4_Comprobantes_Cobros/Recibo_{r.id}_Factura_{r.factura_id}_{prop_slug}_{limpiar_nombre_zip(nombre_orig)}",
+                        r.comprobante_imagen
+                    )
+
+            # 4. Comprobantes de liquidaciones a propietarios
+            liquidaciones_qs = LiquidacionPropietario.objects.filter(
+                propietario_inmueble__portafolio__in=portafolios
+            ).exclude(comprobante_pago='').exclude(comprobante_pago__isnull=True).select_related('propietario_inmueble')
+            for l in liquidaciones_qs:
+                if l.comprobante_pago:
+                    prop_slug = limpiar_nombre_zip(l.propietario_inmueble.nombre if l.propietario_inmueble else 'propietario')
+                    nombre_orig = os.path.basename(l.comprobante_pago.name)
+                    agregar_al_zip(
+                        zip_file,
+                        f"5_Liquidaciones_Propietarios/Liquidacion_{l.id}_{prop_slug}_{l.periodo_mes}_{l.periodo_anio}_{limpiar_nombre_zip(nombre_orig)}",
+                        l.comprobante_pago
+                    )
+
+            # 5. Facturas y comprobantes de mantenimiento
+            mantenimientos_qs = MantenimientoUnidad.objects.filter(
+                propiedad__portafolio__in=portafolios
+            ).exclude(factura_adjunta='').exclude(factura_adjunta__isnull=True).select_related('propiedad')
+            for m in mantenimientos_qs:
+                if m.factura_adjunta:
+                    prop_slug = limpiar_nombre_zip(m.propiedad.nombre_o_numero if m.propiedad else 'propiedad')
+                    nombre_orig = os.path.basename(m.factura_adjunta.name)
+                    agregar_al_zip(
+                        zip_file,
+                        f"6_Mantenimientos_Gastos/Mantenimiento_{m.id}_{prop_slug}_{limpiar_nombre_zip(nombre_orig)}",
+                        m.factura_adjunta
+                    )
+
+            # 6. Facturas y comprobantes de gastos generales / deducciones
+            gastos_gen_qs = GastoGeneralPropietario.objects.filter(
+                portafolio__in=portafolios
+            ).exclude(factura_adjunta='').exclude(factura_adjunta__isnull=True)
+            for g in gastos_gen_qs:
+                if g.factura_adjunta:
+                    concepto_slug = limpiar_nombre_zip(g.concepto or f"gasto_{g.id}")
+                    nombre_orig = os.path.basename(g.factura_adjunta.name)
+                    agregar_al_zip(
+                        zip_file,
+                        f"7_Gastos_Generales/Gasto_{g.id}_{concepto_slug}_{limpiar_nombre_zip(nombre_orig)}",
+                        g.factura_adjunta
+                    )
+
+            # 7. Documentos de Solicitudes de Alquiler
+            solicitudes_qs = SolicitudAlquiler.objects.filter(
+                propiedad__portafolio__in=portafolios
+            ).select_related('propiedad')
+            for s in solicitudes_qs:
+                s_slug = limpiar_nombre_zip(s.nombre_solicitante or f"solicitud_{s.id}")
+                for tipo_doc, campo_adj in [
+                    ('Cedula_Solicitante', s.adjunto_cedula_solicitante),
+                    ('Ingresos_Solicitante', s.adjunto_ingresos_solicitante),
+                    ('Cedula_Fiador', s.adjunto_cedula_fiador),
+                    ('Ingresos_Fiador', s.adjunto_ingresos_fiador),
+                ]:
+                    if campo_adj:
+                        nombre_orig = os.path.basename(campo_adj.name)
+                        agregar_al_zip(
+                            zip_file,
+                            f"8_Solicitudes_Alquiler/Solicitud_{s.id}_{s_slug}_{tipo_doc}_{limpiar_nombre_zip(nombre_orig)}",
+                            campo_adj
+                        )
+
+            # 8. Logos de Portafolio
+            for port in portafolios:
+                if port.logo_empresa:
+                    port_slug = limpiar_nombre_zip(port.nombre)
+                    nombre_orig = os.path.basename(port.logo_empresa.name)
+                    agregar_al_zip(
+                        zip_file,
+                        f"9_Logos_Portafolios/Logo_{port.id}_{port_slug}_{limpiar_nombre_zip(nombre_orig)}",
+                        port.logo_empresa
+                    )
+
+            # Manifiesto informativo de respaldo
+            nombres_port = ", ".join([p.nombre for p in portafolios])
+            fecha_hoy_str = date.today().strftime('%d/%m/%Y')
+            if count_files == 0:
+                zip_file.writestr(
+                    'LEEME_RESPALDO.txt',
+                    (
+                        f"========================================================================\n"
+                        f"ALQUILO - COPIA DE SEGURIDAD DE DOCUMENTOS Y ARCHIVOS ADJUNTOS\n"
+                        f"========================================================================\n\n"
+                        f"Fecha de Generación: {fecha_hoy_str}\n"
+                        f"Portafolios: {nombres_port}\n\n"
+                        f"Estado: No se encontraron documentos físicos adjuntos (PDFs o imágenes)\n"
+                        f"cargados en sus contratos, inmuebles, comprobantes o mantenimientos.\n\n"
+                        f"A medida que cargue contratos firmados, fotografías de entrega o recibos\n"
+                        f"de pago, se empaquetarán ordenadamente por carpeta en este archivo.\n"
+                    ).encode('utf-8-sig')
+                )
+            else:
+                zip_file.writestr(
+                    'MANIFIESTO_RESPALDO.txt',
+                    (
+                        f"========================================================================\n"
+                        f"ALQUILO - COPIA DE SEGURIDAD DE DOCUMENTOS Y ARCHIVOS ADJUNTOS\n"
+                        f"========================================================================\n\n"
+                        f"Fecha de Generación: {fecha_hoy_str}\n"
+                        f"Portafolios: {nombres_port}\n"
+                        f"Total de archivos físicos empaquetados: {count_files}\n\n"
+                        f"Estructura de carpetas:\n"
+                        f"- 1_Contratos_Legales: Copias escaneadas o digitalizadas de contratos.\n"
+                        f"- 2_Fotos_Entregas_Inmuebles: Fotos del estado de entrega del inmueble.\n"
+                        f"- 3_Fotos_Propiedades: Fotos principales y galerías de propiedades.\n"
+                        f"- 4_Comprobantes_Cobros: Vouchers y transferencias cargadas al cobrar.\n"
+                        f"- 5_Liquidaciones_Propietarios: Comprobantes de pago transferidos a dueños.\n"
+                        f"- 6_Mantenimientos_Gastos: Facturas de reparaciones y mantenimientos.\n"
+                        f"- 7_Gastos_Generales: Facturas de gastos y deducciones de propietarios.\n"
+                        f"- 8_Solicitudes_Alquiler: Documentos de identidad e ingresos de prospectos.\n"
+                        f"- 9_Logos_Portafolios: Logos oficiales de marca blanca.\n"
+                    ).encode('utf-8-sig')
+                )
+
+        zip_buffer.seek(0)
+        fecha_descarga = date.today().strftime('%Y%m%d')
+        response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
+        response['Content-Disposition'] = f'attachment; filename="Alquilo_Archivos_Adjuntos_{fecha_descarga}.zip"'
+        return response
+
+    except Exception as e:
+        logger.error(f"Error empaquetando archivos adjuntos en ZIP: {e}", exc_info=True)
+        messages.error(request, f"Ocurrió un inconveniente al generar el paquete de archivos adjuntos: {str(e)}")
         return redirect('respaldos_exportacion')
-
-    zip_buffer.seek(0)
-    fecha_str = date.today().strftime('%Y%m%d')
-    response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
-    response['Content-Disposition'] = f'attachment; filename="Alquilo_Archivos_Adjuntos_{fecha_str}.zip"'
-    return response
 
 
 @login_required(login_url='/login/')
