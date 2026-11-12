@@ -26,7 +26,13 @@ def _portafolio_de(instance):
 
 def _registrar(accion, modulo, descripcion, portafolio):
     usuario = get_current_user()
-    if usuario and usuario.is_authenticated:
+    if usuario and usuario.is_authenticated and getattr(usuario, 'pk', None):
+        try:
+            from django.contrib.auth.models import User
+            if not User.objects.filter(pk=usuario.pk).exists():
+                return
+        except Exception:
+            return
         AuditLog.objects.create(
             accion=accion,
             modulo=modulo,

@@ -34,7 +34,7 @@ class Command(BaseCommand):
         # ---------------------------------------------------------
         # FASE 1: AUTOMATIZACIÓN SAAS (B2B) - EMISIÓN POR ADELANTADO
         # ---------------------------------------------------------
-        clientes = User.objects.filter(is_superuser=False, suscripcion__isnull=False)
+        clientes = User.objects.filter(is_superuser=False, is_active=True, suscripcion__isnull=False)
         facturas_saas = 0
         
         for cliente in clientes:
@@ -105,7 +105,17 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"[OK] SaaS Seguimiento: {saas_recordatorios} recordatorios discretos, {saas_suspendidas} cuentas pausadas."))
 
         # ---------------------------------------------------------
-        contratos_activos = Contrato.objects.filter(activo=True)
+        # FASE 2: GENERACIÓN DE FACTURAS DE ALQUILER (B2C)
+        # Excluir contratos de portafolios con suscripción CANCELADA o propiedades eliminadas
+        # Nota: Cuentas SUSPENDIDAS continúan facturando para no interrumpir el registro contable
+        # ---------------------------------------------------------
+        contratos_activos = Contrato.objects.filter(
+            activo=True,
+            propiedad__is_deleted=False,
+            propiedad__portafolio__propietario__is_active=True
+        ).exclude(
+            propiedad__portafolio__propietario__suscripcion__estado='CANCELADA'
+        ).select_related('propiedad', 'propiedad__portafolio', 'inquilino')
         facturas_b2c = 0
         errores_cron = []
         
@@ -167,9 +177,14 @@ class Command(BaseCommand):
         # ---------------------------------------------------------
         # FASE 3: MOTOR DE MORAS Y RECORDATORIOS
         # La mora continúa calculándose mensualmente hasta que el monto del alquiler esté saldado
+        # Excluir facturas de portafolios con suscripción CANCELADA o propiedades eliminadas
         # ---------------------------------------------------------
         facturas_pendientes = Factura.objects.filter(
-            estado__in=['PENDIENTE', 'ATRASADA']
+            estado__in=['PENDIENTE', 'ATRASADA'],
+            contrato__propiedad__is_deleted=False,
+            contrato__propiedad__portafolio__propietario__is_active=True
+        ).exclude(
+            contrato__propiedad__portafolio__propietario__suscripcion__estado='CANCELADA'
         ).select_related('contrato', 'contrato__inquilino')
         recordatorios = 0
         moras = 0
@@ -229,7 +244,7 @@ class Command(BaseCommand):
         trials_suspendidos = 0
         
         # Escaneamos propietarios cuyo estado es TRIAL
-        clientes_trial = User.objects.filter(suscripcion__estado='TRIAL').select_related('suscripcion')
+        clientes_trial = User.objects.filter(suscripcion__estado='TRIAL', is_active=True).select_related('suscripcion')
         
         for cliente in clientes_trial:
             sub = cliente.suscripcion

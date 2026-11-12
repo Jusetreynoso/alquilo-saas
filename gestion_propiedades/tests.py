@@ -10,6 +10,9 @@ from decimal import Decimal
 
 class AlquiloTests(TestCase):
     def setUp(self):
+        from .middleware import _thread_local
+        _thread_local.usuario = None
+
         # Create users
         self.user1 = User.objects.create_user(username='propietario1', password='password123')
         self.user2 = User.objects.create_user(username='propietario2', password='password123')
@@ -62,6 +65,11 @@ class AlquiloTests(TestCase):
         )
 
         self.client = Client()
+
+    def tearDown(self):
+        from .middleware import _thread_local
+        _thread_local.usuario = None
+        super().tearDown()
 
     def test_editar_inquilino_seguridad(self):
         # Login as user2 and try to edit user1's tenant
@@ -1243,6 +1251,202 @@ class AlquiloTests(TestCase):
         self.assertEqual(storage._get_resource_type('comprobantes/pago.docx'), 'raw')
         self.assertEqual(storage._get_resource_type('fotos/fachada.png'), 'image')
         self.assertEqual(storage._get_resource_type('fotos/sala.jpg'), 'image')
+
+    def test_cron_excluye_portafolios_cancelados_y_mantiene_suspendidos(self):
+        from django.core.management import call_command
+        hoy = date.today()
+
+        # 1. Propietario con cuenta SUSPENDIDA (debe seguir facturando y calculando moras para reactivación)
+        user_suspendido = User.objects.create_user(username='suspendido_user', password='pass', email='susp@test.com')
+        SuscripcionCliente.objects.create(usuario=user_suspendido, plan_saas=self.plan, estado='SUSPENDIDA')
+        portafolio_susp = Portafolio.objects.create(nombre='Portafolio Suspendido', propietario=user_suspendido)
+        prop_susp = Propiedad.objects.create(portafolio=portafolio_susp, nombre_o_numero='Apt Susp-1', estado='OCUPADO')
+        inq_susp = Inquilino.objects.create(nombre='Inquilino Susp', telefono='809-111-2222')
+        contrato_susp = Contrato.objects.create(
+            propiedad=prop_susp,
+            inquilino=inq_susp,
+            fecha_inicio=hoy - timedelta(days=60),
+            monto_renta=Decimal('15000.00'),
+            dia_de_pago=hoy.day,
+            activo=True,
+            porcentaje_mora=Decimal('10.00')
+        )
+        factura_vieja_susp = Factura.objects.create(
+            contrato=contrato_susp,
+            fecha_emision=hoy - timedelta(days=40),
+            fecha_vencimiento=hoy - timedelta(days=20),
+            monto_base=Decimal('15000.00'),
+            monto_renta=Decimal('15000.00'),
+            concepto='Factura Vencida Cuenta Suspendida',
+            estado='PENDIENTE'
+        )
+
+        # 2. Propietario con cuenta CANCELADA (debe dejar de procesar facturas y moras)
+        user_cancelado = User.objects.create_user(username='cancelado_user', password='pass', email='canc@test.com')
+        SuscripcionCliente.objects.create(usuario=user_cancelado, plan_saas=self.plan, estado='CANCELADA')
+        portafolio_canc = Portafolio.objects.create(nombre='Portafolio Cancelado', propietario=user_cancelado)
+        prop_canc = Propiedad.objects.create(portafolio=portafolio_canc, nombre_o_numero='Apt Canc-1', estado='OCUPADO')
+        inq_canc = Inquilino.objects.create(nombre='Inquilino Canc', telefono='809-333-4444')
+        contrato_canc = Contrato.objects.create(
+            propiedad=prop_canc,
+            inquilino=inq_canc,
+            fecha_inicio=hoy - timedelta(days=60),
+            monto_renta=Decimal('18000.00'),
+            dia_de_pago=hoy.day,
+            activo=True,
+            porcentaje_mora=Decimal('10.00')
+        )
+        factura_vieja_canc = Factura.objects.create(
+            contrato=contrato_canc,
+            fecha_emision=hoy - timedelta(days=40),
+            fecha_vencimiento=hoy - timedelta(days=20),
+            monto_base=Decimal('18000.00'),
+            monto_renta=Decimal('18000.00'),
+            concepto='Factura Vencida Cuenta Cancelada',
+            estado='PENDIENTE'
+        )
+
+        # Ejecutamos el cron de facturación diaria
+        call_command('facturar_saas_diario')
+
+        # Cuentas SUSPENDIDAS: SÍ generan factura del mes y aplican mora
+        facturas_mes_susp = Factura.objects.filter(
+            contrato=contrato_susp, fecha_emision__year=hoy.year, fecha_emision__month=hoy.month
+        )
+        self.assertEqual(facturas_mes_susp.count(), 1)
+        self.assertEqual(factura_vieja_susp.moras.count(), 1)
+
+        # Cuentas CANCELADAS: NO generan facturas del mes ni aplican mora
+        facturas_mes_canc = Factura.objects.filter(
+            contrato=contrato_canc, fecha_emision__year=hoy.year, fecha_emision__month=hoy.month
+        )
+        self.assertEqual(facturas_mes_canc.count(), 0)
+        self.assertEqual(factura_vieja_canc.moras.count(), 0)
+
+    def test_generar_facturas_masivas_excluye_portafolios_cancelados(self):
+        hoy = date.today()
+        # Propietario cancelado
+        user_canc = User.objects.create_user(username='super_canc', password='pass', email='scanc@test.com')
+        SuscripcionCliente.objects.create(usuario=user_canc, plan_saas=self.plan, estado='CANCELADA')
+        port_canc = Portafolio.objects.create(nombre='Portafolio Manual Canc', propietario=user_canc)
+        prop_canc = Propiedad.objects.create(portafolio=port_canc, nombre_o_numero='Apt Man-Canc', estado='OCUPADO')
+        inq_canc = Inquilino.objects.create(nombre='Inquilino Man Canc', telefono='809-555-0002')
+        contrato_canc = Contrato.objects.create(
+            propiedad=prop_canc,
+            inquilino=inq_canc,
+            fecha_inicio=hoy - timedelta(days=30),
+            monto_renta=Decimal('20000.00'),
+            dia_de_pago=hoy.day,
+            activo=True
+        )
+
+        # Propietario suspendido (debe incluirse en facturación)
+        user_susp = User.objects.create_user(username='super_susp', password='pass', email='ssusp@test.com')
+        SuscripcionCliente.objects.create(usuario=user_susp, plan_saas=self.plan, estado='SUSPENDIDA')
+        port_susp = Portafolio.objects.create(nombre='Portafolio Manual Susp', propietario=user_susp)
+        prop_susp = Propiedad.objects.create(portafolio=port_susp, nombre_o_numero='Apt Man-Susp', estado='OCUPADO')
+        inq_susp = Inquilino.objects.create(nombre='Inquilino Man Susp', telefono='809-555-0003')
+        contrato_susp = Contrato.objects.create(
+            propiedad=prop_susp,
+            inquilino=inq_susp,
+            fecha_inicio=hoy - timedelta(days=30),
+            monto_renta=Decimal('25000.00'),
+            dia_de_pago=hoy.day,
+            activo=True
+        )
+
+        # Iniciar sesión como superuser
+        superuser = User.objects.create_superuser(username='superadmin_cron', password='adminpassword', email='admin_cron@test.com')
+        self.client.login(username='superadmin_cron', password='adminpassword')
+
+        url = reverse('generar_facturas_masivas')
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 302)
+
+        # No debe haberse generado factura para el contrato cancelado
+        facturas_canc = Factura.objects.filter(
+            contrato=contrato_canc,
+            fecha_emision__year=hoy.year,
+            fecha_emision__month=hoy.month
+        )
+        self.assertEqual(facturas_canc.count(), 0)
+
+        # Sí debe haberse generado factura para el contrato suspendido
+        facturas_susp = Factura.objects.filter(
+            contrato=contrato_susp,
+            fecha_emision__year=hoy.year,
+            fecha_emision__month=hoy.month
+        )
+        self.assertEqual(facturas_susp.count(), 1)
+
+    def test_registrar_gasto_itbis_calculo_y_validacion_cero(self):
+        self.client.login(username='propietario1', password='password123')
+        prop_owner = PropietarioInmueble.objects.create(
+            portafolio=self.portafolio1,
+            nombre='Propietario ITBIS Test'
+        )
+
+        url = reverse('registrar_gasto_general')
+        
+        # 1. Intentar registrar ITBIS con monto 0.00 -> Debe rechazarlo
+        post_data_cero = {
+            'next': 'reporte_propietario',
+            'propietario_inmueble': prop_owner.id,
+            'categoria': 'ITBIS_18',
+            'concepto': 'Impuesto ITBIS',
+            'monto': '0.00',
+            'base_imponible_itbis': '0.00',
+            'fecha': '2026-11-12'
+        }
+        res_cero = self.client.post(url, post_data_cero)
+        self.assertEqual(res_cero.status_code, 302)
+        self.assertEqual(GastoGeneralPropietario.objects.filter(propietario_inmueble=prop_owner).count(), 0)
+
+        # 2. Registrar ITBIS suministrando base de alquiler de 50,000 -> Debe calcular 18% = 9,000
+        post_data_base = {
+            'next': 'reporte_propietario',
+            'propietario_inmueble': prop_owner.id,
+            'categoria': 'ITBIS_18',
+            'concepto': 'Impuesto ITBIS (18%) - Noviembre 2026',
+            'monto': '50000.00', # Simula que el usuario digitó la base en la casilla monto
+            'base_imponible_itbis': '50000.00',
+            'fecha': '2026-11-12',
+            'mes': '11',
+            'anio': '2026'
+        }
+        res_base = self.client.post(url, post_data_base)
+        self.assertEqual(res_base.status_code, 302)
+        gasto_creado = GastoGeneralPropietario.objects.filter(propietario_inmueble=prop_owner).first()
+        self.assertIsNotNone(gasto_creado)
+        self.assertEqual(gasto_creado.monto, Decimal('9000.00'))
+
+    def test_eliminar_gasto_general_desde_reporte_propietario(self):
+        self.client.login(username='propietario1', password='password123')
+        prop_owner = PropietarioInmueble.objects.create(
+            portafolio=self.portafolio1,
+            nombre='Propietario Eliminar Test'
+        )
+        gasto = GastoGeneralPropietario.objects.create(
+            portafolio=self.portafolio1,
+            propietario_inmueble=prop_owner,
+            concepto='Gasto Temporal por Error',
+            categoria='OTRO',
+            monto=Decimal('500.00'),
+            fecha=date.today()
+        )
+
+        url_del = reverse('eliminar_gasto_general', args=[gasto.id])
+        res = self.client.post(url_del, {
+            'next': 'reporte_propietario',
+            'propietario_id': prop_owner.id,
+            'mes': '11',
+            'anio': '2026'
+        })
+        self.assertEqual(res.status_code, 302)
+        self.assertIn('/reportes/propietario/', res.url)
+        self.assertFalse(GastoGeneralPropietario.objects.filter(id=gasto.id).exists())
+
+
 
 
 

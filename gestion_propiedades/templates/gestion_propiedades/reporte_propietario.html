@@ -388,6 +388,7 @@
                                     <th class="py-2">Tipo</th>
                                     <th class="py-2">Fecha</th>
                                     <th class="py-2 text-end px-3">Monto</th>
+                                    <th class="py-2 text-center pe-3" style="width: 50px;">Acción</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -397,6 +398,7 @@
                                     <td class="py-2"><span class="badge bg-secondary">Mantenimiento</span></td>
                                     <td class="py-2 small">{{ g.fecha_reporte|date:"d/m/Y" }}</td>
                                     <td class="py-2 text-end px-3 text-danger fw-bold">${{ g.costo|dinero }}</td>
+                                    <td class="py-2 text-center pe-3 text-muted small">-</td>
                                 </tr>
                                 {% endfor %}
 
@@ -406,12 +408,24 @@
                                     <td class="py-2"><span class="badge bg-warning text-dark">{{ g.get_categoria_display }}</span></td>
                                     <td class="py-2 small">{{ g.fecha|date:"d/m/Y" }}</td>
                                     <td class="py-2 text-end px-3 text-danger fw-bold">${{ g.monto|dinero }}</td>
+                                    <td class="py-2 text-center pe-3">
+                                        <form method="POST" action="{% url 'eliminar_gasto_general' g.id %}" class="d-inline" onsubmit="return confirm('¿Seguro que deseas eliminar el gasto \'{{ g.concepto|escapejs }}\' de ${{ g.monto|dinero }}? Esta acción no se puede deshacer.');">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="next" value="reporte_propietario">
+                                            <input type="hidden" name="propietario_id" value="{{ propietario_seleccionado.id }}">
+                                            <input type="hidden" name="mes" value="{{ mes }}">
+                                            <input type="hidden" name="anio" value="{{ anio }}">
+                                            <button type="submit" class="btn btn-outline-danger btn-sm p-1 lh-1" title="Eliminar gasto / deducción">
+                                                🗑️
+                                            </button>
+                                        </form>
+                                    </td>
                                 </tr>
                                 {% endfor %}
 
                                 {% if not gastos_directos_list and not gastos_generales_list %}
                                 <tr>
-                                    <td colspan="4" class="text-center py-4 text-muted">No se registraron gastos o deducciones en este período.</td>
+                                    <td colspan="5" class="text-center py-4 text-muted">No se registraron gastos o deducciones en este período.</td>
                                 </tr>
                                 {% endif %}
                             </tbody>
@@ -500,7 +514,7 @@
                 <h5 class="modal-title fw-bold" id="modalGastoGeneralLabel">💸 Registrar Gasto General o Deducción</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form method="POST" action="{% url 'registrar_gasto_general' %}">
+            <form method="POST" action="{% url 'registrar_gasto_general' %}" onsubmit="return validarEnvioGasto(event);">
                 {% csrf_token %}
                 <input type="hidden" name="next" value="reporte_propietario">
                 <input type="hidden" name="propietario_inmueble" value="{{ propietario_seleccionado.id }}">
@@ -527,27 +541,49 @@
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-bold" id="labelMontoGasto">Monto (RD$)</label>
+                            <label class="form-label fw-bold" id="labelMontoGasto">Monto del Gasto (RD$)</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-white fw-bold">RD$</span>
                                 <input type="number" step="0.01" name="monto" id="montoGastoInput" class="form-control fw-bold" required placeholder="0.00">
                             </div>
+                            <small class="text-muted" id="subtextoMontoGasto"></small>
                         </div>
                     </div>
 
-                    <div id="contenedorInfoItbis" class="alert alert-success border-success py-3 px-3 mb-3 d-none shadow-sm">
-                        <div class="d-flex align-items-center gap-2 mb-2">
-                            <span class="fs-4">🏛️</span>
-                            <div>
-                                <h6 class="fw-bold mb-0 text-success">Cálculo Automático de ITBIS (18%): RD$ {{ itbis_18_calculado|dinero }}</h6>
-                                <small class="text-muted">Calculado sobre <strong>RD$ {{ total_renta_cobrada|dinero }}</strong> de alquiler puro cobrado en {{ nombre_mes }} (excluye servicios y moras).</small>
+                    <!-- CALCULADORA INTELIGENTE DE ITBIS 18% -->
+                    <div id="contenedorInfoItbis" class="card border-success bg-success-subtle mb-3 d-none shadow-sm">
+                        <div class="card-body p-3">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <span class="fs-4">🏛️</span>
+                                <div>
+                                    <h6 class="fw-bold mb-0 text-success">Calculadora Interactiva de ITBIS (18%)</h6>
+                                    <small class="text-muted" id="itbisOrigenDetalleTexto">{{ origen_base_renta }}</small>
+                                </div>
                             </div>
-                        </div>
-                        <div class="bg-white p-2 rounded border border-success-subtle small text-dark">
-                            <i class="bi bi-check-circle-fill text-success me-1"></i>
-                            <strong>¿Cómo funciona?</strong> No necesitas calcular ni digitar nada. El sistema ya colocó el monto exacto calculado (RD$ {{ itbis_18_calculado|dinero }}) en la casilla de monto. Solo haz clic abajo en <strong>"💾 Guardar Gasto"</strong> para aplicarlo a la liquidación.
-                            <div class="mt-1 text-muted" style="font-size: 0.8rem;">
-                                <em>* Si el propietario cuenta con alguna exención o retención parcial, puedes modificar el número en la casilla libremente.</em>
+
+                            <div class="row g-2 align-items-end mt-2">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-dark mb-1">
+                                        Base de Alquiler Puro (RD$):
+                                    </label>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text bg-white fw-bold">RD$</span>
+                                        <input type="number" step="0.01" id="baseItbisInput" name="base_imponible_itbis" class="form-control fw-bold bg-white" placeholder="0.00" oninput="alModificarBaseItbis()">
+                                    </div>
+                                    <small class="text-muted" style="font-size: 0.75rem;">Digita o ajusta el alquiler sobre el cual calcular el 18%</small>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="bg-white p-2 rounded border border-success-subtle text-center">
+                                        <div class="small text-muted fw-bold">ITBIS Calculado (18%):</div>
+                                        <div class="fs-5 fw-bold text-success" id="itbisCalculadoDisplay">RD$ 0.00</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mt-2 pt-2 border-top border-success-subtle small text-dark">
+                                <i class="bi bi-info-circle-fill text-success me-1"></i>
+                                <span>Al escribir la base de alquiler arriba, el <strong>18%</strong> se calcula automáticamente y se coloca en la casilla de <strong>Monto</strong>. Si el propietario cuenta con exención o retención parcial, puedes modificar la casilla de Monto libremente antes de guardar.</span>
                             </div>
                         </div>
                     </div>
@@ -587,7 +623,6 @@
             navigator.clipboard.writeText(el.innerText).then(() => {
                 alert('¡Mensaje de WhatsApp copiado al portapapeles!');
             }).catch(err => {
-                // Fallback para navegadores antiguos
                 const textArea = document.createElement("textarea");
                 textArea.value = el.innerText;
                 document.body.appendChild(textArea);
@@ -599,8 +634,26 @@
         }
     }
 
+    const baseRentaSugeridaStr = "{{ base_renta_sugerida|stringformat:'.2f' }}";
     const itbis18SugeridoStr = "{{ itbis_18_calculado|stringformat:'.2f' }}";
     const nombrePeriodoActual = "{{ nombre_mes }} {{ anio }}";
+
+    function alModificarBaseItbis() {
+        const baseInp = document.getElementById('baseItbisInput');
+        const montoInp = document.getElementById('montoGastoInput');
+        const display = document.getElementById('itbisCalculadoDisplay');
+        if (!baseInp) return;
+
+        const baseVal = parseFloat(baseInp.value) || 0;
+        const itbisVal = Math.round(baseVal * 0.18 * 100) / 100;
+
+        if (montoInp) {
+            montoInp.value = itbisVal > 0 ? itbisVal.toFixed(2) : '';
+        }
+        if (display) {
+            display.innerText = 'RD$ ' + itbisVal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+    }
 
     function alCambiarCategoriaGasto() {
         const sel = document.getElementById('categoriaGastoSelect');
@@ -608,17 +661,28 @@
         const conceptoInp = document.getElementById('conceptoGastoInput');
         const infoItbis = document.getElementById('contenedorInfoItbis');
         const labelMonto = document.getElementById('labelMontoGasto');
+        const subtextoMonto = document.getElementById('subtextoMontoGasto');
+        const baseInp = document.getElementById('baseItbisInput');
 
         if (sel && sel.value === 'ITBIS_18') {
-            if (montoInp) montoInp.value = itbis18SugeridoStr;
+            if (baseInp) {
+                const baseSugeridaNum = parseFloat(baseRentaSugeridaStr) || 0;
+                if (!baseInp.value || parseFloat(baseInp.value) === 0) {
+                    baseInp.value = baseSugeridaNum > 0 ? baseSugeridaNum.toFixed(2) : '';
+                }
+            }
+            alModificarBaseItbis();
+
             if (conceptoInp && (!conceptoInp.value || conceptoInp.value.includes('ITBIS'))) {
                 conceptoInp.value = `Impuesto ITBIS (18%) - ${nombrePeriodoActual}`;
             }
             if (infoItbis) infoItbis.classList.remove('d-none');
-            if (labelMonto) labelMonto.innerHTML = 'Monto (RD$) <span class="badge bg-success ms-1">18% Automático</span>';
+            if (labelMonto) labelMonto.innerHTML = 'Monto ITBIS a Deducir (RD$) <span class="badge bg-success ms-1">18%</span>';
+            if (subtextoMonto) subtextoMonto.innerText = 'Monto calculado automáticamente según la base de alquiler.';
         } else {
             if (infoItbis) infoItbis.classList.add('d-none');
-            if (labelMonto) labelMonto.innerHTML = 'Monto (RD$)';
+            if (labelMonto) labelMonto.innerHTML = 'Monto del Gasto (RD$)';
+            if (subtextoMonto) subtextoMonto.innerText = '';
         }
     }
 
@@ -630,6 +694,34 @@
         alCambiarCategoriaGasto();
         const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
         modal.show();
+    }
+
+    function validarEnvioGasto(e) {
+        const sel = document.getElementById('categoriaGastoSelect');
+        const montoInp = document.getElementById('montoGastoInput');
+        const baseInp = document.getElementById('baseItbisInput');
+
+        if (sel && sel.value === 'ITBIS_18') {
+            const monto = parseFloat(montoInp.value) || 0;
+            const base = parseFloat(baseInp.value) || 0;
+
+            if (monto <= 0) {
+                e.preventDefault();
+                alert('El monto del ITBIS debe ser mayor a RD$ 0.00.\n\nPor favor digita el monto del alquiler en la casilla "Base de Alquiler Puro" para calcular el 18% automáticamente.');
+                if (baseInp) baseInp.focus();
+                return false;
+            }
+
+            // Si el usuario digitó la base en el campo de monto (ej: digitó 50,000 en monto)
+            if (base > 0 && Math.abs(monto - base) < 0.01) {
+                const itbisCalculado = Math.round(base * 0.18 * 100) / 100;
+                const confirmar = confirm(`Has ingresado RD$ ${monto.toLocaleString('en-US', {minimumFractionDigits: 2})} en el monto final de ITBIS (igual a la base de alquiler).\n\n¿Deseas aplicar el 18% calculado (RD$ ${itbisCalculado.toLocaleString('en-US', {minimumFractionDigits: 2})}) en su lugar?`);
+                if (confirmar) {
+                    montoInp.value = itbisCalculado.toFixed(2);
+                }
+            }
+        }
+        return true;
     }
 
     document.addEventListener('DOMContentLoaded', function () {

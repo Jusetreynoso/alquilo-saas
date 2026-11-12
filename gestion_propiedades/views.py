@@ -723,19 +723,27 @@ def generar_facturas_masivas(request):
         messages.error(request, "Acceso restringido. La generación manual de facturas masivas solo está permitida para el Superadministrador.")
         return redirect('dashboard')
 
-    # 1. Buscamos los portafolios del usuario
+    # 1. Buscamos los portafolios del usuario (excluyendo cuentas canceladas)
     if request.user.is_superuser:
-        portafolios = Portafolio.objects.all().distinct()
+        portafolios = Portafolio.objects.filter(
+            propietario__is_active=True
+        ).exclude(
+            propietario__suscripcion__estado='CANCELADA'
+        ).distinct()
     else:
         portafolios = Portafolio.objects.filter(
-            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+            Q(propietario=request.user) | Q(accesos__usuario=request.user),
+            propietario__is_active=True
+        ).exclude(
+            propietario__suscripcion__estado='CANCELADA'
         ).distinct()
 
-    # 2. Buscamos contratos activos
+    # 2. Buscamos contratos activos de propiedades no eliminadas
     contratos = Contrato.objects.filter(
         propiedad__portafolio__in=portafolios,
+        propiedad__is_deleted=False,
         activo=True
-    )
+    ).select_related('propiedad', 'propiedad__portafolio', 'inquilino')
 
     hoy = date.today()
     facturas_creadas = 0
@@ -4048,28 +4056,66 @@ def registrar_gasto_general(request):
         post_data = request.POST.copy()
         
         # Soporte inteligente para cálculo automático de ITBIS 18%
-        if post_data.get('categoria') == 'ITBIS_18' and (not post_data.get('monto') or post_data.get('monto').strip() in ['', '0', '0.00']):
-            prop_id = post_data.get('propietario_inmueble')
-            mes_val = post_data.get('mes')
-            anio_val = post_data.get('anio')
-            if prop_id:
+        if post_data.get('categoria') == 'ITBIS_18':
+            monto_str = (post_data.get('monto') or '').strip()
+            base_manual = (post_data.get('base_imponible_itbis') or '').strip()
+            
+            # Si el usuario ingresó la base en el campo de base de alquiler
+            if base_manual:
                 try:
-                    m_int = int(mes_val) if mes_val else date.today().month
-                    a_int = int(anio_val) if anio_val else date.today().year
-                    recibos = ReciboPago.objects.filter(
-                        factura__contrato__propiedad__propietario_inmueble_id=prop_id,
-                        fecha_pago__month=m_int,
-                        fecha_pago__year=a_int
-                    )
-                    renta_cobrada = recibos.aggregate(total=Sum('monto_a_renta'))['total'] or decimal.Decimal('0.00')
-                    if renta_cobrada == decimal.Decimal('0.00'):
-                        renta_cobrada = recibos.aggregate(total=Sum('monto_pagado'))['total'] or decimal.Decimal('0.00')
-                    itbis_auto = round(renta_cobrada * decimal.Decimal('0.18'), 2)
-                    post_data['monto'] = str(itbis_auto)
-                    if not post_data.get('concepto'):
-                        post_data['concepto'] = f"Impuesto ITBIS (18%) - {obtener_nombre_mes(m_int)} {a_int}"
-                except Exception as itbis_err:
-                    logger.warning(f"Error autocalculando ITBIS en backend: {itbis_err}")
+                    b_val = Decimal(base_manual)
+                    if b_val > Decimal('0.00'):
+                        itbis_auto = round(b_val * Decimal('0.18'), 2)
+                        # Si el monto está vacío, es 0, o es igual a la base digitada por el usuario
+                        if not monto_str or monto_str in ['0', '0.00', '0.0'] or monto_str == base_manual:
+                            post_data['monto'] = str(itbis_auto)
+                except Exception:
+                    pass
+
+            # Si no hay monto o es 0, intentar resolver automáticamente
+            monto_actual = Decimal(str(post_data.get('monto') or '0'))
+            if monto_actual <= Decimal('0.00'):
+                prop_id = post_data.get('propietario_inmueble')
+                mes_val = post_data.get('mes')
+                anio_val = post_data.get('anio')
+                if prop_id:
+                    try:
+                        m_int = int(mes_val) if mes_val else date.today().month
+                        a_int = int(anio_val) if anio_val else date.today().year
+                        recibos = ReciboPago.objects.filter(
+                            factura__contrato__propiedad__propietario_inmueble_id=prop_id,
+                            fecha_pago__month=m_int,
+                            fecha_pago__year=a_int
+                        )
+                        renta_cobrada = recibos.aggregate(total=Sum('monto_a_renta'))['total'] or Decimal('0.00')
+                        if renta_cobrada == Decimal('0.00'):
+                            renta_cobrada = recibos.aggregate(total=Sum('monto_pagado'))['total'] or Decimal('0.00')
+                        if renta_cobrada == Decimal('0.00'):
+                            contratos = Contrato.objects.filter(
+                                propiedad__propietario_inmueble_id=prop_id,
+                                activo=True
+                            )
+                            renta_cobrada = contratos.aggregate(total=Sum('monto_renta'))['total'] or Decimal('0.00')
+                        if renta_cobrada > Decimal('0.00'):
+                            post_data['monto'] = str(round(renta_cobrada * Decimal('0.18'), 2))
+                    except Exception as itbis_err:
+                        logger.warning(f"Error autocalculando ITBIS en backend: {itbis_err}")
+
+            if not post_data.get('concepto'):
+                m_int = int(post_data.get('mes')) if post_data.get('mes') else date.today().month
+                a_int = int(post_data.get('anio')) if post_data.get('anio') else date.today().year
+                post_data['concepto'] = f"Impuesto ITBIS (18%) - {obtener_nombre_mes(m_int)} {a_int}"
+
+            # Validación: impedir registrar un gasto de ITBIS con monto 0.00
+            monto_final = Decimal(str(post_data.get('monto') or '0'))
+            if monto_final <= Decimal('0.00'):
+                messages.error(request, 'No se puede registrar un gasto de ITBIS con monto RD$ 0.00. Ingresa una base de alquiler en la casilla de cálculo para computar el 18%.')
+                if next_url == 'reporte_propietario':
+                    prop_id = request.POST.get('propietario_inmueble') or ''
+                    mes = request.POST.get('mes') or ''
+                    anio = request.POST.get('anio') or ''
+                    return redirect(f"{reverse('reporte_propietario')}?propietario_id={prop_id}&mes={mes}&anio={anio}")
+                return redirect('lista_gastos_generales')
 
         form = GastoGeneralPropietarioForm(post_data, request.FILES, portafolios=portafolios)
         if form.is_valid():
@@ -4109,8 +4155,19 @@ def eliminar_gasto_general(request, gasto_id):
         ).distinct()
     gasto = get_object_or_404(GastoGeneralPropietario, id=gasto_id, portafolio__in=portafolios)
     if request.method == 'POST':
+        concepto = gasto.concepto
+        monto = gasto.monto
+        prop_inmueble_id = gasto.propietario_inmueble_id
         gasto.delete()
-        messages.success(request, 'Gasto eliminado exitosamente.')
+        messages.success(request, f'Gasto/deducción "{concepto}" (RD$ {monto:,.2f}) eliminado exitosamente.')
+        
+        next_url = request.POST.get('next') or request.GET.get('next')
+        if next_url == 'reporte_propietario':
+            prop_id = request.POST.get('propietario_id') or prop_inmueble_id or ''
+            mes = request.POST.get('mes') or ''
+            anio = request.POST.get('anio') or ''
+            return redirect(f"{reverse('reporte_propietario')}?propietario_id={prop_id}&mes={mes}&anio={anio}")
+            
     return redirect('lista_gastos_generales')
 
 
@@ -4245,6 +4302,30 @@ def reporte_propietario(request):
             contratos_activos.append(c)
             
         propiedades_ocupadas = propiedades.filter(estado='OCUPADO').count()
+        
+        # Base de sugerencia inteligente para cálculo de ITBIS (18%)
+        facturas_mes_prop = Factura.objects.filter(
+            contrato__propiedad__in=propiedades,
+            fecha_emision__month=mes,
+            fecha_emision__year=anio
+        )
+        total_renta_facturada = sum(f.monto_renta if f.monto_renta > Decimal('0.00') else f.monto_base for f in facturas_mes_prop)
+        total_renta_contratos = sum(c.monto_renta for c in contratos_activos)
+
+        if total_renta_cobrada > Decimal('0.00'):
+            base_renta_sugerida = total_renta_cobrada
+            origen_base_renta = f"Calculado sobre RD$ {total_renta_cobrada:,.2f} de alquiler puro cobrado en {obtener_nombre_mes(mes)}."
+        elif total_renta_facturada > Decimal('0.00'):
+            base_renta_sugerida = total_renta_facturada
+            origen_base_renta = f"Sugerido sobre RD$ {total_renta_facturada:,.2f} de alquiler facturado en {obtener_nombre_mes(mes)} (aún sin recibos cobrados)."
+        elif total_renta_contratos > Decimal('0.00'):
+            base_renta_sugerida = total_renta_contratos
+            origen_base_renta = f"Sugerido sobre RD$ {total_renta_contratos:,.2f} de alquiler mensual fijado en contratos activos."
+        else:
+            base_renta_sugerida = Decimal('0.00')
+            origen_base_renta = f"Sin cobros ni contratos registrados en {obtener_nombre_mes(mes)}. Digita el monto en la casilla de Base."
+
+        itbis_18_calculado = round(base_renta_sugerida * Decimal('0.18'), 2)
         
         # --- SITUACIÓN DETALLADA INDIVIDUAL POR PROPIEDAD ---
         situacion_propiedades = []
@@ -4404,7 +4485,9 @@ def reporte_propietario(request):
         'porcentaje_ocupacion': round(porcentaje_ocupacion, 1),
         'recibos_cobrados': recibos_cobrados,
         'total_renta_cobrada': total_renta_cobrada if 'total_renta_cobrada' in locals() else total_ingresos,
-        'itbis_18_calculado': round(Decimal(str(total_renta_cobrada if 'total_renta_cobrada' in locals() else total_ingresos)) * Decimal('0.18'), 2),
+        'base_renta_sugerida': base_renta_sugerida if 'base_renta_sugerida' in locals() else Decimal('0.00'),
+        'origen_base_renta': origen_base_renta if 'origen_base_renta' in locals() else '',
+        'itbis_18_calculado': itbis_18_calculado if 'itbis_18_calculado' in locals() else Decimal('0.00'),
         'total_servicios_cobrados': total_servicios_cobrados if 'total_servicios_cobrados' in locals() else decimal.Decimal('0.00'),
         'total_mora_cobrada': total_mora_cobrada if 'total_mora_cobrada' in locals() else decimal.Decimal('0.00'),
         'gastos_directos_list': gastos_directos_list,

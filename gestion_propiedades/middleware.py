@@ -13,7 +13,10 @@ class CurrentUserMiddleware:
 
     def __call__(self, request):
         _thread_local.usuario = getattr(request, 'user', None)
-        response = self.get_response(request)
+        try:
+            response = self.get_response(request)
+        finally:
+            _thread_local.usuario = None
         return response
 
 
