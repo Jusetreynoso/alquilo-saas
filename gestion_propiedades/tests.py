@@ -1545,6 +1545,8 @@ class AlquiloTests(TestCase):
         content_print = res_print.content.decode('utf-8')
         self.assertIn('Alquiler Departamento 502 - Noviembre 2026', content_print)
         self.assertIn(f"Factura #{factura.id}", content_print)
+        self.assertIn(self.portafolio1.nombre, content_print)
+        self.assertNotIn('Gestión Alquilo', content_print)
 
 
 
