@@ -349,6 +349,7 @@
                                 <tr>
                                     <th class="px-3 py-2">Propiedad</th>
                                     <th class="py-2">Inquilino</th>
+                                    <th class="py-2">Concepto</th>
                                     <th class="py-2">Fecha Pago</th>
                                     <th class="py-2 text-end px-3">Monto</th>
                                 </tr>
@@ -358,12 +359,16 @@
                                 <tr>
                                     <td class="px-3 py-2 fw-bold">{{ r.factura.contrato.propiedad.nombre_o_numero }}</td>
                                     <td class="py-2 text-muted small">{{ r.factura.contrato.inquilino.nombre }}</td>
+                                    <td class="py-2 small">
+                                        <span class="fw-bold text-dark">{{ r.factura.concepto|default:"Cobro de Alquiler" }}</span>
+                                        <span class="badge bg-light text-secondary border ms-1">#{{ r.factura.id }}</span>
+                                    </td>
                                     <td class="py-2 small">{{ r.fecha_pago|date:"d/m/Y" }}</td>
                                     <td class="py-2 text-end px-3 text-success fw-bold">${{ r.monto_pagado|dinero }}</td>
                                 </tr>
                                 {% empty %}
                                 <tr>
-                                    <td colspan="4" class="text-center py-4 text-muted">No se registraron cobros de renta en este período.</td>
+                                    <td colspan="5" class="text-center py-4 text-muted">No se registraron cobros de renta en este período.</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -409,6 +414,7 @@
                                     <td class="py-2 small">{{ g.fecha|date:"d/m/Y" }}</td>
                                     <td class="py-2 text-end px-3 text-danger fw-bold">${{ g.monto|dinero }}</td>
                                     <td class="py-2 text-center pe-3">
+                                        {% if not liquidacion_existente %}
                                         <form method="POST" action="{% url 'eliminar_gasto_general' g.id %}" class="d-inline" onsubmit="return confirm('¿Seguro que deseas eliminar el gasto \'{{ g.concepto|escapejs }}\' de ${{ g.monto|dinero }}? Esta acción no se puede deshacer.');">
                                             {% csrf_token %}
                                             <input type="hidden" name="next" value="reporte_propietario">
@@ -419,6 +425,9 @@
                                                 🗑️
                                             </button>
                                         </form>
+                                        {% else %}
+                                        <span class="badge bg-light text-muted border py-1 px-2" title="Período ya liquidado: no se pueden eliminar gastos de este mes">🔒 Liquidado</span>
+                                        {% endif %}
                                     </td>
                                 </tr>
                                 {% endfor %}

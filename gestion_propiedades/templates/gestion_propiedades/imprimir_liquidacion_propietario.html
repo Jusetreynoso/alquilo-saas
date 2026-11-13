@@ -101,6 +101,7 @@
             <tr>
                 <th>Propiedad</th>
                 <th>Inquilino</th>
+                <th>Concepto</th>
                 <th>Fecha Cobro</th>
                 <th class="text-end">Monto Cobrado</th>
             </tr>
@@ -110,18 +111,22 @@
             <tr>
                 <td>{{ r.factura.contrato.propiedad.nombre_o_numero }}</td>
                 <td>{{ r.factura.contrato.inquilino.nombre }}</td>
+                <td>
+                    <span class="fw-semibold">{{ r.factura.concepto|default:"Cobro de Alquiler" }}</span>
+                    <small class="text-muted d-block">Factura #{{ r.factura.id }}</small>
+                </td>
                 <td>{{ r.fecha_pago|date:"d/m/Y" }}</td>
                 <td class="text-end fw-bold">${{ r.monto_pagado|dinero }}</td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="4" class="text-center text-muted py-3">No hubieron cobros de renta en este período.</td>
+                <td colspan="5" class="text-center text-muted py-3">No hubieron cobros de renta en este período.</td>
             </tr>
             {% endfor %}
         </tbody>
         <tfoot class="table-light">
             <tr>
-                <th colspan="3" class="text-end">Total Rentas Cobradas:</th>
+                <th colspan="4" class="text-end">Total Rentas Cobradas:</th>
                 <th class="text-end text-success fs-6">${{ total_ingresos|dinero }}</th>
             </tr>
         </tfoot>

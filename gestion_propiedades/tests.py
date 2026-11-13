@@ -1446,6 +1446,107 @@ class AlquiloTests(TestCase):
         self.assertIn('/reportes/propietario/', res.url)
         self.assertFalse(GastoGeneralPropietario.objects.filter(id=gasto.id).exists())
 
+    def test_bloquear_eliminar_gasto_general_en_mes_liquidado(self):
+        self.client.login(username='propietario1', password='password123')
+        prop_owner = PropietarioInmueble.objects.create(
+            portafolio=self.portafolio1,
+            nombre='Propietario Liquidado Test'
+        )
+        gasto = GastoGeneralPropietario.objects.create(
+            portafolio=self.portafolio1,
+            propietario_inmueble=prop_owner,
+            concepto='Gasto En Mes Cerrado',
+            categoria='OTRO',
+            monto=Decimal('750.00'),
+            fecha=date(2026, 11, 5)
+        )
+        # Liquidación registrada para este mes y año
+        LiquidacionPropietario.objects.create(
+            propietario_inmueble=prop_owner,
+            periodo_mes=11,
+            periodo_anio=2026,
+            monto_rentas_cobradas=Decimal('20000.00'),
+            monto_neto_pagado=Decimal('18000.00'),
+            estado='PAGADO'
+        )
+
+        url_del = reverse('eliminar_gasto_general', args=[gasto.id])
+        res = self.client.post(url_del, {
+            'next': 'reporte_propietario',
+            'propietario_id': prop_owner.id,
+            'mes': '11',
+            'anio': '2026'
+        })
+        self.assertEqual(res.status_code, 302)
+        # El gasto NO debe haberse eliminado
+        self.assertTrue(GastoGeneralPropietario.objects.filter(id=gasto.id).exists())
+
+        # Verificar que en el reporte se muestre el candado de Liquidado y no el botón 🗑️
+        url_reporte = f"{reverse('reporte_propietario')}?propietario_id={prop_owner.id}&mes=11&anio=2026"
+        res_reporte = self.client.get(url_reporte)
+        self.assertEqual(res_reporte.status_code, 200)
+        content = res_reporte.content.decode('utf-8')
+        self.assertIn('🔒 Liquidado', content)
+        self.assertNotIn(f"action=\"/gastos-generales/eliminar/{gasto.id}/\"", content)
+
+    def test_concepto_pago_visible_en_reporte_e_impresion_liquidacion(self):
+        self.client.login(username='propietario1', password='password123')
+        prop_owner = PropietarioInmueble.objects.create(
+            portafolio=self.portafolio1,
+            nombre='Propietario Conceptos Test'
+        )
+        prop = Propiedad.objects.create(
+            portafolio=self.portafolio1,
+            propietario_inmueble=prop_owner,
+            nombre_o_numero='Apto 502 Vista',
+            estado='OCUPADO'
+        )
+        inquilino = Inquilino.objects.create(
+            nombre='Carlos Inquilino Concepto'
+        )
+        contrato = Contrato.objects.create(
+            propiedad=prop,
+            inquilino=inquilino,
+            monto_renta=Decimal('18000.00'),
+            dia_de_pago=5,
+            fecha_inicio=date(2026, 1, 1),
+            fecha_fin=date(2027, 1, 1),
+            activo=True
+        )
+        factura = Factura.objects.create(
+            contrato=contrato,
+            monto_base=Decimal('18000.00'),
+            monto_renta=Decimal('18000.00'),
+            concepto='Alquiler Departamento 502 - Noviembre 2026',
+            fecha_emision=date(2026, 11, 1),
+            fecha_vencimiento=date(2026, 11, 5),
+            estado='PAGADA'
+        )
+        ReciboPago.objects.create(
+            factura=factura,
+            fecha_pago=date(2026, 11, 3),
+            monto_pagado=Decimal('18000.00'),
+            monto_a_renta=Decimal('18000.00'),
+            metodo_pago='TRANSFERENCIA'
+        )
+
+        # 1. Verificar en reporte_propietario (web)
+        url_reporte = f"{reverse('reporte_propietario')}?propietario_id={prop_owner.id}&mes=11&anio=2026"
+        res_rep = self.client.get(url_reporte)
+        self.assertEqual(res_rep.status_code, 200)
+        content_rep = res_rep.content.decode('utf-8')
+        self.assertIn('Alquiler Departamento 502 - Noviembre 2026', content_rep)
+        self.assertIn(f"#{factura.id}", content_rep)
+
+        # 2. Verificar en imprimir_liquidacion_propietario (PDF/Impresión)
+        url_print = f"{reverse('imprimir_liquidacion_propietario', args=[prop_owner.id])}?mes=11&anio=2026"
+        res_print = self.client.get(url_print)
+        self.assertEqual(res_print.status_code, 200)
+        content_print = res_print.content.decode('utf-8')
+        self.assertIn('Alquiler Departamento 502 - Noviembre 2026', content_print)
+        self.assertIn(f"Factura #{factura.id}", content_print)
+
+
 
 
 

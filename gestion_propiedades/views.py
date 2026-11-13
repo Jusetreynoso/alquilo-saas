@@ -4155,6 +4155,29 @@ def eliminar_gasto_general(request, gasto_id):
         ).distinct()
     gasto = get_object_or_404(GastoGeneralPropietario, id=gasto_id, portafolio__in=portafolios)
     if request.method == 'POST':
+        propietario_afectado = gasto.propietario_inmueble or (gasto.propiedad.propietario_inmueble if gasto.propiedad else None)
+        if propietario_afectado and gasto.fecha:
+            mes_gasto = gasto.fecha.month
+            anio_gasto = gasto.fecha.year
+            liquidacion_cerrada = LiquidacionPropietario.objects.filter(
+                propietario_inmueble=propietario_afectado,
+                periodo_mes=mes_gasto,
+                periodo_anio=anio_gasto
+            ).first()
+            if liquidacion_cerrada:
+                messages.error(
+                    request,
+                    f'No se puede eliminar el gasto "{gasto.concepto}" porque el período {mes_gasto}/{anio_gasto} '
+                    f'ya fue liquidado para el propietario {propietario_afectado.nombre}.'
+                )
+                next_url = request.POST.get('next') or request.GET.get('next')
+                if next_url == 'reporte_propietario':
+                    prop_id = request.POST.get('propietario_id') or propietario_afectado.id
+                    mes = request.POST.get('mes') or mes_gasto
+                    anio = request.POST.get('anio') or anio_gasto
+                    return redirect(f"{reverse('reporte_propietario')}?propietario_id={prop_id}&mes={mes}&anio={anio}")
+                return redirect('lista_gastos_generales')
+
         concepto = gasto.concepto
         monto = gasto.monto
         prop_inmueble_id = gasto.propietario_inmueble_id
@@ -4213,6 +4236,9 @@ def reporte_propietario(request):
             propiedades = todas_propiedades
             
     total_ingresos = decimal.Decimal('0.00')
+    total_renta_cobrada = decimal.Decimal('0.00')
+    total_servicios_cobrados = decimal.Decimal('0.00')
+    total_mora_cobrada = decimal.Decimal('0.00')
     total_gastos_propiedades = decimal.Decimal('0.00')
     total_gastos_generales = decimal.Decimal('0.00')
     monto_comision = decimal.Decimal('0.00')
@@ -4223,6 +4249,11 @@ def reporte_propietario(request):
     recibos_cobrados = []
     gastos_directos_list = []
     gastos_generales_list = []
+    situacion_propiedades = []
+    saldo_acumulado_anterior = decimal.Decimal('0.00')
+    base_renta_sugerida = decimal.Decimal('0.00')
+    origen_base_renta = f"Sin cobros ni contratos registrados en {obtener_nombre_mes(mes)}. Digita el monto en la casilla de Base."
+    itbis_18_calculado = decimal.Decimal('0.00')
     
     if propiedades.exists():
         # Recibos cobrados en el mes/año
@@ -4245,23 +4276,6 @@ def reporte_propietario(request):
         gastos_directos_list = list(mantenimientos_qs)
         gastos_agg = sum(m.costo for m in gastos_directos_list)
         total_gastos_propiedades = decimal.Decimal(str(gastos_agg)) if gastos_agg else decimal.Decimal('0.00')
-        
-        # Gastos generales / deducciones asociadas al propietario o a sus propiedades
-        if propietario_seleccionado:
-            gastos_gen_qs = GastoGeneralPropietario.objects.filter(
-                Q(propietario_inmueble=propietario_seleccionado) | Q(propiedad__in=propiedades),
-                fecha__month=mes,
-                fecha__year=anio
-            )
-        else:
-            gastos_gen_qs = GastoGeneralPropietario.objects.filter(
-                propiedad__in=propiedades,
-                fecha__month=mes,
-                fecha__year=anio
-            )
-        gastos_generales_list = list(gastos_gen_qs)
-        gastos_gen_agg = sum(g.monto for g in gastos_generales_list)
-        total_gastos_generales = decimal.Decimal(str(gastos_gen_agg)) if gastos_gen_agg else decimal.Decimal('0.00')
         
         # Cálculo de comisión de administración si hay propietario seleccionado
         # REGLA: Los conceptos adicionales (mantenimiento, agua, bomba, basura) y moras NO pagan comisión.
@@ -4375,48 +4389,67 @@ def reporte_propietario(request):
                 'detalles_custodia': contrato_act.detalles_custodia_deposito if contrato_act else ''
             })
 
-        # --- CÁLCULO DE SALDO ACUMULADO MULTIMES NO LIQUIDADO ---
-        saldo_acumulado_anterior = decimal.Decimal('0.00')
-        if propietario_seleccionado:
-            recibos_pasados = ReciboPago.objects.filter(
-                factura__contrato__propiedad__propietario_inmueble=propietario_seleccionado
-            ).exclude(
-                fecha_pago__month=mes,
-                fecha_pago__year=anio
-            )
-            periodos_pasados = recibos_pasados.values_list('fecha_pago__month', 'fecha_pago__year').distinct()
-            for p_mes, p_anio in periodos_pasados:
-                ya_liquidado = LiquidacionPropietario.objects.filter(
+    # Gastos generales / deducciones asociadas al propietario o a sus propiedades
+    if propietario_seleccionado:
+        gastos_gen_qs = GastoGeneralPropietario.objects.filter(
+            Q(propietario_inmueble=propietario_seleccionado) | Q(propiedad__in=propiedades),
+            fecha__month=mes,
+            fecha__year=anio
+        )
+    elif propiedades.exists():
+        gastos_gen_qs = GastoGeneralPropietario.objects.filter(
+            propiedad__in=propiedades,
+            fecha__month=mes,
+            fecha__year=anio
+        )
+    else:
+        gastos_gen_qs = GastoGeneralPropietario.objects.none()
+    gastos_generales_list = list(gastos_gen_qs)
+    gastos_gen_agg = sum(g.monto for g in gastos_generales_list)
+    total_gastos_generales = decimal.Decimal(str(gastos_gen_agg)) if gastos_gen_agg else decimal.Decimal('0.00')
+
+    # --- CÁLCULO DE SALDO ACUMULADO MULTIMES NO LIQUIDADO ---
+    saldo_acumulado_anterior = decimal.Decimal('0.00')
+    if propietario_seleccionado:
+        recibos_pasados = ReciboPago.objects.filter(
+            factura__contrato__propiedad__propietario_inmueble=propietario_seleccionado
+        ).exclude(
+            fecha_pago__month=mes,
+            fecha_pago__year=anio
+        )
+        periodos_pasados = recibos_pasados.values_list('fecha_pago__month', 'fecha_pago__year').distinct()
+        for p_mes, p_anio in periodos_pasados:
+            ya_liquidado = LiquidacionPropietario.objects.filter(
+                propietario_inmueble=propietario_seleccionado,
+                periodo_mes=p_mes,
+                periodo_anio=p_anio
+            ).exists()
+            if not ya_liquidado:
+                ing_pasado = ReciboPago.objects.filter(
+                    factura__contrato__propiedad__propietario_inmueble=propietario_seleccionado,
+                    fecha_pago__month=p_mes,
+                    fecha_pago__year=p_anio
+                ).aggregate(total=Sum('monto_pagado'))['total'] or decimal.Decimal('0.00')
+                
+                if propietario_seleccionado.tipo_comision == 'PORCENTAJE':
+                    comision_pasada = round(ing_pasado * (propietario_seleccionado.porcentaje_comision / decimal.Decimal('100.0')), 2)
+                else:
+                    comision_pasada = propietario_seleccionado.monto_comision_fijo * propiedades.count()
+                    
+                gastos_pasados = MantenimientoUnidad.objects.filter(
+                    propiedad__propietario_inmueble=propietario_seleccionado,
+                    fecha_reporte__month=p_mes,
+                    fecha_reporte__year=p_anio
+                ).aggregate(total=Sum('costo'))['total'] or decimal.Decimal('0.00')
+                
+                gastos_gen_pasados = GastoGeneralPropietario.objects.filter(
                     propietario_inmueble=propietario_seleccionado,
-                    periodo_mes=p_mes,
-                    periodo_anio=p_anio
-                ).exists()
-                if not ya_liquidado:
-                    ing_pasado = ReciboPago.objects.filter(
-                        factura__contrato__propiedad__propietario_inmueble=propietario_seleccionado,
-                        fecha_pago__month=p_mes,
-                        fecha_pago__year=p_anio
-                    ).aggregate(total=Sum('monto_pagado'))['total'] or decimal.Decimal('0.00')
-                    
-                    if propietario_seleccionado.tipo_comision == 'PORCENTAJE':
-                        comision_pasada = round(ing_pasado * (propietario_seleccionado.porcentaje_comision / decimal.Decimal('100.0')), 2)
-                    else:
-                        comision_pasada = propietario_seleccionado.monto_comision_fijo * propiedades.count()
-                        
-                    gastos_pasados = MantenimientoUnidad.objects.filter(
-                        propiedad__propietario_inmueble=propietario_seleccionado,
-                        fecha_reporte__month=p_mes,
-                        fecha_reporte__year=p_anio
-                    ).aggregate(total=Sum('costo'))['total'] or decimal.Decimal('0.00')
-                    
-                    gastos_gen_pasados = GastoGeneralPropietario.objects.filter(
-                        propietario_inmueble=propietario_seleccionado,
-                        fecha__month=p_mes,
-                        fecha__year=p_anio
-                    ).aggregate(total=Sum('monto'))['total'] or decimal.Decimal('0.00')
-                    
-                    neto_pasado = max(decimal.Decimal('0.00'), ing_pasado - (comision_pasada + gastos_pasados + gastos_gen_pasados))
-                    saldo_acumulado_anterior += neto_pasado
+                    fecha__month=p_mes,
+                    fecha__year=p_anio
+                ).aggregate(total=Sum('monto'))['total'] or decimal.Decimal('0.00')
+                
+                neto_pasado = max(decimal.Decimal('0.00'), ing_pasado - (comision_pasada + gastos_pasados + gastos_gen_pasados))
+                saldo_acumulado_anterior += neto_pasado
 
     total_propiedades = propiedades.count()
     porcentaje_ocupacion = (propiedades_ocupadas / total_propiedades * 100) if total_propiedades > 0 else 0
