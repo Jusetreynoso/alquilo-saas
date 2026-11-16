@@ -5520,6 +5520,34 @@ def exportar_datos_csv_zip(request):
                 ])
             zip_file.writestr('10_Recordatorios_Pagos_Propietarios.csv', output_rec_prop.getvalue().encode('utf-8-sig'))
 
+            # 11. Solicitudes de Alquiler y Prospectos
+            try:
+                solicitudes_qs = SolicitudAlquiler.objects.filter(
+                    propiedad__portafolio__in=portafolios
+                ).select_related('propiedad')
+                output_sol = io.StringIO()
+                writer = csv.writer(output_sol)
+                writer.writerow([
+                    'ID', 'Propiedad', 'Nombre Completo', 'Cédula', 'Teléfono', 'Estado Civil',
+                    'Cantidad Personas', 'Mascotas', 'Profesión', 'Empresa', 'Ingresos Mensuales',
+                    'Tiene Fiador', 'Nombre Fiador', 'Cédula Fiador', 'Teléfono Fiador',
+                    'Empresa Fiador', 'Ingresos Fiador', 'Estado Solicitud', 'Fecha Creación'
+                ])
+                for s in solicitudes_qs:
+                    prop_nom = s.propiedad.nombre_o_numero if s.propiedad else 'N/A'
+                    est_txt = s.get_estado_display() if hasattr(s, 'get_estado_display') else s.estado
+                    writer.writerow([
+                        s.id, prop_nom, s.nombre_completo or '', s.cedula or '', s.telefono or '',
+                        s.estado_civil or '', s.cantidad_personas or '', 'Sí' if s.tiene_mascotas else 'No',
+                        s.profesion or '', s.empresa_trabajo or '', s.ingresos_mensuales or 0.00,
+                        'Sí' if s.tiene_fiador else 'No', s.fiador_nombre or '', s.fiador_cedula or '',
+                        s.fiador_telefono or '', s.fiador_empresa_trabajo or '', s.fiador_ingresos_mensuales or 0.00,
+                        est_txt, s.creada_en.strftime('%Y-%m-%d %H:%M') if s.creada_en else ''
+                    ])
+                zip_file.writestr('11_Solicitudes_Alquiler.csv', output_sol.getvalue().encode('utf-8-sig'))
+            except Exception as e_sol_csv:
+                logger.warning(f"Error procesando solicitudes de alquiler en exportación CSV: {e_sol_csv}")
+
         zip_buffer.seek(0)
         fecha_str = date.today().strftime('%Y%m%d')
         response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
@@ -5586,142 +5614,167 @@ def exportar_archivos_adjuntos_zip(request):
     try:
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
             # 1. Contratos legales (PDFs)
-            contratos_qs = Contrato.objects.filter(
-                propiedad__portafolio__in=portafolios
-            ).select_related('propiedad', 'inquilino')
-            for c in contratos_qs:
-                prop_slug = limpiar_nombre_zip(c.propiedad.nombre_o_numero if c.propiedad else f"prop_{c.propiedad_id}")
-                inq_slug = limpiar_nombre_zip(c.inquilino.nombre if c.inquilino else 'inquilino')
-                
-                # Documento principal firmado
-                if c.documento_contrato:
-                    nombre_orig = os.path.basename(c.documento_contrato.name)
-                    agregar_al_zip(
-                        zip_file,
-                        f"1_Contratos_Legales/Contrato_{c.id}_{prop_slug}_{inq_slug}_{limpiar_nombre_zip(nombre_orig)}",
-                        c.documento_contrato
-                    )
-                
-                # Fotos de entrega del inmueble asociadas al contrato
-                for idx_f, f_entrega in enumerate([c.fotos_entrega, c.foto_entrega_2, c.foto_entrega_3, c.foto_entrega_4, c.foto_entrega_5], start=1):
-                    if f_entrega:
-                        nombre_orig = os.path.basename(f_entrega.name)
+            try:
+                contratos_qs = Contrato.objects.filter(
+                    propiedad__portafolio__in=portafolios
+                ).select_related('propiedad', 'inquilino')
+                for c in contratos_qs:
+                    prop_slug = limpiar_nombre_zip(c.propiedad.nombre_o_numero if c.propiedad else f"prop_{c.propiedad_id}")
+                    inq_slug = limpiar_nombre_zip(c.inquilino.nombre if c.inquilino else 'inquilino')
+                    
+                    # Documento principal firmado
+                    if c.documento_contrato and getattr(c.documento_contrato, 'name', None):
+                        nombre_orig = os.path.basename(c.documento_contrato.name)
                         agregar_al_zip(
                             zip_file,
-                            f"2_Fotos_Entregas_Inmuebles/Entrega_Contrato_{c.id}_{prop_slug}_foto{idx_f}_{limpiar_nombre_zip(nombre_orig)}",
-                            f_entrega
+                            f"1_Contratos_Legales/Contrato_{c.id}_{prop_slug}_{inq_slug}_{limpiar_nombre_zip(nombre_orig)}",
+                            c.documento_contrato
                         )
+                    
+                    # Fotos de entrega del inmueble asociadas al contrato
+                    for idx_f, f_entrega in enumerate([c.fotos_entrega, c.foto_entrega_2, c.foto_entrega_3, c.foto_entrega_4, c.foto_entrega_5], start=1):
+                        if f_entrega and getattr(f_entrega, 'name', None):
+                            nombre_orig = os.path.basename(f_entrega.name)
+                            agregar_al_zip(
+                                zip_file,
+                                f"2_Fotos_Entregas_Inmuebles/Entrega_Contrato_{c.id}_{prop_slug}_foto{idx_f}_{limpiar_nombre_zip(nombre_orig)}",
+                                f_entrega
+                            )
+            except Exception as e_sec:
+                logger.warning(f"Error procesando contratos en ZIP: {e_sec}")
 
             # 2. Fotos de Propiedades (Fachadas y Galería)
-            propiedades_qs = Propiedad.objects.filter(
-                portafolio__in=portafolios, 
-                is_deleted=False
-            ).prefetch_related('imagenes_galeria')
-            for pr in propiedades_qs:
-                prop_slug = limpiar_nombre_zip(pr.nombre_o_numero)
-                if pr.imagen_principal:
-                    nombre_orig = os.path.basename(pr.imagen_principal.name)
-                    agregar_al_zip(
-                        zip_file,
-                        f"3_Fotos_Propiedades/Fachada_{pr.id}_{prop_slug}_{limpiar_nombre_zip(nombre_orig)}",
-                        pr.imagen_principal
-                    )
-                for img_gal in pr.imagenes_galeria.all():
-                    if img_gal.imagen:
-                        nombre_orig = os.path.basename(img_gal.imagen.name)
-                        desc_slug = limpiar_nombre_zip(img_gal.titulo_o_descripcion or f"foto_{img_gal.id}")
+            try:
+                propiedades_qs = Propiedad.objects.filter(
+                    portafolio__in=portafolios, 
+                    is_deleted=False
+                ).prefetch_related('imagenes_galeria')
+                for pr in propiedades_qs:
+                    prop_slug = limpiar_nombre_zip(pr.nombre_o_numero)
+                    if pr.imagen_principal and getattr(pr.imagen_principal, 'name', None):
+                        nombre_orig = os.path.basename(pr.imagen_principal.name)
                         agregar_al_zip(
                             zip_file,
-                            f"3_Fotos_Propiedades/Galeria_{prop_slug}_{desc_slug}_{limpiar_nombre_zip(nombre_orig)}",
-                            img_gal.imagen
+                            f"3_Fotos_Propiedades/Fachada_{pr.id}_{prop_slug}_{limpiar_nombre_zip(nombre_orig)}",
+                            pr.imagen_principal
                         )
+                    for img_gal in pr.imagenes_galeria.all():
+                        if img_gal.imagen and getattr(img_gal.imagen, 'name', None):
+                            nombre_orig = os.path.basename(img_gal.imagen.name)
+                            desc_slug = limpiar_nombre_zip(img_gal.titulo_o_descripcion or f"foto_{img_gal.id}")
+                            agregar_al_zip(
+                                zip_file,
+                                f"3_Fotos_Propiedades/Galeria_{prop_slug}_{desc_slug}_{limpiar_nombre_zip(nombre_orig)}",
+                                img_gal.imagen
+                            )
+            except Exception as e_sec:
+                logger.warning(f"Error procesando fotos de propiedades en ZIP: {e_sec}")
 
             # 3. Comprobantes físicos de cobros y pagos de inquilinos
-            recibos_qs = ReciboPago.objects.filter(
-                factura__contrato__propiedad__portafolio__in=portafolios
-            ).exclude(comprobante_imagen='').exclude(comprobante_imagen__isnull=True).select_related('factura__contrato__propiedad')
-            for r in recibos_qs:
-                if r.comprobante_imagen:
-                    prop_slug = limpiar_nombre_zip(r.factura.contrato.propiedad.nombre_o_numero if (r.factura and r.factura.contrato and r.factura.contrato.propiedad) else 'propiedad')
-                    nombre_orig = os.path.basename(r.comprobante_imagen.name)
-                    agregar_al_zip(
-                        zip_file,
-                        f"4_Comprobantes_Cobros/Recibo_{r.id}_Factura_{r.factura_id}_{prop_slug}_{limpiar_nombre_zip(nombre_orig)}",
-                        r.comprobante_imagen
-                    )
-
-            # 4. Comprobantes de liquidaciones a propietarios
-            liquidaciones_qs = LiquidacionPropietario.objects.filter(
-                propietario_inmueble__portafolio__in=portafolios
-            ).exclude(comprobante_pago='').exclude(comprobante_pago__isnull=True).select_related('propietario_inmueble')
-            for l in liquidaciones_qs:
-                if l.comprobante_pago:
-                    prop_slug = limpiar_nombre_zip(l.propietario_inmueble.nombre if l.propietario_inmueble else 'propietario')
-                    nombre_orig = os.path.basename(l.comprobante_pago.name)
-                    agregar_al_zip(
-                        zip_file,
-                        f"5_Liquidaciones_Propietarios/Liquidacion_{l.id}_{prop_slug}_{l.periodo_mes}_{l.periodo_anio}_{limpiar_nombre_zip(nombre_orig)}",
-                        l.comprobante_pago
-                    )
-
-            # 5. Facturas y comprobantes de mantenimiento
-            mantenimientos_qs = MantenimientoUnidad.objects.filter(
-                propiedad__portafolio__in=portafolios
-            ).exclude(factura_adjunta='').exclude(factura_adjunta__isnull=True).select_related('propiedad')
-            for m in mantenimientos_qs:
-                if m.factura_adjunta:
-                    prop_slug = limpiar_nombre_zip(m.propiedad.nombre_o_numero if m.propiedad else 'propiedad')
-                    nombre_orig = os.path.basename(m.factura_adjunta.name)
-                    agregar_al_zip(
-                        zip_file,
-                        f"6_Mantenimientos_Gastos/Mantenimiento_{m.id}_{prop_slug}_{limpiar_nombre_zip(nombre_orig)}",
-                        m.factura_adjunta
-                    )
-
-            # 6. Facturas y comprobantes de gastos generales / deducciones
-            gastos_gen_qs = GastoGeneralPropietario.objects.filter(
-                portafolio__in=portafolios
-            ).exclude(factura_adjunta='').exclude(factura_adjunta__isnull=True)
-            for g in gastos_gen_qs:
-                if g.factura_adjunta:
-                    concepto_slug = limpiar_nombre_zip(g.concepto or f"gasto_{g.id}")
-                    nombre_orig = os.path.basename(g.factura_adjunta.name)
-                    agregar_al_zip(
-                        zip_file,
-                        f"7_Gastos_Generales/Gasto_{g.id}_{concepto_slug}_{limpiar_nombre_zip(nombre_orig)}",
-                        g.factura_adjunta
-                    )
-
-            # 7. Documentos de Solicitudes de Alquiler
-            solicitudes_qs = SolicitudAlquiler.objects.filter(
-                propiedad__portafolio__in=portafolios
-            ).select_related('propiedad')
-            for s in solicitudes_qs:
-                s_slug = limpiar_nombre_zip(s.nombre_solicitante or f"solicitud_{s.id}")
-                for tipo_doc, campo_adj in [
-                    ('Cedula_Solicitante', s.adjunto_cedula_solicitante),
-                    ('Ingresos_Solicitante', s.adjunto_ingresos_solicitante),
-                    ('Cedula_Fiador', s.adjunto_cedula_fiador),
-                    ('Ingresos_Fiador', s.adjunto_ingresos_fiador),
-                ]:
-                    if campo_adj:
-                        nombre_orig = os.path.basename(campo_adj.name)
+            try:
+                recibos_qs = ReciboPago.objects.filter(
+                    factura__contrato__propiedad__portafolio__in=portafolios
+                ).exclude(comprobante_imagen='').exclude(comprobante_imagen__isnull=True).select_related('factura__contrato__propiedad')
+                for r in recibos_qs:
+                    if r.comprobante_imagen and getattr(r.comprobante_imagen, 'name', None):
+                        prop_slug = limpiar_nombre_zip(r.factura.contrato.propiedad.nombre_o_numero if (r.factura and r.factura.contrato and r.factura.contrato.propiedad) else 'propiedad')
+                        nombre_orig = os.path.basename(r.comprobante_imagen.name)
                         agregar_al_zip(
                             zip_file,
-                            f"8_Solicitudes_Alquiler/Solicitud_{s.id}_{s_slug}_{tipo_doc}_{limpiar_nombre_zip(nombre_orig)}",
-                            campo_adj
+                            f"4_Comprobantes_Cobros/Recibo_{r.id}_Factura_{r.factura_id}_{prop_slug}_{limpiar_nombre_zip(nombre_orig)}",
+                            r.comprobante_imagen
                         )
+            except Exception as e_sec:
+                logger.warning(f"Error procesando comprobantes de cobro en ZIP: {e_sec}")
+
+            # 4. Comprobantes de liquidaciones a propietarios
+            try:
+                liquidaciones_qs = LiquidacionPropietario.objects.filter(
+                    propietario_inmueble__portafolio__in=portafolios
+                ).exclude(comprobante_pago='').exclude(comprobante_pago__isnull=True).select_related('propietario_inmueble')
+                for l in liquidaciones_qs:
+                    if l.comprobante_pago and getattr(l.comprobante_pago, 'name', None):
+                        prop_slug = limpiar_nombre_zip(l.propietario_inmueble.nombre if l.propietario_inmueble else 'propietario')
+                        nombre_orig = os.path.basename(l.comprobante_pago.name)
+                        agregar_al_zip(
+                            zip_file,
+                            f"5_Liquidaciones_Propietarios/Liquidacion_{l.id}_{prop_slug}_{l.periodo_mes}_{l.periodo_anio}_{limpiar_nombre_zip(nombre_orig)}",
+                            l.comprobante_pago
+                        )
+            except Exception as e_sec:
+                logger.warning(f"Error procesando liquidaciones en ZIP: {e_sec}")
+
+            # 5. Facturas y comprobantes de mantenimiento
+            try:
+                mantenimientos_qs = MantenimientoUnidad.objects.filter(
+                    propiedad__portafolio__in=portafolios
+                ).exclude(factura_adjunta='').exclude(factura_adjunta__isnull=True).select_related('propiedad')
+                for m in mantenimientos_qs:
+                    if m.factura_adjunta and getattr(m.factura_adjunta, 'name', None):
+                        prop_slug = limpiar_nombre_zip(m.propiedad.nombre_o_numero if m.propiedad else 'propiedad')
+                        nombre_orig = os.path.basename(m.factura_adjunta.name)
+                        agregar_al_zip(
+                            zip_file,
+                            f"6_Mantenimientos_Gastos/Mantenimiento_{m.id}_{prop_slug}_{limpiar_nombre_zip(nombre_orig)}",
+                            m.factura_adjunta
+                        )
+            except Exception as e_sec:
+                logger.warning(f"Error procesando mantenimientos en ZIP: {e_sec}")
+
+            # 6. Facturas y comprobantes de gastos generales / deducciones
+            try:
+                gastos_gen_qs = GastoGeneralPropietario.objects.filter(
+                    portafolio__in=portafolios
+                ).exclude(factura_adjunta='').exclude(factura_adjunta__isnull=True)
+                for g in gastos_gen_qs:
+                    if g.factura_adjunta and getattr(g.factura_adjunta, 'name', None):
+                        concepto_slug = limpiar_nombre_zip(g.concepto or f"gasto_{g.id}")
+                        nombre_orig = os.path.basename(g.factura_adjunta.name)
+                        agregar_al_zip(
+                            zip_file,
+                            f"7_Gastos_Generales/Gasto_{g.id}_{concepto_slug}_{limpiar_nombre_zip(nombre_orig)}",
+                            g.factura_adjunta
+                        )
+            except Exception as e_sec:
+                logger.warning(f"Error procesando gastos generales en ZIP: {e_sec}")
+
+            # 7. Documentos de Solicitudes de Alquiler
+            try:
+                solicitudes_qs = SolicitudAlquiler.objects.filter(
+                    propiedad__portafolio__in=portafolios
+                ).select_related('propiedad')
+                for s in solicitudes_qs:
+                    nombre_sol = getattr(s, 'nombre_completo', None)
+                    s_slug = limpiar_nombre_zip(nombre_sol or f"solicitud_{s.id}")
+                    for tipo_doc, campo_adj in [
+                        ('Cedula_Solicitante', getattr(s, 'adjunto_cedula_solicitante', None)),
+                        ('Ingresos_Solicitante', getattr(s, 'adjunto_ingresos_solicitante', None)),
+                        ('Cedula_Fiador', getattr(s, 'adjunto_cedula_fiador', None)),
+                        ('Ingresos_Fiador', getattr(s, 'adjunto_ingresos_fiador', None)),
+                    ]:
+                        if campo_adj and getattr(campo_adj, 'name', None):
+                            nombre_orig = os.path.basename(campo_adj.name)
+                            agregar_al_zip(
+                                zip_file,
+                                f"8_Solicitudes_Alquiler/Solicitud_{s.id}_{s_slug}_{tipo_doc}_{limpiar_nombre_zip(nombre_orig)}",
+                                campo_adj
+                            )
+            except Exception as e_sec:
+                logger.warning(f"Error procesando solicitudes de alquiler en ZIP: {e_sec}")
 
             # 8. Logos de Portafolio
-            for port in portafolios:
-                if port.logo_empresa:
-                    port_slug = limpiar_nombre_zip(port.nombre)
-                    nombre_orig = os.path.basename(port.logo_empresa.name)
-                    agregar_al_zip(
-                        zip_file,
-                        f"9_Logos_Portafolios/Logo_{port.id}_{port_slug}_{limpiar_nombre_zip(nombre_orig)}",
-                        port.logo_empresa
-                    )
+            try:
+                for port in portafolios:
+                    if port.logo_empresa and getattr(port.logo_empresa, 'name', None):
+                        port_slug = limpiar_nombre_zip(port.nombre)
+                        nombre_orig = os.path.basename(port.logo_empresa.name)
+                        agregar_al_zip(
+                            zip_file,
+                            f"9_Logos_Portafolios/Logo_{port.id}_{port_slug}_{limpiar_nombre_zip(nombre_orig)}",
+                            port.logo_empresa
+                        )
+            except Exception as e_sec:
+                logger.warning(f"Error procesando logos de portafolio en ZIP: {e_sec}")
 
             # Manifiesto informativo de respaldo
             nombres_port = ", ".join([p.nombre for p in portafolios])

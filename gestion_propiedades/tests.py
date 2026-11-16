@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from django.utils import timezone
 from django.core.files.uploadedfile import SimpleUploadedFile
 import os
-from .models import Portafolio, Propiedad, Inquilino, Contrato, HistorialAumentoRenta, AuditLog, PlanSaaS, SuscripcionCliente, FacturaSaaS, PublicacionMarketplace, ImagenPublicacion, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, Factura, ReciboPago, MantenimientoUnidad, LiquidacionDepositoInquilino, CargoAdicionalContrato, DetalleFacturaServicio, CargoMora
+from .models import Portafolio, Propiedad, Inquilino, Contrato, HistorialAumentoRenta, AuditLog, PlanSaaS, SuscripcionCliente, FacturaSaaS, PublicacionMarketplace, ImagenPublicacion, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, Factura, ReciboPago, MantenimientoUnidad, LiquidacionDepositoInquilino, CargoAdicionalContrato, DetalleFacturaServicio, CargoMora, SolicitudAlquiler, RecordatorioPagoPropietario
 from decimal import Decimal
 
 class AlquiloTests(TestCase):
@@ -503,16 +503,25 @@ class AlquiloTests(TestCase):
             self.assertIn('7_Gastos_Mantenimiento_Unidades.csv', nombres)
             self.assertIn('8_Gastos_Generales_Deducciones.csv', nombres)
             self.assertIn('10_Recordatorios_Pagos_Propietarios.csv', nombres)
+            self.assertIn('11_Solicitudes_Alquiler.csv', nombres)
             mantenimiento_csv = zf.read('7_Gastos_Mantenimiento_Unidades.csv').decode('utf-8-sig')
             self.assertIn('Reparación de fuga en baño principal', mantenimiento_csv)
 
-        # 3. Probar exportar archivos adjuntos en ZIP
+        # 3. Probar exportar archivos adjuntos en ZIP incluyendo solicitudes de alquiler
+        sol_test = SolicitudAlquiler.objects.create(
+            propiedad=self.propiedad1,
+            nombre_completo='Juan Perez Solicitante',
+            cedula='001-1234567-8',
+            adjunto_cedula_solicitante=SimpleUploadedFile("cedula_juan.pdf", b"%PDF-1.4 test content", content_type="application/pdf"),
+            adjunto_ingresos_solicitante=SimpleUploadedFile("ingresos_juan.pdf", b"%PDF-1.4 test income", content_type="application/pdf"),
+        )
         res_export_archivos = self.client.get(reverse('exportar_archivos_adjuntos_zip'))
         self.assertEqual(res_export_archivos.status_code, 200)
         self.assertEqual(res_export_archivos['Content-Type'], 'application/zip')
         with zipfile.ZipFile(io.BytesIO(res_export_archivos.content)) as zf_archivos:
             nombres_archivos = zf_archivos.namelist()
             self.assertTrue(len(nombres_archivos) > 0)
+            self.assertTrue(any('8_Solicitudes_Alquiler' in n for n in nombres_archivos))
 
         # 4. Probar eliminar propiedad y recuperarla desde papelera
         self.propiedad1.is_deleted = True
