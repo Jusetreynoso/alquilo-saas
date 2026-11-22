@@ -942,6 +942,7 @@ class AuditLog(models.Model):
         ('CREAR', 'Creó'),
         ('EDITAR', 'Editó'),
         ('ELIMINAR', 'Eliminó'),
+        ('ENVIAR', 'Envió'),
     ]
 
     accion = models.CharField(max_length=10, choices=ACCION_CHOICES)
@@ -1184,6 +1185,44 @@ class RecordatorioPagoPropietario(models.Model):
 
     def __str__(self):
         return f"{self.propietario.nombre} - {self.titulo} ({self.fecha_recordatorio})"
+
+
+class PlantillaWhatsApp(models.Model):
+    TIPO_CHOICES = [
+        ('RECORDATORIO', 'Recordatorio de Pago'),
+        ('MORA', 'Aviso de Mora'),
+        ('RECIBO', 'Comprobante de Recibo'),
+    ]
+
+    portafolio = models.ForeignKey(Portafolio, on_delete=models.CASCADE, related_name='plantillas_whatsapp')
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
+    texto = models.TextField(help_text="Texto del mensaje con variables entre llaves, ej: {inquilino}, {monto}")
+    activo = models.BooleanField(default=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('portafolio', 'tipo')
+        verbose_name = 'Plantilla de WhatsApp'
+        verbose_name_plural = 'Plantillas de WhatsApp'
+
+    def clean(self):
+        super().clean()
+        from .whatsapp_links import validar_variables_plantilla
+        es_valido, invalidas = validar_variables_plantilla(self.texto)
+        if not es_valido:
+            from django.core.exceptions import ValidationError
+            raise ValidationError({
+                'texto': (
+                    f"Las siguientes variables no están permitidas: {', '.join(sorted(invalidas))}. "
+                    f"Solo se permiten: {{inquilino}}, {{inmueble}}, {{periodo}}, {{monto}}, {{mora}}, "
+                    f"{{saldo}}, {{fecha_vencimiento}}, {{agencia}}, {{link_recibo}}."
+                )
+            })
+
+    def __str__(self):
+        return f"{self.get_tipo_display()} - {self.portafolio.nombre}"
+
 
 
 

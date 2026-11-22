@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Portafolio, Propiedad, Contrato, Factura, CargoMora, ReciboPago, MantenimientoUnidad, SuscripcionCliente, PlanSaaS, AvisoSistema, Inquilino, HistorialAumentoRenta, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, LiquidacionDepositoInquilino, HistorialPrecioPropiedad, ImagenPropiedad, SolicitudAlquiler, CargoAdicionalContrato, DetalleFacturaServicio
+from .models import Portafolio, Propiedad, Contrato, Factura, CargoMora, ReciboPago, MantenimientoUnidad, SuscripcionCliente, PlanSaaS, AvisoSistema, Inquilino, HistorialAumentoRenta, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, LiquidacionDepositoInquilino, HistorialPrecioPropiedad, ImagenPropiedad, SolicitudAlquiler, CargoAdicionalContrato, DetalleFacturaServicio, PlantillaWhatsApp
 
 # Personalizando los títulos del panel de Django para "Alquilo"
 admin.site.site_header = "Administración Alquilo"
@@ -154,5 +154,12 @@ class RegistroProcesoAdmin(admin.ModelAdmin):
     list_display = ('nombre_proceso', 'fecha_ejecucion', 'exitoso', 'facturas_creadas', 'ejecutado_por')
     list_filter = ('exitoso', 'fecha_ejecucion', 'nombre_proceso')
     search_fields = ('nombre_proceso', 'detalles')
+
+@admin.register(PlantillaWhatsApp)
+class PlantillaWhatsAppAdmin(admin.ModelAdmin):
+    list_display = ('tipo', 'portafolio', 'activo', 'actualizado_en')
+    list_filter = ('tipo', 'activo', 'portafolio')
+    search_fields = ('portafolio__nombre', 'texto')
+
 
 
