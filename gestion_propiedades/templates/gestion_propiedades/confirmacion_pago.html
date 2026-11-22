@@ -1,0 +1,110 @@
+{% extends 'gestion_propiedades/base.html' %}
+{% load filtros_dinero %}
+
+{% block titulo %}{{ titulo_pagina }}{% endblock %}
+
+{% block encabezado %}
+    <div class="d-flex align-items-center gap-2">
+        <a href="{% url 'detalle_propiedad' propiedad.id %}" class="btn btn-sm btn-outline-secondary">⬅ Volver a Propiedad</a>
+        <span>{{ titulo_pagina }}</span>
+    </div>
+{% endblock %}
+
+{% block contenido %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-7 col-md-9">
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+                <!-- Header con mensaje de éxito -->
+                <div class="card-header bg-success bg-gradient text-white text-center py-4 border-0">
+                    <div class="display-5 mb-2">🎉</div>
+                    <h3 class="fw-bold mb-1">¡Pago Registrado con Éxito!</h3>
+                    <p class="mb-0 text-white-50 small">El recibo oficial #{{ recibo.id }} ha sido generado e imputado en el sistema.</p>
+                </div>
+
+                <div class="card-body p-4 p-md-5">
+                    <!-- Resumen del Pago -->
+                    <div class="bg-light rounded-3 p-4 mb-4 border">
+                        <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                            <span class="text-muted small text-uppercase fw-bold">Monto Pagado</span>
+                            <span class="fs-3 fw-bold text-success">RD$ {{ recibo.monto_pagado|dinero }}</span>
+                        </div>
+                        <div class="row g-2 small text-secondary">
+                            <div class="col-6">
+                                <span class="fw-bold text-dark">Inquilino:</span><br>
+                                {{ inquilino.nombre }}
+                            </div>
+                            <div class="col-6">
+                                <span class="fw-bold text-dark">Inmueble:</span><br>
+                                {{ propiedad.nombre_o_numero }}
+                            </div>
+                            <div class="col-6 mt-2">
+                                <span class="fw-bold text-dark">Concepto:</span><br>
+                                {{ factura.concepto }}
+                            </div>
+                            <div class="col-6 mt-2">
+                                <span class="fw-bold text-dark">Método de Pago:</span><br>
+                                {{ recibo.get_metodo_pago_display }}
+                            </div>
+                            <div class="col-6 mt-2">
+                                <span class="fw-bold text-dark">Fecha:</span><br>
+                                {{ recibo.fecha_pago|date:"d/m/Y" }}
+                            </div>
+                            <div class="col-6 mt-2">
+                                <span class="fw-bold text-dark">Saldo Pendiente Restante:</span><br>
+                                {% if factura.saldo_pendiente > 0 %}
+                                    <span class="text-danger fw-bold">RD$ {{ factura.saldo_pendiente|dinero }}</span>
+                                {% else %}
+                                    <span class="text-success fw-bold">Factura Totalmente Saldada ✓</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Acciones principales -->
+                    <div class="d-grid gap-3 mb-4">
+                        {% if tiene_telefono_valido %}
+                        <a href="{% url 'enviar_whatsapp_recibo' recibo.id %}" target="_blank" rel="noopener" class="btn btn-success btn-lg fw-bold shadow-sm d-flex align-items-center justify-content-center gap-2 py-3">
+                            <i class="bi bi-whatsapp fs-4"></i>
+                            <span>Enviar Recibo por WhatsApp</span>
+                        </a>
+                        {% else %}
+                        <div class="d-inline-block w-100" tabindex="0" data-bs-toggle="tooltip" data-bs-placement="top" title="El inquilino no tiene un teléfono válido registrado para WhatsApp">
+                            <button class="btn btn-secondary btn-lg fw-bold shadow-sm w-100 d-flex align-items-center justify-content-center gap-2 py-3 disabled" disabled style="pointer-events: none;">
+                                <i class="bi bi-whatsapp fs-4"></i>
+                                <span>Enviar Recibo por WhatsApp (Sin Teléfono Válido)</span>
+                            </button>
+                        </div>
+                        {% endif %}
+
+                        <a href="{% url 'imprimir_recibo' recibo.id %}" target="_blank" class="btn btn-outline-dark btn-lg fw-bold shadow-sm d-flex align-items-center justify-content-center gap-2 py-2">
+                            <i class="bi bi-printer fs-5"></i>
+                            <span>Ver / Imprimir Recibo Oficial</span>
+                        </a>
+                    </div>
+
+                    <!-- Navegación de retorno -->
+                    <hr class="text-muted opacity-25 my-4">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <a href="{% url 'detalle_propiedad' propiedad.id %}" class="btn btn-sm btn-outline-secondary">
+                            🏢 Volver a {{ propiedad.nombre_o_numero }}
+                        </a>
+                        <a href="{% url 'lista_facturas_global' %}" class="btn btn-sm btn-outline-primary">
+                            📋 Ir al Listado de Facturación
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    });
+</script>
+{% endblock %}

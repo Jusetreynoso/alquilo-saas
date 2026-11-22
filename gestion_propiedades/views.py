@@ -402,7 +402,7 @@ def registrar_pago(request, factura_id):
                             factura.estado = 'PAGADA'
                         factura.save()
                     messages.warning(request, f"¡Pago registrado exitosamente! Nota: el archivo de comprobante no pudo cargarse en este momento ({str(e)}).")
-                    return redirect('detalle_propiedad', propiedad_id=factura.contrato.propiedad.id)
+                    return redirect('confirmacion_pago_recibo', recibo_id=recibo.id)
                 except Exception as inner_e:
                     messages.error(request, f"Error al procesar el pago: {str(inner_e)}")
                     return redirect('registrar_pago', factura_id=factura.id)
@@ -425,13 +425,18 @@ def registrar_pago(request, factura_id):
                 f"🎉 ¡Factura #{factura.id} saldada completamente con RD$ {recibo.monto_pagado:,.2f}!"
             )
 
-        # 4. Lo devolvemos al expediente de la propiedad
-        return redirect('detalle_propiedad', propiedad_id=factura.contrato.propiedad.id)
+        # 4. Pantalla de confirmación con opciones de impresión y WhatsApp
+        return redirect('confirmacion_pago_recibo', recibo_id=recibo.id)
 
     # Si solo está entrando a ver la pantalla (Método GET), le mostramos el formulario
+    from .whatsapp_links import normalizar_telefono
+    inq_cobro = factura.contrato.inquilino if factura.contrato else None
+    tel_norm_cobro = normalizar_telefono(inq_cobro.telefono if inq_cobro else None)
     context = {
         'titulo_pagina': f'Cobrar Factura #{factura.id}',
         'factura': factura,
+        'inquilino': inq_cobro,
+        'tiene_telefono_valido': bool(tel_norm_cobro),
     }
     return render(request, 'gestion_propiedades/registrar_pago.html', context)
 
@@ -5937,5 +5942,199 @@ def importar_cartera_basora_web(request):
         return redirect('saas_master_control')
 
     return redirect('saas_master_control')
+
+
+# --- SERVICIOS DE WHATSAPP Y RECIBOS PÚBLICOS ---
+
+def ver_recibo_publico(request, token):
+    """
+    Permite abrir y descargar un recibo de pago oficial en PDF/HTML sin requerir inicio de sesión,
+    mediante un token criptográfico firmado con validez de 30 días.
+    Inmune a enumeración de IDs y manipulación.
+    """
+    from .whatsapp_links import validar_token_recibo
+    recibo_id = validar_token_recibo(token)
+    if not recibo_id:
+        raise Http404("El enlace a este recibo no es válido o ha expirado (vigencia máxima de 30 días).")
+
+    recibo = get_object_or_404(
+        ReciboPago.objects.select_related(
+            'factura__contrato__propiedad__portafolio',
+            'factura__contrato__inquilino',
+            'registrado_por'
+        ),
+        id=recibo_id
+    )
+
+    data = {
+        'recibo': recibo,
+        'factura': recibo.factura,
+        'contrato': recibo.factura.contrato,
+        'propiedad': recibo.factura.contrato.propiedad,
+        'usuario': recibo.registrado_por,
+        'es_publico': True,
+    }
+    return render(request, 'gestion_propiedades/recibo_pdf.html', data)
+
+
+@login_required(login_url='/login/')
+def enviar_whatsapp_factura(request, factura_id, tipo='RECORDATORIO'):
+    """
+    Prepara el enlace de WhatsApp para recordatorio o aviso de mora,
+    registra la intención de envío en AuditLog con aislamiento multi-tenant
+    y redirige a la URL wa.me.
+    """
+    from .whatsapp_links import normalizar_telefono, construir_enlace, generar_mensaje_whatsapp
+
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
+
+    factura = get_object_or_404(
+        Factura.objects.select_related('contrato__propiedad__portafolio', 'contrato__inquilino'),
+        id=factura_id,
+        contrato__propiedad__portafolio__in=portafolios
+    )
+
+    inquilino = factura.contrato.inquilino if factura.contrato else None
+    tel_norm = normalizar_telefono(inquilino.telefono if inquilino else None)
+
+    if not tel_norm:
+        messages.error(request, "El inquilino no tiene un número telefónico válido registrado para WhatsApp.")
+        return redirect(request.META.get('HTTP_REFERER') or 'lista_facturas_global')
+
+    tipo_str = str(tipo or '').upper().strip()
+    if tipo_str not in ('RECORDATORIO', 'MORA'):
+        tipo_str = 'MORA' if factura.estado == 'ATRASADA' else 'RECORDATORIO'
+
+    portafolio = factura.contrato.propiedad.portafolio
+    mensaje = generar_mensaje_whatsapp(tipo=tipo_str, factura=factura, portafolio=portafolio)
+    wa_url = construir_enlace(tel_norm, mensaje)
+
+    if not wa_url:
+        messages.error(request, "No fue posible generar el enlace de WhatsApp.")
+        return redirect(request.META.get('HTTP_REFERER') or 'lista_facturas_global')
+
+    # Registro auditable del intento de envío
+    AuditLog.objects.create(
+        accion='ENVIAR',
+        modulo='WhatsApp',
+        descripcion=(
+            f"Generó enlace de WhatsApp ({tipo_str}) para {inquilino.nombre} "
+            f"(Factura #{factura.id}, Inmueble {factura.contrato.propiedad.nombre_o_numero}). Tel: +{tel_norm}"
+        ),
+        usuario=request.user,
+        portafolio=portafolio
+    )
+
+    return HttpResponseRedirect(wa_url)
+
+
+@login_required(login_url='/login/')
+def enviar_whatsapp_recibo(request, recibo_id):
+    """
+    Genera el enlace de WhatsApp para comprobante de pago con token firmado seguro,
+    registra la intención de envío en AuditLog y redirige a wa.me.
+    """
+    from .whatsapp_links import (
+        normalizar_telefono, construir_enlace, generar_mensaje_whatsapp, generar_token_recibo
+    )
+
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
+
+    recibo = get_object_or_404(
+        ReciboPago.objects.select_related(
+            'factura__contrato__propiedad__portafolio',
+            'factura__contrato__inquilino'
+        ),
+        id=recibo_id,
+        factura__contrato__propiedad__portafolio__in=portafolios
+    )
+
+    inquilino = recibo.factura.contrato.inquilino if (recibo.factura and recibo.factura.contrato) else None
+    tel_norm = normalizar_telefono(inquilino.telefono if inquilino else None)
+
+    if not tel_norm:
+        messages.error(request, "El inquilino no tiene un número telefónico válido registrado para WhatsApp.")
+        return redirect(request.META.get('HTTP_REFERER') or 'lista_facturas_global')
+
+    token = generar_token_recibo(recibo.id)
+    link_recibo = request.build_absolute_uri(reverse('ver_recibo_publico', kwargs={'token': token}))
+
+    portafolio = recibo.factura.contrato.propiedad.portafolio
+    mensaje = generar_mensaje_whatsapp(
+        tipo='RECIBO',
+        recibo=recibo,
+        factura=recibo.factura,
+        portafolio=portafolio,
+        link_recibo=link_recibo
+    )
+    wa_url = construir_enlace(tel_norm, mensaje)
+
+    if not wa_url:
+        messages.error(request, "No fue posible generar el enlace de WhatsApp.")
+        return redirect(request.META.get('HTTP_REFERER') or 'lista_facturas_global')
+
+    # Registro auditable del intento de envío
+    AuditLog.objects.create(
+        accion='ENVIAR',
+        modulo='WhatsApp',
+        descripcion=(
+            f"Generó enlace de WhatsApp (RECIBO) para {inquilino.nombre} "
+            f"(Recibo #{recibo.id}, Factura #{recibo.factura_id}, Monto: RD$ {recibo.monto_pagado:,.2f}). Tel: +{tel_norm}"
+        ),
+        usuario=request.user,
+        portafolio=portafolio
+    )
+
+    return HttpResponseRedirect(wa_url)
+
+
+@login_required(login_url='/login/')
+def confirmacion_pago_recibo(request, recibo_id):
+    """
+    Pantalla de confirmación tras registrar un pago. Presenta el resumen del abono
+    y opciones directas para Enviar por WhatsApp (con token firmado) o Imprimir Recibo.
+    """
+    from .whatsapp_links import normalizar_telefono
+
+    if request.user.is_superuser:
+        portafolios = Portafolio.objects.all().distinct()
+    else:
+        portafolios = Portafolio.objects.filter(
+            Q(propietario=request.user) | Q(accesos__usuario=request.user)
+        ).distinct()
+
+    recibo = get_object_or_404(
+        ReciboPago.objects.select_related(
+            'factura__contrato__propiedad__portafolio',
+            'factura__contrato__inquilino'
+        ),
+        id=recibo_id,
+        factura__contrato__propiedad__portafolio__in=portafolios
+    )
+
+    inquilino = recibo.factura.contrato.inquilino
+    tel_norm = normalizar_telefono(inquilino.telefono if inquilino else None)
+
+    context = {
+        'titulo_pagina': f'¡Pago Registrado! - Recibo #{recibo.id}',
+        'recibo': recibo,
+        'factura': recibo.factura,
+        'contrato': recibo.factura.contrato,
+        'propiedad': recibo.factura.contrato.propiedad,
+        'inquilino': inquilino,
+        'tiene_telefono_valido': bool(tel_norm),
+    }
+    return render(request, 'gestion_propiedades/confirmacion_pago.html', context)
+
     
 

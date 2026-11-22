@@ -100,10 +100,16 @@
                                             </form>
                                             {% endif %}
 
-                                            {% if factura.contrato.inquilino.telefono and factura.whatsapp_cobro_url %}
-                                                <a href="{{ factura.whatsapp_cobro_url }}" target="_blank" class="btn btn-sm btn-success w-100 text-start" title="Enviar recordatorio de cobro por WhatsApp a {{ factura.contrato.inquilino.nombre }}">
-                                                    <i class="bi bi-whatsapp"></i> Enviar Cobro
+                                            {% if factura.tiene_telefono_valido %}
+                                                <a href="{% url 'enviar_whatsapp_factura' factura.id factura.tipo_whatsapp_sugerido %}" target="_blank" rel="noopener" class="btn btn-sm btn-success w-100 text-start" title="Enviar {% if factura.estado == 'ATRASADA' %}aviso de mora{% else %}recordatorio de cobro{% endif %} por WhatsApp a {{ factura.contrato.inquilino.nombre }}">
+                                                    <i class="bi bi-whatsapp"></i> {% if factura.estado == 'ATRASADA' %}Aviso Mora{% else %}Recordatorio{% endif %}
                                                 </a>
+                                            {% else %}
+                                                <div class="d-inline-block w-100" tabindex="0" data-bs-toggle="tooltip" data-bs-placement="top" title="El inquilino no tiene un teléfono válido registrado para WhatsApp">
+                                                    <button class="btn btn-sm btn-outline-secondary w-100 text-start disabled" disabled style="pointer-events: none;">
+                                                        <i class="bi bi-whatsapp"></i> WhatsApp <small class="text-danger">(Sin tel)</small>
+                                                    </button>
+                                                </div>
                                             {% endif %}
 
                                             {% if factura.es_prorrateable %}
@@ -198,6 +204,17 @@
                                             📎 Comprobante
                                         </a>
                                     {% endif %}
+                                    {% if recibo.tiene_telefono_valido %}
+                                        <a href="{% url 'enviar_whatsapp_recibo' recibo.id %}" target="_blank" rel="noopener" class="btn btn-sm btn-success me-1" title="Enviar recibo por WhatsApp a {{ recibo.factura.contrato.inquilino.nombre }}">
+                                            <i class="bi bi-whatsapp"></i> WhatsApp
+                                        </a>
+                                    {% else %}
+                                        <span class="d-inline-block me-1" tabindex="0" data-bs-toggle="tooltip" data-bs-placement="top" title="El inquilino no tiene un teléfono válido registrado para WhatsApp">
+                                            <button class="btn btn-sm btn-outline-secondary disabled" disabled style="pointer-events: none;">
+                                                <i class="bi bi-whatsapp"></i> WhatsApp
+                                            </button>
+                                        </span>
+                                    {% endif %}
                                     <a href="{% url 'imprimir_recibo' recibo.id %}" target="_blank" class="btn btn-sm btn-outline-secondary">
                                         🖨️ Imprimir PDF
                                     </a>
@@ -218,4 +235,13 @@
         </div>
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    });
+</script>
 {% endblock %}

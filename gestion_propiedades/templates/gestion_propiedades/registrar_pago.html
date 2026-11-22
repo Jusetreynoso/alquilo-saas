@@ -28,8 +28,32 @@
                     </div>
                     <h6 class="text-muted mb-1 text-uppercase fw-bold small">Saldo Pendiente a Cobrar</h6>
                     <h1 class="fw-bold text-primary mb-1">${{ factura.saldo_pendiente|dinero }}</h1>
-                    <div class="small text-muted">
+                    <div class="small text-muted mb-3">
                         Factura Total{% if factura.total_mora > 0 %} (con mora incluida){% endif %}: <strong>${{ factura.monto_total_con_mora|dinero }}</strong> | Ya Pagado: <strong>${{ factura.monto_pagado_total|dinero }}</strong>
+                    </div>
+
+                    <!-- Botón Enviar WhatsApp desde Detalle de Factura -->
+                    <div class="d-flex justify-content-center">
+                        {% if tiene_telefono_valido %}
+                            {% if factura.estado == 'ATRASADA' %}
+                                <a href="{% url 'enviar_whatsapp_factura' factura.id 'MORA' %}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-danger fw-bold shadow-sm d-flex align-items-center gap-2 px-3 py-2 bg-white">
+                                    <i class="bi bi-whatsapp fs-6"></i>
+                                    <span>Enviar Aviso de Mora por WhatsApp</span>
+                                </a>
+                            {% else %}
+                                <a href="{% url 'enviar_whatsapp_factura' factura.id 'RECORDATORIO' %}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-success fw-bold shadow-sm d-flex align-items-center gap-2 px-3 py-2 bg-white">
+                                    <i class="bi bi-whatsapp fs-6"></i>
+                                    <span>Enviar Recordatorio por WhatsApp</span>
+                                </a>
+                            {% endif %}
+                        {% else %}
+                            <div class="d-inline-block" tabindex="0" data-bs-toggle="tooltip" data-bs-placement="top" title="El inquilino no tiene un teléfono válido registrado para WhatsApp">
+                                <button class="btn btn-sm btn-outline-secondary fw-bold shadow-sm d-flex align-items-center gap-2 px-3 py-2 disabled bg-white" disabled style="pointer-events: none;">
+                                    <i class="bi bi-whatsapp fs-6"></i>
+                                    <span>Enviar por WhatsApp (Sin Teléfono Válido)</span>
+                                </button>
+                            </div>
+                        {% endif %}
                     </div>
                 </div>
 
@@ -266,6 +290,10 @@
 
     document.addEventListener("DOMContentLoaded", function() {
         simularImputacion();
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
     });
 </script>
 {% endblock %}

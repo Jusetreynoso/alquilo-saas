@@ -380,22 +380,15 @@ class Inquilino(models.Model):
     @property
     def telefono_whatsapp(self):
         """
-        Retorna el número limpio para WhatsApp en formato internacional E.164 sin símbolos ni espacios.
-        Para números de 10 dígitos (formato RD: 809/829/849 o EEUU/Canadá), antepone el prefijo 1.
-        Ej: '(829) 702-0221' -> '18297020221'
+        Retorna el número limpio para WhatsApp en formato internacional E.164.
         """
-        if not self.telefono:
-            return ""
-        digits = ''.join(filter(str.isdigit, str(self.telefono)))
-        if not digits:
-            return ""
-        if len(digits) == 10:
-            return "1" + digits
-        if len(digits) == 11 and digits.startswith('1'):
-            return digits
-        if digits.startswith('00'):
-            return digits[2:]
-        return digits
+        from .whatsapp_links import normalizar_telefono
+        return normalizar_telefono(self.telefono) or ""
+
+    @property
+    def tiene_telefono_valido(self):
+        from .whatsapp_links import normalizar_telefono
+        return normalizar_telefono(self.telefono) is not None
 
     def __str__(self):
         return self.nombre
@@ -705,6 +698,16 @@ class Factura(models.Model):
         except Exception:
             return ""
 
+    @property
+    def tiene_telefono_valido(self):
+        if self.contrato and self.contrato.inquilino:
+            return self.contrato.inquilino.tiene_telefono_valido
+        return False
+
+    @property
+    def tipo_whatsapp_sugerido(self):
+        return 'MORA' if self.estado == 'ATRASADA' else 'RECORDATORIO'
+
     class Meta:
         indexes = [
             models.Index(fields=['contrato', 'fecha_emision'], name='fact_cont_femi_idx'),
@@ -791,6 +794,12 @@ class ReciboPago(models.Model):
         indexes = [
             models.Index(fields=['factura', 'fecha_pago'], name='recibo_fact_fpago_idx'),
         ]
+
+    @property
+    def tiene_telefono_valido(self):
+        if self.factura and self.factura.contrato and self.factura.contrato.inquilino:
+            return self.factura.contrato.inquilino.tiene_telefono_valido
+        return False
 
     def __str__(self):
         return f"Recibo #{self.id} - Factura #{self.factura.id}"

@@ -172,4 +172,10 @@ urlpatterns = [
     path('solicitud/<int:solicitud_id>/devolver/', views.devolver_solicitud_alquiler, name='devolver_solicitud_alquiler'),
     path('master-control/importar-cartera-basora/', views.importar_cartera_basora_web, name='importar_cartera_basora_web'),
     path('propietario/<int:propietario_id>/imprimir-situacion/', views.imprimir_estado_situacion_propietario, name='imprimir_estado_situacion_propietario'),
+
+    # --- WHATSAPP COBRANZAS Y RECIBOS PÚBLICOS ---
+    path('recibo/publico/<str:token>/', views.ver_recibo_publico, name='ver_recibo_publico'),
+    path('factura/<int:factura_id>/whatsapp/<str:tipo>/', views.enviar_whatsapp_factura, name='enviar_whatsapp_factura'),
+    path('recibo/<int:recibo_id>/whatsapp/', views.enviar_whatsapp_recibo, name='enviar_whatsapp_recibo'),
+    path('recibo/<int:recibo_id>/confirmacion/', views.confirmacion_pago_recibo, name='confirmacion_pago_recibo'),
 ]
