@@ -1714,6 +1714,32 @@ class WhatsAppFase1Tests(TestCase):
         with self.assertRaises(ValidationError):
             plantilla_invalida.clean()
 
+    def test_mensaje_por_defecto_formato_alquiler(self):
+        from .whatsapp_links import generar_mensaje_whatsapp
+        from .models import CargoMora
+
+        # Configurar factura con mora y concepto de rango
+        CargoMora.objects.create(
+            factura=self.factura_a,
+            monto=Decimal('1150.00'),
+            mes_aplicado=10,
+            anio_aplicado=2026,
+            fecha_aplicacion=date(2026, 11, 6)
+        )
+        self.factura_a.concepto = "PAGO DESDE EL 1 DE SEPTIEMBRE DEL 2026 HASTA EL 1 DE OCTUBRE DEL 2026"
+        self.factura_a.fecha_vencimiento = date(2026, 10, 6)
+        self.factura_a.save()
+
+        msg = generar_mensaje_whatsapp('MORA', factura=self.factura_a)
+        self.assertIn("Estimado/a Carlos Perez:", msg)
+        self.assertIn("Le saludamos de Inmobiliaria A.", msg)
+        self.assertIn("Le informamos que el pago de su alquiler correspondiente al período del 1 de septiembre al 1 de octubre de 2026 venció el 6 de octubre de 2026.", msg)
+        self.assertIn("Balance pendiente: RD$ ", msg)
+        self.assertIn("(incluye RD$ 1,150.00 por cargo de mora)", msg)
+        self.assertIn("Ref. Suite 101", msg)
+        self.assertIn("Quedamos a su orden.", msg)
+        self.assertNotIn("factura", msg.lower())
+
     def test_token_recibo_publico_seguridad(self):
         from .whatsapp_links import generar_token_recibo, validar_token_recibo
 

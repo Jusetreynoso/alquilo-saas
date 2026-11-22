@@ -34,26 +34,82 @@ VARIABLES_PERMITIDAS = {
 # Plantillas estándar por defecto en español
 PLANTILLAS_POR_DEFECTO = {
     'RECORDATORIO': (
-        "Hola {inquilino}, le saludamos de {agencia}. "
-        "Le recordamos que su factura de {inmueble} correspondiente a {periodo} "
-        "por un monto de RD$ {monto} vence el {fecha_vencimiento}. "
-        "Saldo pendiente: RD$ {saldo}. ¡Gracias por su puntualidad! 🙏"
+        "Estimado/a {inquilino}:\n\n"
+        "Le saludamos de {agencia}. Le informamos que el pago de su alquiler correspondiente al período {periodo} "
+        "vence el {fecha_vencimiento}.\n\n"
+        "Monto a pagar: RD$ {monto}\n"
+        "Balance pendiente: RD$ {saldo}\n\n"
+        "Le agradecemos realizar su pago a la brevedad. Si ya realizó el pago, favor enviarnos el comprobante.\n\n"
+        "Ref. {inmueble}\n"
+        "Quedamos a su orden."
     ),
     'MORA': (
-        "Estimado/a {inquilino}, le contactamos de {agencia}. "
-        "Le informamos que su factura de {inmueble} correspondiente a {periodo} "
-        "venció el {fecha_vencimiento}. Saldo pendiente actual: RD$ {saldo} "
-        "(incluye RD$ {mora} de mora acumulada). "
-        "Por favor regularizar su pago a la brevedad. Quedamos a su orden."
+        "Estimado/a {inquilino}:\n\n"
+        "Le saludamos de {agencia}. Le informamos que el pago de su alquiler correspondiente al período {periodo} "
+        "venció el {fecha_vencimiento}.\n\n"
+        "Balance pendiente: RD$ {saldo}\n"
+        "(incluye RD$ {mora} por cargo de mora)\n\n"
+        "Le agradecemos regularizar su pago a la brevedad. Si ya realizó el pago, favor enviarnos el comprobante.\n\n"
+        "Ref. {inmueble}\n"
+        "Quedamos a su orden."
     ),
     'RECIBO': (
-        "Hola {inquilino}, confirmamos la recepción de su pago por RD$ {monto} "
-        "para {inmueble} ({periodo}) en {agencia}. "
-        "Saldo pendiente restante: RD$ {saldo}. "
-        "Puede ver y descargar su recibo oficial aquí: {link_recibo} 📄 "
-        "¡Muchas gracias!"
+        "Estimado/a {inquilino}:\n\n"
+        "Le saludamos de {agencia}. Confirmamos la recepción del pago de su alquiler correspondiente al período {periodo}.\n\n"
+        "Monto abonado: RD$ {monto}\n"
+        "Balance pendiente: RD$ {saldo}\n\n"
+        "Puede ver y descargar su recibo oficial aquí:\n"
+        "{link_recibo}\n\n"
+        "Ref. {inmueble}\n"
+        "¡Muchas gracias! Quedamos a su orden."
     ),
 }
+
+MESES_ES = {
+    1: 'enero', 2: 'febrero', 3: 'marzo', 4: 'abril', 5: 'mayo', 6: 'junio',
+    7: 'julio', 8: 'agosto', 9: 'septiembre', 10: 'octubre', 11: 'noviembre', 12: 'diciembre'
+}
+
+
+def formatear_fecha_es(fecha) -> str:
+    """Formatea una fecha en formato natural en español (ej: 6 de octubre de 2026)."""
+    if not fecha:
+        return ""
+    mes = MESES_ES.get(fecha.month, '')
+    return f"{fecha.day} de {mes} de {fecha.year}"
+
+
+def formatear_periodo_alquiler(concepto: str | None) -> str:
+    """
+    Convierte conceptos de facturación interna en redacción natural del período de alquiler.
+    Ej:
+    - 'PAGO DESDE EL 1 DE SEPTIEMBRE DEL 2026 HASTA EL 1 DE OCTUBRE DEL 2026'
+      -> 'del 1 de septiembre al 1 de octubre de 2026'
+    - 'Renta Octubre 2026' -> 'de octubre de 2026'
+    """
+    if not concepto:
+        return "del mes en curso"
+    s = str(concepto).strip()
+    m = re.match(
+        r'^PAGO DESDE (?:EL )?(.+?) DEL? (\d{4}) HASTA (?:EL )?(.+?) DEL? (\d{4})(?: \((.*?)\))?$',
+        s,
+        re.IGNORECASE
+    )
+    if m:
+        f1, y1, f2, y2, extra = m.groups()
+        if y1 == y2:
+            base = f"del {f1.strip().lower()} al {f2.strip().lower()} de {y2}"
+        else:
+            base = f"del {f1.strip().lower()} de {y1} al {f2.strip().lower()} de {y2}"
+        if extra:
+            base += f" ({extra.capitalize()})"
+        return base
+
+    m2 = re.match(r'^(?:Renta|Alquiler)\s+(.+)$', s, re.IGNORECASE)
+    if m2:
+        return f"de {m2.group(1).strip()}"
+
+    return s
 
 SALT_RECIBO_PUBLICO = 'whatsapp-recibo-publico-v1'
 DURACION_TOKEN_RECIBO_SEGUNDOS = 30 * 86400  # 30 días
@@ -202,9 +258,9 @@ def generar_mensaje_whatsapp(
     
     concepto_periodo = ""
     if factura and getattr(factura, 'concepto', None):
-        concepto_periodo = factura.concepto
+        concepto_periodo = formatear_periodo_alquiler(factura.concepto)
     elif contrato:
-        concepto_periodo = f"Renta {propiedad.nombre_o_numero}" if propiedad else "Renta Mensual"
+        concepto_periodo = f"de {propiedad.nombre_o_numero}" if propiedad else "del mes en curso"
 
     # Montos
     if recibo:
@@ -214,12 +270,13 @@ def generar_mensaje_whatsapp(
     else:
         monto_str = "0.00"
 
-    mora_str = formatear_dinero(getattr(factura, 'total_mora', Decimal('0.00'))) if factura else "0.00"
+    total_mora_val = getattr(factura, 'total_mora', Decimal('0.00')) if factura else Decimal('0.00')
+    mora_str = formatear_dinero(total_mora_val)
     saldo_str = formatear_dinero(getattr(factura, 'saldo_pendiente', Decimal('0.00'))) if factura else "0.00"
 
     fecha_venc_str = ""
     if factura and getattr(factura, 'fecha_vencimiento', None):
-        fecha_venc_str = factura.fecha_vencimiento.strftime('%d/%m/%Y')
+        fecha_venc_str = formatear_fecha_es(factura.fecha_vencimiento)
 
     contexto = {
         'inquilino': nombre_inquilino,
@@ -234,6 +291,11 @@ def generar_mensaje_whatsapp(
     }
 
     plantilla = obtener_texto_plantilla(portafolio, tipo)
+
+    # Si la mora acumulada es 0.00, omitir la línea de mora para mantener el mensaje limpio
+    if total_mora_val <= Decimal('0.00'):
+        plantilla = plantilla.replace("\n(incluye RD$ {mora} por cargo de mora)", "")
+        plantilla = plantilla.replace("(incluye RD$ {mora} por cargo de mora)", "")
 
     # Reemplazo seguro de variables (evita excepciones si falta alguna clave no esperada)
     for k, v in contexto.items():
