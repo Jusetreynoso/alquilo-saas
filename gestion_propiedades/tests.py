@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from django.utils import timezone
 from django.core.files.uploadedfile import SimpleUploadedFile
 import os
-from .models import Portafolio, Propiedad, Inquilino, Contrato, HistorialAumentoRenta, AuditLog, PlanSaaS, SuscripcionCliente, FacturaSaaS, PublicacionMarketplace, ImagenPublicacion, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, Factura, ReciboPago, MantenimientoUnidad, LiquidacionDepositoInquilino, CargoAdicionalContrato, DetalleFacturaServicio, CargoMora, SolicitudAlquiler, RecordatorioPagoPropietario
+from .models import Portafolio, Propiedad, Inquilino, Contrato, HistorialAumentoRenta, AuditLog, PlanSaaS, SuscripcionCliente, FacturaSaaS, PublicacionMarketplace, ImagenPublicacion, PropietarioInmueble, GastoGeneralPropietario, LiquidacionPropietario, Factura, ReciboPago, MantenimientoUnidad, LiquidacionDepositoInquilino, CargoAdicionalContrato, DetalleFacturaServicio, CargoMora, SolicitudAlquiler, RecordatorioPagoPropietario, PlantillaWhatsApp
 from decimal import Decimal
 
 class AlquiloTests(TestCase):
@@ -1556,6 +1556,250 @@ class AlquiloTests(TestCase):
         self.assertIn(f"Factura #{factura.id}", content_print)
         self.assertIn(self.portafolio1.nombre, content_print)
         self.assertNotIn('Gestión Alquilo', content_print)
+
+
+class WhatsAppFase1Tests(TestCase):
+    def setUp(self):
+        from .middleware import _thread_local
+        _thread_local.usuario = None
+
+        self.user_a = User.objects.create_user(username='agencia_a', password='password123')
+        self.user_b = User.objects.create_user(username='agencia_b', password='password123')
+
+        self.plan = PlanSaaS.objects.create(nombre='Plan Pro', precio_mensual=10.00, limite_propiedades=100, activo=True)
+        SuscripcionCliente.objects.create(usuario=self.user_a, plan_saas=self.plan, estado='ACTIVA')
+        SuscripcionCliente.objects.create(usuario=self.user_b, plan_saas=self.plan, estado='ACTIVA')
+
+        self.portafolio_a = Portafolio.objects.create(nombre='Inmobiliaria A', propietario=self.user_a)
+        self.portafolio_b = Portafolio.objects.create(nombre='Inmobiliaria B', propietario=self.user_b)
+
+        self.propiedad_a = Propiedad.objects.create(portafolio=self.portafolio_a, nombre_o_numero='Suite 101', estado='ALQUILADA')
+        self.propiedad_b = Propiedad.objects.create(portafolio=self.portafolio_b, nombre_o_numero='Suite 202', estado='ALQUILADA')
+
+        self.inquilino_a = Inquilino.objects.create(
+            nombre='Carlos Perez',
+            telefono='(809) 555-1234',
+            correo='carlos@test.com',
+            creado_por=self.user_a
+        )
+        self.inquilino_b = Inquilino.objects.create(
+            nombre='Maria Gomez',
+            telefono='829 888 9999',
+            correo='maria@test.com',
+            creado_por=self.user_b
+        )
+        self.inquilino_sin_tel = Inquilino.objects.create(
+            nombre='Sin Telefono',
+            telefono='',
+            correo='sintel@test.com',
+            creado_por=self.user_a
+        )
+
+        self.contrato_a = Contrato.objects.create(
+            propiedad=self.propiedad_a,
+            inquilino=self.inquilino_a,
+            fecha_inicio=date(2026, 1, 1),
+            monto_renta=15000.00,
+            dia_de_pago=5,
+            activo=True
+        )
+        self.contrato_sin_tel = Contrato.objects.create(
+            propiedad=self.propiedad_a,
+            inquilino=self.inquilino_sin_tel,
+            fecha_inicio=date(2026, 1, 1),
+            monto_renta=12000.00,
+            dia_de_pago=5,
+            activo=True
+        )
+
+        self.factura_a = Factura.objects.create(
+            contrato=self.contrato_a,
+            fecha_emision=date(2026, 11, 1),
+            fecha_vencimiento=date(2026, 11, 5),
+            monto_base=Decimal('15000.00'),
+            monto_renta=Decimal('15000.00'),
+            concepto='Alquiler Noviembre 2026',
+            estado='PENDIENTE'
+        )
+        self.factura_sin_tel = Factura.objects.create(
+            contrato=self.contrato_sin_tel,
+            fecha_emision=date(2026, 11, 1),
+            fecha_vencimiento=date(2026, 11, 5),
+            monto_base=Decimal('12000.00'),
+            monto_renta=Decimal('12000.00'),
+            concepto='Alquiler Sin Tel Noviembre 2026',
+            estado='PENDIENTE'
+        )
+
+        self.recibo_a = ReciboPago.objects.create(
+            factura=self.factura_a,
+            fecha_pago=date(2026, 11, 3),
+            monto_pagado=Decimal('5000.00'),
+            metodo_pago='TRANSFERENCIA',
+            registrado_por=self.user_a
+        )
+
+        self.client = Client()
+
+    def test_normalizar_telefono(self):
+        from .whatsapp_links import normalizar_telefono
+
+        # Formatos RD 809 / 829 / 849
+        self.assertEqual(normalizar_telefono('809-555-1234'), '18095551234')
+        self.assertEqual(normalizar_telefono('(829) 702-0221'), '18297020221')
+        self.assertEqual(normalizar_telefono('849 999 8888'), '18499998888')
+        self.assertEqual(normalizar_telefono('8091234567'), '18091234567')
+
+        # Con +1 y 1 inicial
+        self.assertEqual(normalizar_telefono('+1 (809) 123-4567'), '18091234567')
+        self.assertEqual(normalizar_telefono('+18295551234'), '18295551234')
+        self.assertEqual(normalizar_telefono('18091234567'), '18091234567')
+
+        # Internacionales con código de país respetado
+        self.assertEqual(normalizar_telefono('+34 600 123 456'), '34600123456')
+        self.assertEqual(normalizar_telefono('0018091234567'), '18091234567')
+
+        # Casos inválidos
+        self.assertIsNone(normalizar_telefono('12345'))
+        self.assertIsNone(normalizar_telefono('809'))
+        self.assertIsNone(normalizar_telefono(''))
+        self.assertIsNone(normalizar_telefono('   '))
+        self.assertIsNone(normalizar_telefono(None))
+        self.assertIsNone(normalizar_telefono('abc-def-ghij'))
+
+    def test_construir_enlace_codificacion_utf8_y_emojis(self):
+        from .whatsapp_links import construir_enlace
+        import urllib.parse
+
+        mensaje = "¡Hola Carlos! 🏡 Tu recibo #10 está listo. Saludos y bendiciones. 🙏\nLínea 2."
+        enlace = construir_enlace('809-555-1234', mensaje)
+        self.assertIsNotNone(enlace)
+        self.assertTrue(enlace.startswith('https://wa.me/18095551234?text='))
+        
+        # Verificar que el mensaje codificado decodifique exactamente igual
+        query = enlace.split('?text=')[1]
+        decoded = urllib.parse.unquote(query)
+        self.assertEqual(decoded, mensaje)
+
+        # Fallos seguros
+        self.assertIsNone(construir_enlace('123', mensaje))
+        self.assertIsNone(construir_enlace('8095551234', ''))
+        self.assertIsNone(construir_enlace(None, mensaje))
+
+    def test_plantilla_whatsapp_personalizada_y_validacion(self):
+        from django.core.exceptions import ValidationError
+        from .models import PlantillaWhatsApp
+        from .whatsapp_links import generar_mensaje_whatsapp
+
+        # Plantilla válida
+        plantilla = PlantillaWhatsApp(
+            portafolio=self.portafolio_a,
+            tipo='RECORDATORIO',
+            texto="Hola {inquilino}, de parte de {agencia}. Tu renta de {inmueble} es de RD$ {monto}."
+        )
+        plantilla.clean()
+        plantilla.save()
+
+        msg = generar_mensaje_whatsapp('RECORDATORIO', factura=self.factura_a)
+        self.assertIn('Hola Carlos Perez', msg)
+        self.assertIn('Inmobiliaria A', msg)
+        self.assertIn('Suite 101', msg)
+
+        # Plantilla inválida con variables no permitidas
+        plantilla_invalida = PlantillaWhatsApp(
+            portafolio=self.portafolio_a,
+            tipo='MORA',
+            texto="Estimado {inquilino}, variable {no_permitida} incorrecta."
+        )
+        with self.assertRaises(ValidationError):
+            plantilla_invalida.clean()
+
+    def test_token_recibo_publico_seguridad(self):
+        from .whatsapp_links import generar_token_recibo, validar_token_recibo
+
+        token = generar_token_recibo(self.recibo_a.id)
+        self.assertEqual(validar_token_recibo(token), self.recibo_a.id)
+
+        # Token manipulado
+        self.assertIsNone(validar_token_recibo(token + 'tampered'))
+
+        # Token expirado (simulado con max_age_seconds=-1)
+        self.assertIsNone(validar_token_recibo(token, max_age_seconds=-1))
+
+        # Cliente anónimo (sin login) puede acceder a ver_recibo_publico con token válido
+        anon_client = Client()
+        url_publico = reverse('ver_recibo_publico', kwargs={'token': token})
+        res = anon_client.get(url_publico)
+        self.assertEqual(res.status_code, 200)
+        self.assertIn('Carlos Perez', res.content.decode('utf-8'))
+
+        # Token inválido da 404
+        res_bad = anon_client.get(reverse('ver_recibo_publico', kwargs={'token': 'token-falso'}))
+        self.assertEqual(res_bad.status_code, 404)
+
+    def test_enviar_whatsapp_factura_y_recibo_con_auditlog(self):
+        self.client.login(username='agencia_a', password='password123')
+
+        # 1. Factura
+        url_wa_factura = reverse('enviar_whatsapp_factura', args=[self.factura_a.id, 'RECORDATORIO'])
+        res_factura = self.client.get(url_wa_factura)
+        self.assertEqual(res_factura.status_code, 302)
+        self.assertTrue(res_factura['Location'].startswith('https://wa.me/18095551234?text='))
+
+        # Verificar que se registró en AuditLog
+        log_factura = AuditLog.objects.filter(modulo='WhatsApp', accion='ENVIAR', usuario=self.user_a).first()
+        self.assertIsNotNone(log_factura)
+        self.assertIn(self.inquilino_a.nombre, log_factura.descripcion)
+        self.assertIn('RECORDATORIO', log_factura.descripcion)
+
+        # 2. Recibo
+        url_wa_recibo = reverse('enviar_whatsapp_recibo', args=[self.recibo_a.id])
+        res_recibo = self.client.get(url_wa_recibo)
+        self.assertEqual(res_recibo.status_code, 302)
+        self.assertTrue(res_recibo['Location'].startswith('https://wa.me/18095551234?text='))
+        self.assertIn('recibo%2Fpublico', res_recibo['Location'])
+
+        log_recibo = AuditLog.objects.filter(modulo='WhatsApp', accion='ENVIAR', usuario=self.user_a).order_by('-id').first()
+        self.assertIsNotNone(log_recibo)
+        self.assertIn('RECIBO', log_recibo.descripcion)
+
+    def test_aislamiento_multitenant_whatsapp(self):
+        # Usuario de Agencia B intenta acceder a factura y recibo de Agencia A
+        self.client.login(username='agencia_b', password='password123')
+
+        url_factura_ajena = reverse('enviar_whatsapp_factura', args=[self.factura_a.id, 'RECORDATORIO'])
+        res_factura = self.client.get(url_factura_ajena)
+        self.assertEqual(res_factura.status_code, 404)
+
+        url_recibo_ajeno = reverse('enviar_whatsapp_recibo', args=[self.recibo_a.id])
+        res_recibo = self.client.get(url_recibo_ajeno)
+        self.assertEqual(res_recibo.status_code, 404)
+
+    def test_botones_whatsapp_deshabilitados_sin_telefono(self):
+        self.client.login(username='agencia_a', password='password123')
+
+        # Facturación global: factura con teléfono válido tiene enlace activo, sin teléfono tiene disabled
+        res_fac = self.client.get(reverse('lista_facturas_global'))
+        self.assertEqual(res_fac.status_code, 200)
+        html_fac = res_fac.content.decode('utf-8')
+        self.assertIn(f"factura/{self.factura_a.id}/whatsapp/RECORDATORIO/", html_fac)
+        self.assertIn("El inquilino no tiene un teléfono válido registrado para WhatsApp", html_fac)
+
+        # Confirmación de pago para recibo sin teléfono
+        recibo_sin_tel = ReciboPago.objects.create(
+            factura=self.factura_sin_tel,
+            fecha_pago=date(2026, 11, 3),
+            monto_pagado=Decimal('2000.00'),
+            metodo_pago='EFECTIVO',
+            registrado_por=self.user_a
+        )
+        url_conf = reverse('confirmacion_pago_recibo', args=[recibo_sin_tel.id])
+        res_conf = self.client.get(url_conf)
+        self.assertEqual(res_conf.status_code, 200)
+        html_conf = res_conf.content.decode('utf-8')
+        self.assertIn('disabled', html_conf)
+        self.assertIn('Sin Teléfono Válido', html_conf)
+
 
 
 

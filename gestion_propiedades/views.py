@@ -1,7 +1,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse
 from django.utils import timezone
-from django.http import HttpResponse, HttpResponseNotAllowed
+from django.http import HttpResponse, HttpResponseNotAllowed, HttpResponseRedirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login
 from django.db.models import Sum, Q, Prefetch, F, Count
@@ -1667,7 +1667,7 @@ def reporte_movimientos_detallados(request):
 
 @login_required(login_url='/login/')
 def exportar_movimientos_excel(request):
-    from django.http import HttpResponse, HttpResponseNotAllowed
+    from django.http import HttpResponse, HttpResponseNotAllowed, HttpResponseRedirect
     from .utils_excel import generar_excel_movimientos_detallados
 
     data = _obtener_datos_movimientos_detallados(request)
@@ -1937,7 +1937,7 @@ def reporte_estado_propiedades_propietario(request):
 
 @login_required(login_url='/login/')
 def exportar_estado_propiedades_excel(request):
-    from django.http import HttpResponse, HttpResponseNotAllowed
+    from django.http import HttpResponse, HttpResponseNotAllowed, HttpResponseRedirect
     from .utils_excel import generar_excel_estado_propiedades_propietario
 
     data = _obtener_datos_estado_propiedades_propietario(request)
