@@ -131,6 +131,15 @@
                     <a href="{% url 'detalle_inquilino' contrato_activo.inquilino.id %}" class="btn btn-sm btn-outline-primary shadow-sm fw-bold">
                         👤 Perfil Inquilino
                     </a>
+                    {% if contrato_activo.tiene_alquiler_pendiente %}
+                    <a href="{% url 'registrar_pago' contrato_activo.proxima_factura_pendiente.id %}" class="btn btn-sm btn-success shadow-sm fw-bold" title="Cobrar factura pendiente de este contrato (RD${{ contrato_activo.total_deuda_pendiente|dinero }})">
+                        💳 Cobrar
+                    </a>
+                    {% else %}
+                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Al día: sin alquiler pendiente">
+                        💳 Cobrar
+                    </button>
+                    {% endif %}
                     <a href="{% url 'registrar_pago_anticipado' contrato_activo.id %}" class="btn btn-sm btn-outline-success">
                         💰 Recibir Adelanto
                     </a>
@@ -150,19 +159,37 @@
             <div class="card-body">
                 {% if contrato_activo %}
                     <!-- Cabecera del Inquilino con Enlace al Perfil -->
-                    <div class="d-flex align-items-center gap-3 mb-3 pb-3 border-bottom">
-                        <div class="bg-primary-subtle text-primary rounded-circle d-flex align-items-center justify-content-center shadow-sm" style="width: 46px; height: 46px; font-size: 1.4rem;">
-                            👤
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom flex-wrap gap-2">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="bg-primary-subtle text-primary rounded-circle d-flex align-items-center justify-content-center shadow-sm" style="width: 46px; height: 46px; font-size: 1.4rem;">
+                                👤
+                            </div>
+                            <div>
+                                <h5 class="fw-bold mb-0">
+                                    <a href="{% url 'detalle_inquilino' contrato_activo.inquilino.id %}" class="text-dark text-decoration-none d-inline-flex align-items-center gap-2 link-hover-perfil" title="Haz clic para ver el perfil completo de {{ contrato_activo.inquilino.nombre }}">
+                                        <span class="border-bottom border-2 border-primary pb-0">{{ contrato_activo.inquilino.nombre }}</span>
+                                        <span class="badge bg-primary text-white small" style="font-size: 0.72rem; font-weight: 500;">Ver Perfil ↗</span>
+                                    </a>
+                                </h5>
+                                {% if contrato_activo.inquilino.cedula_o_pasaporte %}
+                                    <small class="text-muted">🆔 Cédula: <strong>{{ contrato_activo.inquilino.cedula_o_pasaporte }}</strong></small>
+                                {% endif %}
+                            </div>
                         </div>
-                        <div>
-                            <h5 class="fw-bold mb-0">
-                                <a href="{% url 'detalle_inquilino' contrato_activo.inquilino.id %}" class="text-dark text-decoration-none d-inline-flex align-items-center gap-2 link-hover-perfil" title="Haz clic para ver el perfil completo de {{ contrato_activo.inquilino.nombre }}">
-                                    <span class="border-bottom border-2 border-primary pb-0">{{ contrato_activo.inquilino.nombre }}</span>
-                                    <span class="badge bg-primary text-white small" style="font-size: 0.72rem; font-weight: 500;">Ver Perfil ↗</span>
-                                </a>
-                            </h5>
-                            {% if contrato_activo.inquilino.cedula_o_pasaporte %}
-                                <small class="text-muted">🆔 Cédula: <strong>{{ contrato_activo.inquilino.cedula_o_pasaporte }}</strong></small>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            {% if total_adeudado > 0 %}
+                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-2 fw-bold" style="font-size: 0.82rem;" title="Total adeudado por el inquilino">
+                                    ⚠️ Adeudado: RD${{ total_adeudado|dinero }}
+                                </span>
+                            {% else %}
+                                <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 fw-bold" style="font-size: 0.82rem;">
+                                    🟢 Al Día
+                                </span>
+                            {% endif %}
+                            {% if balance_a_favor > 0 %}
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2 fw-bold" style="font-size: 0.82rem;" title="Balance a favor o pagos por adelantado">
+                                    ⭐ A Favor: RD${{ balance_a_favor|dinero }}
+                                </span>
                             {% endif %}
                         </div>
                     </div>
@@ -606,9 +633,62 @@
         </div>
 
         <div class="card shadow-sm border-0 h-100">
-            <div class="card-header bg-white fw-bold text-secondary py-3">
-                💰 Historial de Facturación
+            <div class="card-header bg-white fw-bold text-secondary py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <span>💰 Historial de Facturación</span>
+                </div>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    {% if total_adeudado > 0 %}
+                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-2 fw-bold" style="font-size: 0.82rem;" title="{{ facturas_pendientes_count }} factura(s) con saldo pendiente">
+                            ⚠️ Total Adeudado: RD${{ total_adeudado|dinero }}
+                            <span class="badge bg-danger text-white rounded-pill ms-1" style="font-size: 0.7rem;">{{ facturas_pendientes_count }} pend.</span>
+                        </span>
+                    {% else %}
+                        <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 fw-bold" style="font-size: 0.82rem;">
+                            🟢 Al Día: RD$0.00
+                        </span>
+                    {% endif %}
+                    {% if balance_a_favor > 0 %}
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2 fw-bold" style="font-size: 0.82rem;" title="Balance a favor o pagos por adelantado">
+                            ⭐ Balance a Favor: RD${{ balance_a_favor|dinero }}
+                        </span>
+                    {% endif %}
+                </div>
             </div>
+            
+            {% if total_adeudado > 0 or balance_a_favor > 0 %}
+            <div class="px-4 py-2 bg-light border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                    {% if total_adeudado > 0 %}
+                    <div>
+                        <span class="text-muted small text-uppercase fw-semibold" style="font-size: 0.72rem;">Pendiente de Cobro:</span>
+                        <span class="fw-bold text-danger d-block fs-6">RD${{ total_adeudado|dinero }} <span class="badge bg-danger-subtle text-danger border border-danger-subtle ms-1" style="font-size: 0.7rem;">{{ facturas_pendientes_count }} pendiente{{ facturas_pendientes_count|pluralize:"s" }}</span></span>
+                    </div>
+                    {% else %}
+                    <div>
+                        <span class="text-muted small text-uppercase fw-semibold" style="font-size: 0.72rem;">Estado de Cobro:</span>
+                        <span class="fw-bold text-success d-block fs-6">🟢 Al Día (Sin deuda)</span>
+                    </div>
+                    {% endif %}
+
+                    {% if balance_a_favor > 0 %}
+                    <div class="border-start ps-3">
+                        <span class="text-muted small text-uppercase fw-semibold" style="font-size: 0.72rem;">Balance a Favor / Adelanto:</span>
+                        <span class="fw-bold text-primary d-block fs-6">RD${{ balance_a_favor|dinero }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% if contrato_activo and contrato_activo.tiene_alquiler_pendiente %}
+                <div>
+                    <a href="{% url 'registrar_pago' contrato_activo.proxima_factura_pendiente.id %}" class="btn btn-sm btn-success fw-bold shadow-sm">
+                        💳 Cobrar Más Antigua
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
@@ -625,7 +705,17 @@
                             {% for factura in facturas %}
                             <tr>
                                 <td class="px-4 py-3 text-muted small">{{ factura.concepto }}</td>
-                                <td class="py-3 fw-bold">${{ factura.monto_total_con_mora|dinero }}</td>
+                                <td class="py-3">
+                                    <div class="fw-bold">${{ factura.monto_total_con_mora|dinero }}</div>
+                                    {% if factura.monto_pagado_total > 0 and factura.saldo_pendiente > 0 %}
+                                        <div class="small text-danger fw-semibold" style="font-size: 0.72rem;">
+                                            Resta: ${{ factura.saldo_pendiente|dinero }}
+                                        </div>
+                                        <div class="small text-success" style="font-size: 0.7rem;">
+                                            (Abonado: ${{ factura.monto_pagado_total|dinero }})
+                                        </div>
+                                    {% endif %}
+                                </td>
                                 <td class="py-3 small">{{ factura.fecha_vencimiento|date:"d M Y" }}</td>
                                 <td class="py-3">
                                     {% if factura.estado == 'PAGADA' %}
@@ -640,7 +730,7 @@
                                 </td>
                                 <td class="py-3 text-end px-4">
                                     {% if factura.estado == 'PENDIENTE' or factura.estado == 'ATRASADA' %}
-                                        <a href="{% url 'registrar_pago' factura.id %}" class="btn btn-sm btn-success shadow-sm me-1">Cobrar</a>
+                                        <a href="{% url 'registrar_pago' factura.id %}" class="btn btn-sm btn-success shadow-sm me-1" title="Cobrar (Resta: RD${{ factura.saldo_pendiente|dinero }})">💳 Cobrar</a>
                                         {% if factura.total_mora > 0 %}
                                         <form action="{% url 'quitar_mora_factura' factura.id %}" method="POST" class="d-inline" onsubmit="return confirm('¿Quitar mora a esta factura?');">
                                             {% csrf_token %}

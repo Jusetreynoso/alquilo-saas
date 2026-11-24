@@ -237,7 +237,19 @@ def detalle_propiedad(request, propiedad_id):
     contrato_activo = propiedad.contratos.filter(activo=True).first()
 
     # 3. Historial de Facturas (De todos los contratos que haya tenido esta propiedad)
-    facturas = Factura.objects.filter(contrato__propiedad=propiedad).order_by('-fecha_emision')
+    facturas = Factura.objects.filter(contrato__propiedad=propiedad).order_by('-fecha_emision').prefetch_related('recibos', 'moras')
+
+    # Métricas financieras de la propiedad e inquilino actual
+    if contrato_activo:
+        facturas_pendientes_prop = [f for f in facturas if f.contrato_id == contrato_activo.id and f.estado in ('PENDIENTE', 'ATRASADA') and f.saldo_pendiente > decimal.Decimal('0.00')]
+        total_adeudado = contrato_activo.total_deuda_pendiente
+        facturas_pendientes_count = len(facturas_pendientes_prop)
+        balance_a_favor = contrato_activo.balance_a_favor
+    else:
+        facturas_pendientes_prop = [f for f in facturas if f.estado in ('PENDIENTE', 'ATRASADA') and f.saldo_pendiente > decimal.Decimal('0.00')]
+        total_adeudado = sum((f.saldo_pendiente for f in facturas_pendientes_prop), decimal.Decimal('0.00'))
+        facturas_pendientes_count = len(facturas_pendientes_prop)
+        balance_a_favor = decimal.Decimal('0.00')
 
     # 4. Historial de Mantenimientos
     mantenimientos = propiedad.historial_mantenimientos.all().order_by('-fecha_reporte')
@@ -261,6 +273,9 @@ def detalle_propiedad(request, propiedad_id):
         'solicitudes': solicitudes,
         'historial_precios': historial_precios,
         'form_precio': form_precio,
+        'total_adeudado': total_adeudado,
+        'facturas_pendientes_count': facturas_pendientes_count,
+        'balance_a_favor': balance_a_favor,
     }
     return render(request, 'gestion_propiedades/detalle_propiedad.html', context)
 
@@ -2289,10 +2304,15 @@ def detalle_inquilino(request, inquilino_id):
     # Historial de contratos vinculados a este inquilino
     contratos = inquilino.contratos.all().select_related('propiedad').order_by('-fecha_inicio')
     
+    total_adeudado = inquilino.total_deuda_pendiente
+    balance_a_favor = inquilino.balance_a_favor
+
     context = {
         'titulo_pagina': f'Perfil de Inquilino: {inquilino.nombre}',
         'inquilino': inquilino,
         'contratos': contratos,
+        'total_adeudado': total_adeudado,
+        'balance_a_favor': balance_a_favor,
     }
     return render(request, 'gestion_propiedades/detalle_inquilino.html', context)
 

@@ -101,9 +101,25 @@
     <!-- Historial de Propiedades Alquiladas -->
     <div class="col-md-8 mb-4">
         <div class="card shadow-sm border-0 h-100">
-            <div class="card-header bg-white fw-bold text-secondary py-3">
-                <div class="d-flex justify-content-between align-items-center">
+            <div class="card-header bg-white fw-bold text-secondary py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
                     <span>🏠 Historial de Contratos / Estancias</span>
+                </div>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    {% if total_adeudado > 0 %}
+                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-2 fw-bold" style="font-size: 0.82rem;" title="Deuda total pendiente del inquilino">
+                            ⚠️ Total Adeudado: RD${{ total_adeudado|dinero }}
+                        </span>
+                    {% else %}
+                        <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 fw-bold" style="font-size: 0.82rem;">
+                            🟢 Al Día: RD$0.00
+                        </span>
+                    {% endif %}
+                    {% if balance_a_favor > 0 %}
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2 fw-bold" style="font-size: 0.82rem;" title="Balance a favor o pagos por adelantado">
+                            ⭐ A Favor: RD${{ balance_a_favor|dinero }}
+                        </span>
+                    {% endif %}
                     <!-- Botón rápido para vincular a una nueva propiedad -->
                     <a href="{% url 'crear_contrato' %}" class="btn btn-sm btn-primary">+ Nuevo Contrato</a>
                 </div>
@@ -150,14 +166,23 @@
                                     {% if contrato.activo %}
                                         <div class="d-flex flex-column gap-1 align-items-center">
                                             <span class="badge bg-success w-100">Activo</span>
+                                            {% if contrato.tiene_alquiler_pendiente %}
+                                                <a href="{% url 'registrar_pago' contrato.proxima_factura_pendiente.id %}" class="btn btn-sm btn-success w-100 fw-bold shadow-sm" style="font-size: 0.75rem;" title="Cobrar factura pendiente de este contrato (RD${{ contrato.total_deuda_pendiente|dinero }})">
+                                                    💳 Cobrar
+                                                </a>
+                                            {% else %}
+                                                <button type="button" class="btn btn-sm btn-light text-muted border w-100" style="font-size: 0.75rem;" disabled title="Al día: sin alquiler pendiente">
+                                                    💳 Cobrar
+                                                </button>
+                                            {% endif %}
+                                            <a href="{% url 'registrar_pago_anticipado' contrato.id %}" class="btn btn-sm btn-outline-success w-100" style="font-size: 0.75rem;">
+                                                💰 Adelanto
+                                            </a>
                                             <a href="{% url 'gestionar_servicios_contrato' contrato.id %}?next={{ request.path }}" class="btn btn-sm btn-info text-white w-100 fw-bold" style="font-size: 0.75rem;">
                                                 ⚙️ Servicios
                                             </a>
                                             <a href="{% url 'editar_contrato' contrato.id %}" class="btn btn-sm btn-outline-secondary w-100" style="font-size: 0.75rem;">
                                                 ✏️ Editar
-                                            </a>
-                                            <a href="{% url 'registrar_pago_anticipado' contrato.id %}" class="btn btn-sm btn-outline-success w-100" style="font-size: 0.75rem;">
-                                                💰 Adelanto
                                             </a>
                                         </div>
                                     {% else %}

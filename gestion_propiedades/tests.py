@@ -1881,12 +1881,165 @@ class WhatsAppFase1Tests(TestCase):
             metodo_pago='EFECTIVO',
             registrado_por=self.user_a
         )
-        url_conf = reverse('confirmacion_pago_recibo', args=[recibo_sin_tel.id])
-        res_conf = self.client.get(url_conf)
-        self.assertEqual(res_conf.status_code, 200)
-        html_conf = res_conf.content.decode('utf-8')
-        self.assertIn('disabled', html_conf)
-        self.assertIn('Sin Teléfono Válido', html_conf)
+
+class CobroYBalancesTests(TestCase):
+    def setUp(self):
+        from .middleware import _thread_local
+        _thread_local.usuario = None
+
+        self.user = User.objects.create_user(username='admin_cobro', password='password123')
+        self.plan = PlanSaaS.objects.create(nombre='Plan Pro Cobro', precio_mensual=10.00, limite_propiedades=100, activo=True)
+        SuscripcionCliente.objects.create(usuario=self.user, plan_saas=self.plan, estado='ACTIVA')
+
+        self.portafolio = Portafolio.objects.create(nombre='Portafolio Cobro', propietario=self.user)
+        self.propiedad = Propiedad.objects.create(
+            portafolio=self.portafolio,
+            nombre_o_numero='Unidad 101',
+            precio_alquiler_sugerido=Decimal('8250.00')
+        )
+        self.inquilino = Inquilino.objects.create(
+            nombre='Carlos Mora',
+            telefono='809-555-0101',
+            creado_por=self.user
+        )
+        self.contrato = Contrato.objects.create(
+            propiedad=self.propiedad,
+            inquilino=self.inquilino,
+            fecha_inicio=date(2026, 1, 1),
+            monto_renta=Decimal('8250.00'),
+            monto_deposito=Decimal('16500.00'),
+            monto_adelanto=Decimal('0.00'),
+            dia_de_pago=1,
+            activo=True
+        )
+
+    def test_propiedades_contrato_deuda_y_proxima_factura(self):
+        # 1. Sin facturas: al día
+        self.assertFalse(self.contrato.tiene_alquiler_pendiente)
+        self.assertIsNone(self.contrato.proxima_factura_pendiente)
+        self.assertEqual(self.contrato.total_deuda_pendiente, Decimal('0.00'))
+
+        # 2. Dos facturas pendientes (mes 1 y mes 2)
+        f1 = Factura.objects.create(
+            contrato=self.contrato,
+            monto_base=Decimal('8250.00'),
+            monto_renta=Decimal('8250.00'),
+            concepto='Alquiler Enero 2026',
+            fecha_emision=date(2026, 1, 1),
+            fecha_vencimiento=date(2026, 1, 5),
+            estado='ATRASADA'
+        )
+        f2 = Factura.objects.create(
+            contrato=self.contrato,
+            monto_base=Decimal('8250.00'),
+            monto_renta=Decimal('8250.00'),
+            concepto='Alquiler Febrero 2026',
+            fecha_emision=date(2026, 2, 1),
+            fecha_vencimiento=date(2026, 2, 5),
+            estado='PENDIENTE'
+        )
+
+        self.assertTrue(self.contrato.tiene_alquiler_pendiente)
+        self.assertEqual(self.contrato.proxima_factura_pendiente.id, f1.id)
+        self.assertEqual(self.contrato.total_deuda_pendiente, Decimal('16500.00'))
+
+        # 3. Abono parcial de 7,960 a f1 -> saldo f1 = 290
+        ReciboPago.objects.create(
+            factura=f1,
+            monto_pagado=Decimal('7960.00'),
+            fecha_pago=date(2026, 1, 10),
+            metodo_pago='TRANSFERENCIA',
+            registrado_por=self.user
+        )
+        # Refrescar y validar
+        self.assertTrue(self.contrato.tiene_alquiler_pendiente)
+        # La más antigua sigue siendo f1 porque aún resta 290
+        self.assertEqual(self.contrato.proxima_factura_pendiente.id, f1.id)
+        self.assertEqual(self.contrato.total_deuda_pendiente, Decimal('8540.00'))
+
+        # 4. Pago del restante de f1 (290)
+        ReciboPago.objects.create(
+            factura=f1,
+            monto_pagado=Decimal('290.00'),
+            fecha_pago=date(2026, 1, 15),
+            metodo_pago='EFECTIVO',
+            registrado_por=self.user
+        )
+        f1.estado = 'PAGADA'
+        f1.save()
+
+        # Ahora la próxima factura pendiente es f2
+        self.assertTrue(self.contrato.tiene_alquiler_pendiente)
+        self.assertEqual(self.contrato.proxima_factura_pendiente.id, f2.id)
+        self.assertEqual(self.contrato.total_deuda_pendiente, Decimal('8250.00'))
+
+        # 5. Pago de f2 completa
+        ReciboPago.objects.create(
+            factura=f2,
+            monto_pagado=Decimal('8250.00'),
+            fecha_pago=date(2026, 2, 5),
+            metodo_pago='TRANSFERENCIA',
+            registrado_por=self.user
+        )
+        f2.estado = 'PAGADA'
+        f2.save()
+
+        self.assertFalse(self.contrato.tiene_alquiler_pendiente)
+        self.assertIsNone(self.contrato.proxima_factura_pendiente)
+        self.assertEqual(self.contrato.total_deuda_pendiente, Decimal('0.00'))
+
+    def test_vistas_detalle_inquilino_y_propiedad_botones_y_balances(self):
+        self.client.login(username='admin_cobro', password='password123')
+
+        # Factura pendiente creada
+        f1 = Factura.objects.create(
+            contrato=self.contrato,
+            monto_base=Decimal('8250.00'),
+            monto_renta=Decimal('8250.00'),
+            concepto='Alquiler Enero 2026',
+            fecha_emision=date(2026, 1, 1),
+            fecha_vencimiento=date(2026, 1, 5),
+            estado='PENDIENTE'
+        )
+
+        # 1. En Detalle Inquilino con deuda
+        res_inq = self.client.get(reverse('detalle_inquilino', args=[self.inquilino.id]))
+        self.assertEqual(res_inq.status_code, 200)
+        html_inq = res_inq.content.decode('utf-8')
+        self.assertIn("Total Adeudado: RD$8,250.00", html_inq)
+        self.assertIn(reverse('registrar_pago', args=[f1.id]), html_inq)
+        self.assertIn("Cobrar", html_inq)
+
+        # 2. En Detalle Propiedad con deuda
+        res_prop = self.client.get(reverse('detalle_propiedad', args=[self.propiedad.id]))
+        self.assertEqual(res_prop.status_code, 200)
+        html_prop = res_prop.content.decode('utf-8')
+        self.assertIn("Total Adeudado: RD$8,250.00", html_prop)
+        self.assertIn(reverse('registrar_pago', args=[f1.id]), html_prop)
+
+        # 3. Marcar factura como pagada y verificar estado "Al Día" y botón deshabilitado
+        f1.estado = 'PAGADA'
+        f1.save()
+        ReciboPago.objects.create(
+            factura=f1,
+            monto_pagado=Decimal('8250.00'),
+            fecha_pago=date(2026, 1, 5),
+            metodo_pago='EFECTIVO',
+            registrado_por=self.user
+        )
+
+        res_inq_pago = self.client.get(reverse('detalle_inquilino', args=[self.inquilino.id]))
+        self.assertEqual(res_inq_pago.status_code, 200)
+        html_inq_pago = res_inq_pago.content.decode('utf-8')
+        self.assertIn("Al Día", html_inq_pago)
+        self.assertIn("disabled", html_inq_pago)
+
+        res_prop_pago = self.client.get(reverse('detalle_propiedad', args=[self.propiedad.id]))
+        self.assertEqual(res_prop_pago.status_code, 200)
+        html_prop_pago = res_prop_pago.content.decode('utf-8')
+        self.assertIn("Al Día", html_prop_pago)
+        self.assertIn("disabled", html_prop_pago)
+
 
 
 

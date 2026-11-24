@@ -390,6 +390,21 @@ class Inquilino(models.Model):
         from .whatsapp_links import normalizar_telefono
         return normalizar_telefono(self.telefono) is not None
 
+    @property
+    def total_deuda_pendiente(self):
+        """Suma de saldos pendientes en todos los contratos activos del inquilino."""
+        contratos_act = self.contratos.filter(activo=True)
+        return sum((c.total_deuda_pendiente for c in contratos_act), Decimal('0.00'))
+
+    @property
+    def tiene_alquiler_pendiente(self):
+        return any(c.tiene_alquiler_pendiente for c in self.contratos.filter(activo=True))
+
+    @property
+    def balance_a_favor(self):
+        contratos_act = self.contratos.filter(activo=True)
+        return sum((c.balance_a_favor for c in contratos_act), Decimal('0.00'))
+
     def __str__(self):
         return self.nombre
 
@@ -505,6 +520,36 @@ class Contrato(models.Model):
     def total_cuota_mensual(self):
         renta = Decimal(str(self.monto_renta)) if self.monto_renta else Decimal('0.00')
         return renta + self.total_cargos_adicionales
+
+    @property
+    def proxima_factura_pendiente(self):
+        """Retorna la factura con saldo pendiente más antigua por cobrar, o None si está al día."""
+        facturas = self.facturas.filter(estado__in=['PENDIENTE', 'ATRASADA']).order_by('fecha_vencimiento', 'id')
+        for f in facturas:
+            if f.saldo_pendiente > Decimal('0.00'):
+                return f
+        return None
+
+    @property
+    def tiene_alquiler_pendiente(self):
+        """Indica si el contrato tiene alguna factura pendiente o atrasada con saldo mayor a cero."""
+        return self.proxima_factura_pendiente is not None
+
+    @property
+    def total_deuda_pendiente(self):
+        """Suma de saldos pendientes de todas las facturas del contrato."""
+        facturas = self.facturas.filter(estado__in=['PENDIENTE', 'ATRASADA'])
+        return sum((f.saldo_pendiente for f in facturas), Decimal('0.00'))
+
+    @property
+    def balance_a_favor(self):
+        """Calcula pagos adelantados a períodos futuros y sobrepagos a favor del contrato."""
+        from datetime import date
+        hoy = date.today()
+        futuras = self.facturas.filter(estado='PAGADA', fecha_emision__gt=hoy)
+        adelantos_futuros = sum((f.monto_pagado_total for f in futuras), Decimal('0.00'))
+        sobrepagos = sum((max(Decimal('0.00'), f.monto_pagado_total - f.monto_total_con_mora) for f in self.facturas.all()), Decimal('0.00'))
+        return adelantos_futuros + sobrepagos
 
     def __str__(self):
         return f"{self.propiedad} - {self.inquilino.nombre}"
