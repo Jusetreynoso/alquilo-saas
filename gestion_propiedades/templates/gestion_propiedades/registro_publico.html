@@ -56,38 +56,45 @@
             <form method="post" action="{% url 'registro_publico' %}">
                 {% csrf_token %}
                 
+                <!-- Campo Honeypot Oculto (Invisible para humanos, trampa para bots automatizados) -->
+                <div style="position: absolute; left: -9999px; top: -9999px; opacity: 0; pointer-events: none;" aria-hidden="true" tabindex="-1">
+                    <label for="empresa_confirmacion">Confirmación de Empresa (dejar en blanco)</label>
+                    <input type="text" name="empresa_confirmacion" id="empresa_confirmacion" value="" autocomplete="off" tabindex="-1">
+                    <input type="text" name="website_url" id="website_url" value="" autocomplete="off" tabindex="-1">
+                </div>
+                
                 <div class="row">
                     <div class="col-6 mb-3">
                         <label class="form-label text-muted small fw-bold mb-1">Nombre</label>
-                        <input type="text" name="first_name" class="form-control bg-light" required autofocus>
+                        <input type="text" name="first_name" class="form-control bg-light" value="{{ first_name|default:'' }}" required autofocus placeholder="Ej: Carlos">
                     </div>
                     <div class="col-6 mb-3">
                         <label class="form-label text-muted small fw-bold mb-1">Apellido</label>
-                        <input type="text" name="last_name" class="form-control bg-light" required>
+                        <input type="text" name="last_name" class="form-control bg-light" value="{{ last_name|default:'' }}" required placeholder="Ej: Rodríguez">
                     </div>
                 </div>
 
                 <div class="mb-3">
                     <label class="form-label text-muted small fw-bold mb-1">Tu Correo (Este será tu usuario)</label>
-                    <input type="email" name="email" class="form-control bg-light" required>
+                    <input type="email" name="email" class="form-control bg-light" value="{{ email|default:'' }}" required placeholder="nombre@tuempresa.com">
                 </div>
                 
                 <div class="mb-3">
                     <label class="form-label text-muted small fw-bold mb-1">Contraseña de Administrador</label>
-                    <input type="password" name="password" class="form-control bg-light" required minlength="6">
+                    <input type="password" name="password" class="form-control bg-light" required minlength="6" placeholder="Mínimo 6 caracteres">
                 </div>
 
                 <hr class="my-4 text-muted">
 
                 <div class="mb-3">
                     <label class="form-label text-primary small fw-bold mb-1">🏢 Nombre de tu Portafolio B2B</label>
-                    <input type="text" name="nombre_portafolio" class="form-control bg-light border-primary" placeholder="Ej: Inmobiliaria García" required>
+                    <input type="text" name="nombre_portafolio" class="form-control bg-light border-primary" value="{{ nombre_portafolio|default:'' }}" placeholder="Ej: Inmobiliaria García" required>
                 </div>
                 
                 <div class="mb-4">
                     <label class="form-label text-success small fw-bold mb-1">💬 Teléfono / WhatsApp (Obligatorio)</label>
-                    <input type="text" name="telefono" class="form-control bg-light" placeholder="+1 (000) 000-0000" required>
-                    <div class="form-text" style="font-size: 0.75rem;">Tu número nos permite darte soporte prioritario durante la prueba.</div>
+                    <input type="text" name="telefono" class="form-control bg-light" value="{{ telefono|default:'' }}" placeholder="+1 (809) 000-0000" required>
+                    <div class="form-text" style="font-size: 0.75rem;">Para República Dominicana usa prefijos 809, 829 u 849. Nos permite darte soporte prioritario durante la prueba.</div>
                 </div>
                 
                 <button type="submit" class="btn btn-gradient btn-lg w-100 fw-bold rounded-pill mb-3">Crear mi Máquina de Cobros</button>

@@ -2041,6 +2041,111 @@ class CobroYBalancesTests(TestCase):
         self.assertIn("disabled", html_prop_pago)
 
 
+class AntiSpamRegistroTests(TestCase):
+    def setUp(self):
+        from .middleware import _thread_local
+        _thread_local.usuario = None
+        self.plan = PlanSaaS.objects.create(nombre='Plan Trial Spam', precio_mensual=10.00, limite_propiedades=100, activo=True)
+
+    def test_es_correo_desechable(self):
+        from .antispam import es_correo_desechable
+        self.assertTrue(es_correo_desechable('hqlxvsoy@immenseignite.info'))
+        self.assertTrue(es_correo_desechable('fake@mailinator.com'))
+        self.assertTrue(es_correo_desechable('spam@tempmail.com'))
+        self.assertTrue(es_correo_desechable('invalid-email'))
+        self.assertFalse(es_correo_desechable('propietario@gmail.com'))
+        self.assertFalse(es_correo_desechable('contacto@realty.com.do'))
+        self.assertFalse(es_correo_desechable('admin@inmobiliaria.es'))
+
+    def test_es_nombre_plausible(self):
+        from .antispam import es_nombre_plausible
+        # Casos reales del bot spam
+        self.assertFalse(es_nombre_plausible('dvlfkmzzmw'))
+        self.assertFalse(es_nombre_plausible('jjlljgnlrs'))
+        self.assertFalse(es_nombre_plausible(''))
+        self.assertFalse(es_nombre_plausible('a'))
+        # Nombres humanos válidos
+        self.assertTrue(es_nombre_plausible('Carlos'))
+        self.assertTrue(es_nombre_plausible('María'))
+        self.assertTrue(es_nombre_plausible('Rodríguez'))
+        self.assertTrue(es_nombre_plausible('John'))
+        self.assertTrue(es_nombre_plausible('Ng'))
+
+    def test_validar_telefono_registro(self):
+        from .antispam import validar_telefono_registro
+        # Caso real del bot spam: +1-019-849-2980 (código de área 019 inválido)
+        ok, msg = validar_telefono_registro('+1-019-849-2980')
+        self.assertFalse(ok)
+        self.assertIn('019', msg)
+
+        # Repetidos o inválidos
+        ok, _ = validar_telefono_registro('1111111111')
+        self.assertFalse(ok)
+        ok, _ = validar_telefono_registro('123')
+        self.assertFalse(ok)
+
+        # Válidos de República Dominicana y formato internacional
+        ok, _ = validar_telefono_registro('809-555-1234')
+        self.assertTrue(ok)
+        ok, _ = validar_telefono_registro('+1 (829) 555-6789')
+        self.assertTrue(ok)
+        ok, _ = validar_telefono_registro('8493532097')
+        self.assertTrue(ok)
+
+    def test_registro_publico_trampa_honeypot_descarta_bot(self):
+        url = reverse('registro_publico')
+        conteo_inicial = User.objects.count()
+
+        # Bot que llena el campo trampa
+        data_bot = {
+            'first_name': 'Carlos',
+            'last_name': 'Mendoza',
+            'email': 'carlos@realtyrd.com',
+            'password': 'password123',
+            'nombre_portafolio': 'Realty RD',
+            'telefono': '809-555-4321',
+            'empresa_confirmacion': 'Soy un bot completando todo',
+        }
+        res = self.client.post(url, data_bot)
+        # Redirige silenciosamente sin crear usuario ni portafolio
+        self.assertEqual(res.status_code, 302)
+        self.assertEqual(User.objects.count(), conteo_inicial)
+
+    def test_registro_publico_rechaza_datos_falsos_del_bot(self):
+        url = reverse('registro_publico')
+        conteo_inicial = User.objects.count()
+
+        # Payload exacto del bot reportado por el usuario
+        data_bot = {
+            'first_name': 'dvlfkmzzmw',
+            'last_name': 'jjlljgnlrs',
+            'email': 'hqlxvsoy@immenseignite.info',
+            'password': 'password123',
+            'nombre_portafolio': 'Spam Portfolio',
+            'telefono': '+1-019-849-2980',
+        }
+        res = self.client.post(url, data_bot)
+        self.assertEqual(res.status_code, 200)
+        self.assertIn('message', res.context)
+        self.assertEqual(User.objects.count(), conteo_inicial)
+
+    def test_registro_publico_exitoso_con_datos_validos(self):
+        url = reverse('registro_publico')
+        data_humano = {
+            'first_name': 'Alejandro',
+            'last_name': 'Peña',
+            'email': 'alejandro.pena@miempresa.com.do',
+            'password': 'password123',
+            'nombre_portafolio': 'Inversiones Peña',
+            'telefono': '809-555-9876',
+        }
+        res = self.client.post(url, data_humano)
+        self.assertEqual(res.status_code, 302)
+        self.assertTrue(User.objects.filter(email='alejandro.pena@miempresa.com.do').exists())
+        self.assertTrue(Portafolio.objects.filter(nombre='Inversiones Peña').exists())
+
+
+
 
 
 

@@ -36,22 +36,47 @@ def inicio_comercial(request):
 def registro_publico(request):
     """
     Vista de Auto-Registro para que nuevos clientes creen su Portafolio con 45 días de prueba.
+    Incluye protección anti-spam multicapa (Honeypot + validación de WhatsApp/Teléfono + descarte de correos desechables).
     """
     if request.user.is_authenticated:
         return redirect('dashboard')
         
     if request.method == 'POST':
-        first_name = request.POST.get('first_name', '')
-        last_name = request.POST.get('last_name', '')
-        email = request.POST.get('email', '')
+        from .antispam import validar_registro_publico
+        
+        es_valido, mensaje_error, es_bot_silencioso = validar_registro_publico(request.POST)
+        
+        # 1. Si cayó en la trampa honeypot, fingimos éxito redirigiendo silenciosamente sin guardar nada
+        if es_bot_silencioso:
+            return redirect('inicio_comercial')
+            
+        # 2. Si no pasó las validaciones de nombre, teléfono o correo desechable
+        if not es_valido:
+            return render(request, 'gestion_propiedades/registro_publico.html', {
+                'message': mensaje_error,
+                'first_name': request.POST.get('first_name', ''),
+                'last_name': request.POST.get('last_name', ''),
+                'email': request.POST.get('email', ''),
+                'nombre_portafolio': request.POST.get('nombre_portafolio', ''),
+                'telefono': request.POST.get('telefono', ''),
+            })
+
+        first_name = request.POST.get('first_name', '').strip()
+        last_name = request.POST.get('last_name', '').strip()
+        email = request.POST.get('email', '').strip().lower()
         password = request.POST.get('password', '')
-        nombre_portafolio = request.POST.get('nombre_portafolio', '')
-        telefono = request.POST.get('telefono', '')
+        nombre_portafolio = request.POST.get('nombre_portafolio', '').strip()
+        telefono = request.POST.get('telefono', '').strip()
         
         from django.contrib.auth.models import User
         if User.objects.filter(email=email).exists() or User.objects.filter(username=email).exists():
             return render(request, 'gestion_propiedades/registro_publico.html', {
-                'message': 'Este correo ya está registrado en el sistema. Utilice otro si desea crear un nuevo portafolio.'
+                'message': 'Este correo ya está registrado en el sistema. Utilice otro si desea crear un nuevo portafolio.',
+                'first_name': first_name,
+                'last_name': last_name,
+                'email': email,
+                'nombre_portafolio': nombre_portafolio,
+                'telefono': telefono,
             })
             
         # 1. Crear el Super Usuario B2B (Owner)
