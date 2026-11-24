@@ -870,15 +870,12 @@ def finalizar_contrato(request, contrato_id):
     facturas_pendientes = Factura.objects.filter(
         contrato=contrato,
         estado__in=['PENDIENTE', 'ATRASADA']
-    ).annotate(mora_acumulada=Sum('moras__monto'))
+    )
     
     total_deuda_facturas = decimal.Decimal('0.00')
     for f in facturas_pendientes:
-        mora = f.mora_acumulada or decimal.Decimal('0.00')
-        pagos = f.pagos.aggregate(total=Sum('monto_pagado'))['total'] or decimal.Decimal('0.00')
-        saldo = (f.monto_base + mora) - pagos
-        if saldo > 0:
-            total_deuda_facturas += saldo
+        if f.saldo_pendiente > 0:
+            total_deuda_facturas += f.saldo_pendiente
             
     if request.method == 'POST':
         form = LiquidacionDepositoForm(request.POST)
@@ -3527,10 +3524,12 @@ def reporte_morosos(request):
     for f in facturas_vencidas:
         dias_retraso = (hoy - f.fecha_vencimiento).days
         mora = f.mora_acumulada or decimal.Decimal('0.00')
-        deuda_total = f.monto_base + mora
+        saldo_real = f.saldo_pendiente
         
-        gran_total_deuda += f.monto_base
-        gran_total_mora += mora
+        mora_pendiente = f.saldo_mora_pendiente
+        base_pendiente = max(Decimal('0.00'), saldo_real - mora_pendiente)
+        gran_total_deuda += base_pendiente
+        gran_total_mora += mora_pendiente
         
         deudores.append({
             'factura': f,
@@ -3539,7 +3538,7 @@ def reporte_morosos(request):
             'dias_retraso': dias_retraso,
             'monto_base': f.monto_base,
             'mora': mora,
-            'deuda_total': deuda_total
+            'deuda_total': saldo_real
         })
         
     context = {
@@ -4304,11 +4303,10 @@ def reporte_propietario(request):
         facturas_vencidas = Factura.objects.filter(
             contrato__propiedad__in=propiedades,
             estado='ATRASADA'
-        ).annotate(mora_acumulada=Sum('moras__monto'))
+        )
         
         for f in facturas_vencidas:
-            mora = f.mora_acumulada or decimal.Decimal('0.00')
-            total_morosidad += f.monto_base + mora
+            total_morosidad += f.saldo_pendiente
             
         # Depósitos y contratos activos
         contratos_activos_qs = Contrato.objects.filter(
@@ -4367,12 +4365,11 @@ def reporte_propietario(request):
             facturas_vencidas_prop = Factura.objects.filter(
                 contrato__propiedad=prop,
                 estado='ATRASADA'
-            ).annotate(mora=Sum('moras__monto'))
+            )
             
             deuda_prop = decimal.Decimal('0.00')
             for f in facturas_vencidas_prop:
-                mora_val = f.mora or decimal.Decimal('0.00')
-                deuda_prop += f.monto_base + mora_val
+                deuda_prop += f.saldo_pendiente
                 
             if prop.estado == 'DISPONIBLE':
                 estado_pago = 'VACANTE'
@@ -4844,12 +4841,11 @@ def imprimir_estado_situacion_propietario(request, propietario_id):
         facturas_vencidas_prop = Factura.objects.filter(
             contrato__propiedad=prop,
             estado='ATRASADA'
-        ).annotate(mora=Sum('moras__monto'))
+        )
         
         deuda_prop = decimal.Decimal('0.00')
         for f in facturas_vencidas_prop:
-            mora_val = f.mora or decimal.Decimal('0.00')
-            deuda_prop += f.monto_base + mora_val
+            deuda_prop += f.saldo_pendiente
             
         if prop.estado == 'DISPONIBLE':
             estado_pago = 'VACANTE'

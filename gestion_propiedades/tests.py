@@ -380,6 +380,68 @@ class AlquiloTests(TestCase):
         self.assertEqual(float(liq.monto_neto_pagado), 15000.00)
         self.assertEqual(liq.estado, 'PAGADO')
 
+    def test_reporte_propietario_deuda_con_abonos(self):
+        self.client.login(username='propietario1', password='password123')
+        
+        # Asignar un propietario a la propiedad
+        owner = PropietarioInmueble.objects.create(
+            portafolio=self.portafolio1,
+            nombre='Propietario Don Juan',
+            porcentaje_comision=Decimal('10.00'),
+            tipo_comision='PORCENTAJE'
+        )
+        self.propiedad1.propietario_inmueble = owner
+        self.propiedad1.estado = 'OCUPADO'
+        self.propiedad1.save()
+
+        # Crear 2 facturas atrasadas de 8,250 cada una
+        f1 = Factura.objects.create(
+            contrato=self.contrato1,
+            fecha_emision=date(2026, 9, 1),
+            fecha_vencimiento=date(2026, 9, 5),
+            monto_base=Decimal('8250.00'),
+            monto_renta=Decimal('8250.00'),
+            concepto='Alquiler Septiembre 2026',
+            estado='ATRASADA'
+        )
+        f2 = Factura.objects.create(
+            contrato=self.contrato1,
+            fecha_emision=date(2026, 10, 1),
+            fecha_vencimiento=date(2026, 10, 5),
+            monto_base=Decimal('8250.00'),
+            monto_renta=Decimal('8250.00'),
+            concepto='Alquiler Octubre 2026',
+            estado='ATRASADA'
+        )
+
+        # Inquilino realiza un abono de 7,960 a la factura 1 (quedando 290 de saldo en f1)
+        ReciboPago.objects.create(
+            factura=f1,
+            fecha_pago=date(2026, 10, 15),
+            monto_pagado=Decimal('7960.00'),
+            metodo_pago='TRANSFERENCIA',
+            registrado_por=self.user1
+        )
+
+        # Verificar saldos individuales
+        self.assertEqual(f1.saldo_pendiente, Decimal('290.00'))
+        self.assertEqual(f2.saldo_pendiente, Decimal('8250.00'))
+
+        # Consultar reporte de propietario para el mes de octubre
+        url = f"{reverse('reporte_propietario')}?propietario_id={owner.id}&mes=10&anio=2026"
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 200)
+
+        # Cobrado en el mes debe ser 7,960.00
+        self.assertEqual(float(res.context['total_ingresos']), 7960.00)
+
+        # Deuda pendiente en la situación detallada de la propiedad debe ser 290 + 8250 = 8540.00
+        # (Y NUNCA 16500.00 que ignoraba los abonos)
+        sit_prop = res.context['situacion_propiedades'][0]
+        self.assertEqual(sit_prop['cobrado'], Decimal('7960.00'))
+        self.assertEqual(sit_prop['deuda'], Decimal('8540.00'))
+        self.assertEqual(res.context['total_morosidad'], Decimal('8540.00'))
+
     def test_finalizar_contrato_y_liquidacion_deposito(self):
         self.client.login(username='propietario1', password='password123')
         
