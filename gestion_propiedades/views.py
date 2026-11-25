@@ -33,6 +33,12 @@ def inicio_comercial(request):
         pass # Podríamos redirigirlo, pero dejaremos que vea la página
     return render(request, 'gestion_propiedades/sitio_comercial.html')
 
+def preview_landing(request):
+    """
+    Vista previa interactiva de la propuesta estética para la landing page.
+    """
+    return render(request, 'gestion_propiedades/preview_landing.html')
+
 def registro_publico(request):
     """
     Vista de Auto-Registro para que nuevos clientes creen su Portafolio con 45 días de prueba.
@@ -4472,14 +4478,18 @@ def reporte_propietario(request):
                 periodo_anio=p_anio
             ).exists()
             if not ya_liquidado:
-                ing_pasado = ReciboPago.objects.filter(
+                recibos_pasados_qs = ReciboPago.objects.filter(
                     factura__contrato__propiedad__propietario_inmueble=propietario_seleccionado,
                     fecha_pago__month=p_mes,
                     fecha_pago__year=p_anio
-                ).aggregate(total=Sum('monto_pagado'))['total'] or decimal.Decimal('0.00')
+                )
+                ing_pasado = recibos_pasados_qs.aggregate(total=Sum('monto_pagado'))['total'] or decimal.Decimal('0.00')
+                renta_pasada = recibos_pasados_qs.aggregate(total=Sum('monto_a_renta'))['total'] or decimal.Decimal('0.00')
+                if renta_pasada == decimal.Decimal('0.00') and ing_pasado > decimal.Decimal('0.00'):
+                    renta_pasada = ing_pasado
                 
                 if propietario_seleccionado.tipo_comision == 'PORCENTAJE':
-                    comision_pasada = round(ing_pasado * (propietario_seleccionado.porcentaje_comision / decimal.Decimal('100.0')), 2)
+                    comision_pasada = round(renta_pasada * (propietario_seleccionado.porcentaje_comision / decimal.Decimal('100.0')), 2)
                 else:
                     comision_pasada = propietario_seleccionado.monto_comision_fijo * propiedades.count()
                     
@@ -4791,9 +4801,15 @@ def imprimir_liquidacion_propietario(request, propietario_id):
     ).select_related('factura__contrato__propiedad', 'factura__contrato__inquilino')
     
     total_ingresos = recibos.aggregate(total=Sum('monto_pagado'))['total'] or decimal.Decimal('0.00')
+    total_renta_cobrada = recibos.aggregate(total=Sum('monto_a_renta'))['total'] or decimal.Decimal('0.00')
+    total_servicios_cobrados = recibos.aggregate(total=Sum('monto_a_servicios'))['total'] or decimal.Decimal('0.00')
+    total_mora_cobrada = recibos.aggregate(total=Sum('monto_a_mora'))['total'] or decimal.Decimal('0.00')
+
+    if total_renta_cobrada == decimal.Decimal('0.00') and total_ingresos > decimal.Decimal('0.00'):
+        total_renta_cobrada = total_ingresos
     
     if propietario.tipo_comision == 'PORCENTAJE':
-        monto_comision = round(total_ingresos * (propietario.porcentaje_comision / decimal.Decimal('100.0')), 2)
+        monto_comision = round(total_renta_cobrada * (propietario.porcentaje_comision / decimal.Decimal('100.0')), 2)
     else:
         num_props = propiedades.count()
         monto_comision = propietario.monto_comision_fijo * num_props
@@ -4831,6 +4847,9 @@ def imprimir_liquidacion_propietario(request, propietario_id):
         'gastos_propiedades': gastos_propiedades,
         'gastos_generales': gastos_generales,
         'total_ingresos': total_ingresos,
+        'total_renta_cobrada': total_renta_cobrada,
+        'total_servicios_cobrados': total_servicios_cobrados,
+        'total_mora_cobrada': total_mora_cobrada,
         'monto_comision': monto_comision,
         'total_gastos_prop': total_gastos_prop,
         'total_gastos_gen': total_gastos_gen,

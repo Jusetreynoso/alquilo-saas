@@ -983,6 +983,19 @@ class AlquiloTests(TestCase):
         # Neto pagado al propietario: 13,000 - 1,000 = 12,000
         self.assertEqual(liquidacion.monto_neto_pagado, Decimal('12000.00'))
 
+        # Verificar que imprimir_liquidacion_propietario (PDF) también calcula la comisión solo sobre la renta
+        url_pdf = f"{reverse('imprimir_liquidacion_propietario', args=[propietario.id])}?mes=11&anio=2026"
+        res_pdf = self.client.get(url_pdf)
+        self.assertEqual(res_pdf.status_code, 200)
+        self.assertEqual(res_pdf.context['total_ingresos'], Decimal('13000.00'))
+        self.assertEqual(res_pdf.context['total_renta_cobrada'], Decimal('10000.00'))
+        self.assertEqual(res_pdf.context['total_servicios_cobrados'], Decimal('3000.00'))
+        self.assertEqual(res_pdf.context['monto_comision'], Decimal('1000.00'))
+        self.assertEqual(res_pdf.context['neto_a_pagar'], Decimal('12000.00'))
+        content_pdf = res_pdf.content.decode('utf-8')
+        self.assertIn('$1,000.00', content_pdf)
+        self.assertIn('$12,000.00', content_pdf)
+
     def test_mora_continua_calculandose_hasta_saldar_alquiler(self):
         from django.core.management import call_command
         # Factura vencida donde inquilino solo pagó servicios pero debe el alquiler

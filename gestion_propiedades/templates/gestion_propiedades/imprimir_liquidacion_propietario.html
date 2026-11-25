@@ -125,8 +125,26 @@
             {% endfor %}
         </tbody>
         <tfoot class="table-light">
+            {% if total_servicios_cobrados > 0 or total_mora_cobrada > 0 %}
             <tr>
-                <th colspan="4" class="text-end">Total Rentas Cobradas:</th>
+                <td colspan="4" class="text-end text-muted small">Alquiler Cobrado (Comisionable):</td>
+                <td class="text-end text-muted small">${{ total_renta_cobrada|dinero }}</td>
+            </tr>
+            {% if total_servicios_cobrados > 0 %}
+            <tr>
+                <td colspan="4" class="text-end text-muted small">Servicios Cobrados (Sin comisión):</td>
+                <td class="text-end text-muted small">${{ total_servicios_cobrados|dinero }}</td>
+            </tr>
+            {% endif %}
+            {% if total_mora_cobrada > 0 %}
+            <tr>
+                <td colspan="4" class="text-end text-muted small">Moras Cobradas (Sin comisión):</td>
+                <td class="text-end text-muted small">${{ total_mora_cobrada|dinero }}</td>
+            </tr>
+            {% endif %}
+            {% endif %}
+            <tr>
+                <th colspan="4" class="text-end">Total Cobrado:</th>
                 <th class="text-end text-success fs-6">${{ total_ingresos|dinero }}</th>
             </tr>
         </tfoot>
@@ -147,7 +165,7 @@
             <tr>
                 <td>
                     <strong>Comisión de Administración</strong>
-                    <br><small class="text-muted">{% if propietario.tipo_comision == 'PORCENTAJE' %}{{ propietario.porcentaje_comision }}% sobre el total cobrado{% else %}Monto fijo contractual{% endif %}</small>
+                    <br><small class="text-muted">{% if propietario.tipo_comision == 'PORCENTAJE' %}{{ propietario.porcentaje_comision }}% sobre alquiler cobrado (RD${{ total_renta_cobrada|dinero }}){% else %}Monto fijo contractual{% endif %}</small>
                 </td>
                 <td><span class="badge bg-secondary">Honorarios Admin</span></td>
                 <td class="text-end text-danger fw-bold">${{ monto_comision|dinero }}</td>
