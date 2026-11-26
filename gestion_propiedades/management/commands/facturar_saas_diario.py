@@ -154,6 +154,12 @@ class Command(BaseCommand):
                                 monto=c.monto
                             )
                         facturas_b2c += 1
+
+                        # Aplicar saldo a favor automáticamente si el contrato tiene fondos acumulados
+                        from gestion_propiedades.services.pago_service import aplicar_saldo_a_favor_factura
+                        aplicado_favor = aplicar_saldo_a_favor_factura(nueva_fact)
+                        if aplicado_favor > 0:
+                            self.stdout.write(f"   [Saldo a Favor] Se aplicaron RD$ {aplicado_favor:,.2f} a la Factura #{nueva_fact.id} del Contrato #{contrato.id}")
                         
                         # Enviar estado de cuenta Inquilino
                         enviar_aviso_factura_generada(nueva_fact)

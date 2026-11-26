@@ -1,4 +1,4 @@
-from django.test import TestCase, Client
+from django.test import TestCase, Client, TransactionTestCase
 from django.contrib.auth.models import User
 from django.urls import reverse
 from datetime import date, timedelta
@@ -2156,6 +2156,417 @@ class AntiSpamRegistroTests(TestCase):
         self.assertEqual(res.status_code, 302)
         self.assertTrue(User.objects.filter(email='alejandro.pena@miempresa.com.do').exists())
         self.assertTrue(Portafolio.objects.filter(nombre='Inversiones Peña').exists())
+
+
+class PrevencionPagosDuplicadosTests(TestCase):
+    def setUp(self):
+        from .middleware import _thread_local
+        _thread_local.usuario = None
+
+        self.user_a = User.objects.create_user(username='agencia_alquilo_a', password='password123')
+        self.user_b = User.objects.create_user(username='agencia_alquilo_b', password='password123')
+
+        self.plan = PlanSaaS.objects.create(nombre='Plan Pro Dups', precio_mensual=10.00, limite_propiedades=100, activo=True)
+        SuscripcionCliente.objects.create(usuario=self.user_a, plan_saas=self.plan, estado='ACTIVA')
+        SuscripcionCliente.objects.create(usuario=self.user_b, plan_saas=self.plan, estado='ACTIVA')
+
+        self.portafolio_a = Portafolio.objects.create(nombre='Inmobiliaria Alfa', propietario=self.user_a)
+        self.portafolio_b = Portafolio.objects.create(nombre='Inmobiliaria Beta', propietario=self.user_b)
+
+        self.propiedad_a = Propiedad.objects.create(portafolio=self.portafolio_a, nombre_o_numero='Apto 101-A', estado='ALQUILADA')
+        self.propiedad_b = Propiedad.objects.create(portafolio=self.portafolio_b, nombre_o_numero='Apto 202-B', estado='ALQUILADA')
+
+        self.inquilino_a = Inquilino.objects.create(nombre='Inquilino Juan', telefono='809-555-0101', creado_por=self.user_a)
+        self.inquilino_b = Inquilino.objects.create(nombre='Inquilino Pedro', telefono='809-555-0202', creado_por=self.user_b)
+
+        self.contrato_a = Contrato.objects.create(
+            propiedad=self.propiedad_a,
+            inquilino=self.inquilino_a,
+            monto_renta=Decimal('10000.00'),
+            dia_de_pago=1,
+            fecha_inicio=date(2026, 1, 1),
+            fecha_fin=date(2027, 1, 1),
+            activo=True
+        )
+
+        self.factura_a = Factura.objects.create(
+            contrato=self.contrato_a,
+            fecha_emision=date(2026, 11, 1),
+            fecha_vencimiento=date(2026, 11, 5),
+            monto_base=Decimal('10000.00'),
+            monto_renta=Decimal('10000.00'),
+            concepto='Alquiler Noviembre 2026',
+            estado='PENDIENTE'
+        )
+
+    def test_pago_factura_con_saldo_cero_rechazado(self):
+        from .services.pago_service import registrar_pago_factura, ErrorValidacionPago
+        # 1. Saldar la factura por completo
+        res1 = registrar_pago_factura(
+            factura_id=self.factura_a.id,
+            monto=Decimal('10000.00'),
+            usuario=self.user_a
+        )
+        self.assertEqual(res1['factura'].estado, 'PAGADA')
+        self.assertEqual(res1['factura'].saldo_pendiente, Decimal('0.00'))
+
+        # 2. Intentar pagar de nuevo sobre la factura cubierta debe lanzar ErrorValidacionPago
+        with self.assertRaises(ErrorValidacionPago) as ctx:
+            registrar_pago_factura(
+                factura_id=self.factura_a.id,
+                monto=Decimal('5000.00'),
+                usuario=self.user_a
+            )
+        self.assertEqual(ctx.exception.codigo, 'FACTURA_YA_PAGADA')
+        self.assertIn('ya está pagada por completo', ctx.exception.mensaje)
+
+        # 3. Verificar que se auditó el intento rechazado en AuditLog
+        log = AuditLog.objects.filter(accion='RECHAZAR', modulo='ReciboPago').first()
+        self.assertIsNotNone(log)
+        self.assertIn('pagada por completo', log.descripcion)
+
+        # 4. Verificar desde la interfaz web (POST directo)
+        self.client.login(username='agencia_alquilo_a', password='password123')
+        url = reverse('registrar_pago', args=[self.factura_a.id])
+        res_post = self.client.post(url, {'monto': '10000.00', 'metodo_pago': 'TRANSFERENCIA'})
+        self.assertEqual(res_post.status_code, 302)
+        # Sigue teniendo exactamente 1 recibo
+        self.assertEqual(self.factura_a.recibos.count(), 1)
+
+    def test_abono_parcial_seguido_de_otro_que_completa_saldo(self):
+        from .services.pago_service import registrar_pago_factura
+        # Abono 1: 4,000 de 10,000
+        res1 = registrar_pago_factura(
+            factura_id=self.factura_a.id,
+            monto=Decimal('4000.00'),
+            usuario=self.user_a
+        )
+        self.assertEqual(res1['recibo'].monto_pagado, Decimal('4000.00'))
+        self.assertEqual(res1['factura'].saldo_pendiente, Decimal('6000.00'))
+        self.assertEqual(res1['factura'].estado, 'PENDIENTE')
+
+        # Abono 2: 6,000 restantes
+        res2 = registrar_pago_factura(
+            factura_id=self.factura_a.id,
+            monto=Decimal('6000.00'),
+            usuario=self.user_a
+        )
+        self.assertEqual(res2['recibo'].monto_pagado, Decimal('6000.00'))
+        self.assertEqual(res2['factura'].saldo_pendiente, Decimal('0.00'))
+        self.assertEqual(res2['factura'].estado, 'PAGADA')
+        self.assertEqual(self.factura_a.recibos.count(), 2)
+
+    def test_pago_mayor_al_saldo_rechazado_y_aceptado_con_confirmacion(self):
+        from .services.pago_service import registrar_pago_factura, ErrorValidacionPago
+        # Intento de pagar 13,000 sobre saldo de 10,000 sin confirmación de saldo a favor
+        with self.assertRaises(ErrorValidacionPago) as ctx:
+            registrar_pago_factura(
+                factura_id=self.factura_a.id,
+                monto=Decimal('13000.00'),
+                usuario=self.user_a,
+                permitir_excedente_a_favor=False
+            )
+        self.assertEqual(ctx.exception.codigo, 'EXCEDE_SALDO')
+        self.assertEqual(ctx.exception.excedente, Decimal('3000.00'))
+
+        # Ahora con confirmación explícita (permitir_excedente_a_favor=True)
+        res = registrar_pago_factura(
+            factura_id=self.factura_a.id,
+            monto=Decimal('13000.00'),
+            usuario=self.user_a,
+            permitir_excedente_a_favor=True
+        )
+        # Recibo cubre el saldo exacto de 10,000
+        self.assertEqual(res['recibo'].monto_pagado, Decimal('10000.00'))
+        self.assertEqual(res['factura'].saldo_pendiente, Decimal('0.00'))
+        self.assertEqual(res['factura'].estado, 'PAGADA')
+        # Excedente de 3,000 queda en saldo a favor del contrato
+        self.assertEqual(res['excedente_a_favor'], Decimal('3000.00'))
+        self.contrato_a.refresh_from_db()
+        self.assertEqual(self.contrato_a.saldo_a_favor, Decimal('3000.00'))
+
+    def test_mismo_token_idempotencia_enviado_dos_veces(self):
+        import uuid
+        from .services.pago_service import registrar_pago_factura
+        token = uuid.uuid4()
+
+        # Primer envío
+        res1 = registrar_pago_factura(
+            factura_id=self.factura_a.id,
+            monto=Decimal('5000.00'),
+            usuario=self.user_a,
+            idempotency_token=token
+        )
+        self.assertFalse(res1['es_duplicado_idempotente'])
+        self.assertEqual(res1['recibo'].idempotency_token, token)
+        self.assertEqual(self.factura_a.recibos.count(), 1)
+
+        # Segundo envío idéntico (simulando doble clic o reenvío)
+        res2 = registrar_pago_factura(
+            factura_id=self.factura_a.id,
+            monto=Decimal('5000.00'),
+            usuario=self.user_a,
+            idempotency_token=token
+        )
+        self.assertTrue(res2['es_duplicado_idempotente'])
+        self.assertEqual(res2['recibo'].id, res1['recibo'].id)
+        # No se creó ningún recibo duplicado
+        self.assertEqual(self.factura_a.recibos.count(), 1)
+        self.assertEqual(self.factura_a.saldo_pendiente, Decimal('5000.00'))
+
+    def test_boton_inteligente_no_puede_pagar_factura_cubierta(self):
+        # Saldar la única factura
+        from .services.pago_service import registrar_pago_factura
+        registrar_pago_factura(self.factura_a.id, Decimal('10000.00'), usuario=self.user_a)
+
+        # El botón inteligente detecta que no hay alquiler pendiente
+        self.assertFalse(self.contrato_a.tiene_alquiler_pendiente)
+        self.assertIsNone(self.contrato_a.proxima_factura_pendiente)
+
+        # Si el usuario navega directamente por URL GET a la factura cubierta
+        self.client.login(username='agencia_alquilo_a', password='password123')
+        url = reverse('registrar_pago', args=[self.factura_a.id])
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 200)
+        content = res.content.decode('utf-8')
+        self.assertIn('Esta factura ya está saldada por completo', content)
+        self.assertNotIn('name="monto"', content)
+
+    def test_advertencia_posible_duplicado_no_bloquea(self):
+        from .services.pago_service import registrar_pago_factura, verificar_posible_duplicado
+        # Registrar un primer pago de 3,000 con ref TXN-123
+        res1 = registrar_pago_factura(
+            factura_id=self.factura_a.id,
+            monto=Decimal('3000.00'),
+            referencia='TXN-123',
+            usuario=self.user_a
+        )
+        self.assertEqual(self.factura_a.saldo_pendiente, Decimal('7000.00'))
+
+        # Detección suave encuentra el pago en la ventana de 48h
+        duplicado = verificar_posible_duplicado(self.contrato_a, Decimal('3000.00'), 'TXN-123')
+        self.assertIsNotNone(duplicado)
+        self.assertEqual(duplicado.id, res1['recibo'].id)
+
+        self.client.login(username='agencia_alquilo_a', password='password123')
+        url = reverse('registrar_pago', args=[self.factura_a.id])
+
+        # Enviar sin confirmación de duplicado muestra advertencia sin procesar
+        res_advertencia = self.client.post(url, {
+            'monto': '3000.00',
+            'referencia': 'TXN-123',
+            'metodo_pago': 'TRANSFERENCIA'
+        })
+        self.assertEqual(res_advertencia.status_code, 200)
+        self.assertIn('alerta_duplicado', res_advertencia.context)
+        self.assertEqual(self.factura_a.recibos.count(), 1)
+
+        # Al confirmar el checkbox confirmar_posible_duplicado=1, procesa el cobro exitosamente
+        res_confirmado = self.client.post(url, {
+            'monto': '3000.00',
+            'referencia': 'TXN-123',
+            'metodo_pago': 'TRANSFERENCIA',
+            'confirmar_posible_duplicado': '1'
+        })
+        self.assertEqual(res_confirmado.status_code, 302)
+        self.assertEqual(self.factura_a.recibos.count(), 2)
+        self.assertEqual(self.factura_a.saldo_pendiente, Decimal('4000.00'))
+
+    def test_aislamiento_multitenant_usuario_otra_agencia(self):
+        self.client.login(username='agencia_alquilo_b', password='password123')
+        url = reverse('registrar_pago', args=[self.factura_a.id])
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 404)
+        res_post = self.client.post(url, {'monto': '5000.00'})
+        self.assertEqual(res_post.status_code, 404)
+
+    def test_comando_deteccion_no_modifica_datos(self):
+        from django.core.management import call_command
+        from io import StringIO
+        out = StringIO()
+        recibos_antes = ReciboPago.objects.count()
+        facturas_antes = Factura.objects.count()
+
+        call_command('detectar_pagos_duplicados', stdout=out)
+        salida = out.getvalue()
+        self.assertIn('AUDITORÍA DE PAGOS DUPLICADOS', salida)
+        self.assertEqual(ReciboPago.objects.count(), recibos_antes)
+        self.assertEqual(Factura.objects.count(), facturas_antes)
+
+    def test_pago_anticipado_guarda_saldo_a_favor_del_contrato(self):
+        from .services.pago_service import registrar_anticipo_contrato
+        self.assertEqual(self.contrato_a.saldo_a_favor, Decimal('0.00'))
+
+        res = registrar_anticipo_contrato(
+            contrato_id=self.contrato_a.id,
+            monto=Decimal('15000.00'),
+            referencia='ANTICIPO-2027',
+            usuario=self.user_a
+        )
+        self.assertEqual(res['nuevo_saldo_a_favor'], Decimal('15000.00'))
+        self.contrato_a.refresh_from_db()
+        self.assertEqual(self.contrato_a.saldo_a_favor, Decimal('15000.00'))
+        self.assertEqual(self.contrato_a.balance_a_favor, Decimal('15000.00'))
+
+    def test_saldo_a_favor_aplica_una_sola_vez_en_robot_diario(self):
+        from .services.pago_service import registrar_anticipo_contrato, aplicar_saldo_a_favor_factura
+        # 1. Inquilino tiene saldo a favor de 10,000
+        registrar_anticipo_contrato(self.contrato_a.id, Decimal('10000.00'), usuario=self.user_a)
+
+        # 2. Se emite la nueva factura mensual de 10,000
+        factura_mes = Factura.objects.create(
+            contrato=self.contrato_a,
+            fecha_emision=date(2026, 12, 1),
+            fecha_vencimiento=date(2026, 12, 5),
+            monto_base=Decimal('10000.00'),
+            monto_renta=Decimal('10000.00'),
+            concepto='Alquiler Diciembre 2026',
+            estado='PENDIENTE'
+        )
+        # 3. Primera aplicación (robot cron)
+        aplicado1 = aplicar_saldo_a_favor_factura(factura_mes)
+        self.assertEqual(aplicado1, Decimal('10000.00'))
+        factura_mes.refresh_from_db()
+        self.contrato_a.refresh_from_db()
+        self.assertEqual(factura_mes.saldo_pendiente, Decimal('0.00'))
+        self.assertEqual(factura_mes.estado, 'PAGADA')
+        self.assertEqual(self.contrato_a.saldo_a_favor, Decimal('0.00'))
+
+        # 4. Segunda ejecución del robot cron en el mismo día/mes
+        aplicado2 = aplicar_saldo_a_favor_factura(factura_mes)
+        self.assertEqual(aplicado2, Decimal('0.00'))
+        self.assertEqual(factura_mes.recibos.count(), 1)
+        self.assertEqual(self.contrato_a.saldo_a_favor, Decimal('0.00'))
+
+    def test_saldo_a_favor_nunca_queda_negativo_ni_excede_saldo(self):
+        from .services.pago_service import registrar_anticipo_contrato, aplicar_saldo_a_favor_factura
+        # Caso A: saldo a favor (4,000) menor que factura (10,000)
+        registrar_anticipo_contrato(self.contrato_a.id, Decimal('4000.00'), usuario=self.user_a)
+        aplicado_a = aplicar_saldo_a_favor_factura(self.factura_a)
+        self.assertEqual(aplicado_a, Decimal('4000.00'))
+        self.contrato_a.refresh_from_db()
+        self.assertEqual(self.contrato_a.saldo_a_favor, Decimal('0.00'))
+        self.factura_a.refresh_from_db()
+        self.assertEqual(self.factura_a.saldo_pendiente, Decimal('6000.00'))
+
+        # Caso B: saldo a favor (15,000) mayor que saldo pendiente de factura (6,000)
+        registrar_anticipo_contrato(self.contrato_a.id, Decimal('15000.00'), usuario=self.user_a)
+        aplicado_b = aplicar_saldo_a_favor_factura(self.factura_a)
+        self.assertEqual(aplicado_b, Decimal('6000.00'))
+        self.contrato_a.refresh_from_db()
+        self.assertEqual(self.contrato_a.saldo_a_favor, Decimal('9000.00'))
+        self.factura_a.refresh_from_db()
+        self.assertEqual(self.factura_a.saldo_pendiente, Decimal('0.00'))
+        self.assertEqual(self.factura_a.estado, 'PAGADA')
+
+    def test_anulacion_recibo_recalcula_factura_y_audita(self):
+        from .services.pago_service import registrar_pago_factura, anular_pago_recibo
+        # Pagar factura
+        res = registrar_pago_factura(self.factura_a.id, Decimal('10000.00'), usuario=self.user_a)
+        recibo = res['recibo']
+        self.factura_a.refresh_from_db()
+        self.assertEqual(self.factura_a.estado, 'PAGADA')
+
+        # Anular recibo y pasar el monto a saldo a favor
+        res_anulacion = anular_pago_recibo(
+            recibo_id=recibo.id,
+            usuario=self.user_a,
+            motivo='Comprobante bancario rebotado o duplicado',
+            destino_excedente='SALDO_A_FAVOR'
+        )
+        recibo.refresh_from_db()
+        self.factura_a.refresh_from_db()
+        self.contrato_a.refresh_from_db()
+
+        self.assertEqual(recibo.estado, 'ANULADO')
+        self.assertEqual(self.factura_a.saldo_pendiente, Decimal('10000.00'))
+        self.assertIn(self.factura_a.estado, ['PENDIENTE', 'ATRASADA'])
+        self.assertEqual(self.contrato_a.saldo_a_favor, Decimal('10000.00'))
+
+        # Auditoría registrada
+        log_anulado = AuditLog.objects.filter(accion='ANULAR', modulo='ReciboPago').first()
+        self.assertIsNotNone(log_anulado)
+        self.assertIn('ANULADO', log_anulado.descripcion)
+
+
+class ConcurrenciaPagosDuplicadosTests(TransactionTestCase):
+    def setUp(self):
+        from .middleware import _thread_local
+        _thread_local.usuario = None
+
+        self.user = User.objects.create_user(username='concurrencia_user', password='password123')
+        self.plan = PlanSaaS.objects.create(nombre='Plan Concurrencia', precio_mensual=10.00, limite_propiedades=100, activo=True)
+        SuscripcionCliente.objects.create(usuario=self.user, plan_saas=self.plan, estado='ACTIVA')
+
+        self.portafolio = Portafolio.objects.create(nombre='Inmobiliaria Concurrente', propietario=self.user)
+        self.propiedad = Propiedad.objects.create(portafolio=self.portafolio, nombre_o_numero='Suite 99', estado='ALQUILADA')
+        self.inquilino = Inquilino.objects.create(nombre='Inquilino Concurrente', creado_por=self.user)
+
+        self.contrato = Contrato.objects.create(
+            propiedad=self.propiedad,
+            inquilino=self.inquilino,
+            monto_renta=Decimal('10000.00'),
+            dia_de_pago=1,
+            fecha_inicio=date(2026, 1, 1),
+            fecha_fin=date(2027, 1, 1),
+            activo=True
+        )
+
+        self.factura = Factura.objects.create(
+            contrato=self.contrato,
+            fecha_emision=date(2026, 11, 1),
+            fecha_vencimiento=date(2026, 11, 5),
+            monto_base=Decimal('10000.00'),
+            monto_renta=Decimal('10000.00'),
+            concepto='Alquiler Noviembre 2026 Concurrente',
+            estado='PENDIENTE'
+        )
+
+    def test_concurrencia_dos_solicitudes_simultaneas_superan_saldo(self):
+        """
+        Dos solicitudes intentan pagar simultáneamente RD$ 7,000 cada una sobre una factura de RD$ 10,000.
+        Gracias a select_for_update() y validación post-bloqueo, solo la primera puede aplicar y la segunda debe ser rechazada.
+        """
+        import threading
+        from .services.pago_service import registrar_pago_factura, ErrorValidacionPago
+
+        resultados = []
+        errores = []
+
+        def intentar_pago(num):
+            from django.db import connection
+            try:
+                res = registrar_pago_factura(
+                    factura_id=self.factura.id,
+                    monto=Decimal('7000.00'),
+                    referencia=f'HILO-{num}',
+                    usuario=self.user,
+                    permitir_excedente_a_favor=False
+                )
+                resultados.append(res)
+            except ErrorValidacionPago as e:
+                errores.append(e)
+            finally:
+                connection.close()
+
+        hilo1 = threading.Thread(target=intentar_pago, args=(1,))
+        hilo2 = threading.Thread(target=intentar_pago, args=(2,))
+
+        hilo1.start()
+        hilo2.start()
+
+        hilo1.join()
+        hilo2.join()
+
+        # Exactamente uno tuvo éxito y el otro fue rechazado
+        self.assertEqual(len(resultados), 1)
+        self.assertEqual(len(errores), 1)
+        self.assertEqual(errores[0].codigo, 'EXCEDE_SALDO')
+
+        self.factura.refresh_from_db()
+        self.assertEqual(self.factura.recibos.count(), 1)
+        self.assertEqual(self.factura.saldo_pendiente, Decimal('3000.00'))
+
 
 
 

@@ -387,12 +387,36 @@ def mapa_propiedades_global(request):
 
 @login_required(login_url='/login/')
 def registrar_pago(request, factura_id):
+    import uuid
+    from .services.pago_service import registrar_pago_factura, verificar_posible_duplicado, ErrorValidacionPago
+    from .whatsapp_links import normalizar_telefono
+
     # Buscamos la factura permitiendo acceso a superusuarios o miembros con permiso del portafolio
     if request.user.is_superuser:
         factura = get_object_or_404(Factura, id=factura_id)
     else:
         portafolios = Portafolio.objects.filter(Q(propietario=request.user) | Q(accesos__usuario=request.user)).distinct()
         factura = get_object_or_404(Factura, id=factura_id, contrato__propiedad__portafolio__in=portafolios)
+
+    inq_cobro = factura.contrato.inquilino if factura.contrato else None
+    tel_norm_cobro = normalizar_telefono(inq_cobro.telefono if inq_cobro else None)
+
+    # Si la factura ya no tiene deuda directa
+    if factura.saldo_pendiente <= decimal.Decimal('0.00') or factura.estado == 'PAGADA':
+        messages.info(
+            request,
+            "Esta factura ya está pagada por completo. Si el inquilino quiere adelantar dinero, regístralo como pago anticipado."
+        )
+        if request.method == 'POST':
+            if factura.contrato:
+                return redirect('registrar_pago_anticipado', contrato_id=factura.contrato.id)
+            return redirect('detalle_propiedad', propiedad_id=factura.contrato.propiedad.id)
+
+    datos_previos = {}
+    alerta_duplicado = None
+    excedente_detectado = False
+    excedente_monto = decimal.Decimal('0.00')
+    monto_intentado = decimal.Decimal('0.00')
 
     # Si el usuario hace clic en el botón "Guardar Pago" (Método POST)
     if request.method == 'POST':
@@ -401,88 +425,105 @@ def registrar_pago(request, factura_id):
         referencia = request.POST.get('referencia', '')
         fecha = request.POST.get('fecha_pago') or timezone.now().date()
         comprobante = request.FILES.get('comprobante_imagen')
+        idempotency_token = request.POST.get('idempotency_token')
+        confirmar_duplicado = request.POST.get('confirmar_posible_duplicado') == '1'
+        confirmar_excedente = request.POST.get('confirmar_excedente_saldo_favor') == '1'
 
+        datos_previos = {
+            'monto': monto_str,
+            'metodo_pago': metodo,
+            'referencia': referencia,
+            'fecha_pago': str(fecha),
+        }
+
+        # 1. Verificación suave de posible cobro duplicado en ventana de 48h
+        if not confirmar_duplicado and factura.contrato:
+            duplicado_previo = verificar_posible_duplicado(factura.contrato, monto_str, referencia)
+            if duplicado_previo:
+                alerta_duplicado = duplicado_previo
+                context = {
+                    'titulo_pagina': f'Cobrar Factura #{factura.id}',
+                    'factura': factura,
+                    'inquilino': inq_cobro,
+                    'tiene_telefono_valido': bool(tel_norm_cobro),
+                    'idempotency_token': idempotency_token or str(uuid.uuid4()),
+                    'datos_previos': datos_previos,
+                    'alerta_duplicado': alerta_duplicado,
+                }
+                return render(request, 'gestion_propiedades/registrar_pago.html', context)
+
+        # 2. Llamada al servicio centralizado de pagos
         try:
-            monto_val = decimal.Decimal(str(monto_str).replace(',', ''))
-        except Exception:
-            monto_val = decimal.Decimal('0.00')
+            resultado = registrar_pago_factura(
+                factura_id=factura.id,
+                monto=monto_str,
+                metodo_pago=metodo,
+                referencia=referencia,
+                fecha_pago=fecha,
+                comprobante=comprobante,
+                usuario=request.user,
+                idempotency_token=idempotency_token,
+                permitir_excedente_a_favor=confirmar_excedente
+            )
+            recibo = resultado['recibo']
+            factura_actualizada = resultado['factura']
+            excedente_a_favor = resultado['excedente_a_favor']
 
-        if monto_val <= decimal.Decimal('0.00'):
-            messages.error(request, 'El monto recibido debe ser mayor a cero.')
-            return redirect('registrar_pago', factura_id=factura.id)
+            if resultado.get('es_duplicado_idempotente'):
+                messages.info(request, "Este pago ya había sido registrado previamente.")
+                return redirect('confirmacion_pago_recibo', recibo_id=recibo.id)
 
-        from django.db import transaction
-        recibo = None
-        try:
-            with transaction.atomic():
-                # 1. Creamos el Recibo de Pago (su save() imputa 1. Mora, 2. Servicios, 3. Alquiler)
-                recibo = ReciboPago.objects.create(
-                    factura=factura,
-                    fecha_pago=fecha,
-                    monto_pagado=monto_val,
-                    metodo_pago=metodo,
-                    referencia_transaccion=referencia,
-                    comprobante_imagen=comprobante,
-                    registrado_por=request.user
+            if excedente_a_favor > decimal.Decimal('0.00'):
+                messages.success(
+                    request,
+                    f"💰 ¡Pago registrado! Se aplicaron RD$ {recibo.monto_pagado:,.2f} a la Factura #{factura_actualizada.id} "
+                    f"y se registraron RD$ {excedente_a_favor:,.2f} como saldo a favor del contrato."
+                )
+            elif factura_actualizada.saldo_pendiente > decimal.Decimal('0.00'):
+                messages.success(
+                    request,
+                    f"💰 ¡Abono de RD$ {recibo.monto_pagado:,.2f} registrado! "
+                    f"Desglose aplicado: [Mora: RD$ {recibo.monto_a_mora:,.2f} | "
+                    f"Servicios: RD$ {recibo.monto_a_servicios:,.2f} | "
+                    f"Alquiler: RD$ {recibo.monto_a_renta:,.2f}]. "
+                    f"Saldo pendiente restante: RD$ {factura_actualizada.saldo_pendiente:,.2f}."
+                )
+            else:
+                messages.success(
+                    request,
+                    f"🎉 ¡Factura #{factura_actualizada.id} saldada completamente con RD$ {recibo.monto_pagado:,.2f}!"
                 )
 
-                # 2. Actualizamos la Factura evaluando si quedó completamente saldada
-                if factura.saldo_pendiente <= decimal.Decimal('0.00'):
-                    factura.estado = 'PAGADA'
-                factura.save()
-        except Exception as e:
-            # Tolerancia a fallos: Si falló exclusivamente por subida del comprobante a la nube
-            if comprobante:
+            return redirect('confirmacion_pago_recibo', recibo_id=recibo.id)
+
+        except ErrorValidacionPago as err:
+            if err.codigo == 'EXCEDE_SALDO':
+                excedente_detectado = True
+                excedente_monto = err.excedente
                 try:
-                    with transaction.atomic():
-                        recibo = ReciboPago.objects.create(
-                            factura=factura,
-                            fecha_pago=fecha,
-                            monto_pagado=monto_val,
-                            metodo_pago=metodo,
-                            referencia_transaccion=referencia,
-                            comprobante_imagen=None,
-                            registrado_por=request.user
-                        )
-                        if factura.saldo_pendiente <= decimal.Decimal('0.00'):
-                            factura.estado = 'PAGADA'
-                        factura.save()
-                    messages.warning(request, f"¡Pago registrado exitosamente! Nota: el archivo de comprobante no pudo cargarse en este momento ({str(e)}).")
-                    return redirect('confirmacion_pago_recibo', recibo_id=recibo.id)
-                except Exception as inner_e:
-                    messages.error(request, f"Error al procesar el pago: {str(inner_e)}")
-                    return redirect('registrar_pago', factura_id=factura.id)
-            messages.error(request, f"Error al registrar el cobro: {str(e)}")
-            return redirect('registrar_pago', factura_id=factura.id)
+                    monto_intentado = decimal.Decimal(str(monto_str).replace(',', '').strip())
+                except Exception:
+                    monto_intentado = decimal.Decimal('0.00')
+                messages.warning(request, err.mensaje)
+            else:
+                messages.error(request, err.mensaje)
 
-        # 3. Notificación con desglose de abono
-        if factura.saldo_pendiente > decimal.Decimal('0.00'):
-            messages.success(
-                request,
-                f"💰 ¡Abono de RD$ {recibo.monto_pagado:,.2f} registrado! "
-                f"Desglose aplicado: [Mora: RD$ {recibo.monto_a_mora:,.2f} | "
-                f"Servicios: RD$ {recibo.monto_a_servicios:,.2f} | "
-                f"Alquiler: RD$ {recibo.monto_a_renta:,.2f}]. "
-                f"Saldo pendiente restante: RD$ {factura.saldo_pendiente:,.2f}."
-            )
-        else:
-            messages.success(
-                request,
-                f"🎉 ¡Factura #{factura.id} saldada completamente con RD$ {recibo.monto_pagado:,.2f}!"
-            )
+        except Exception as e:
+            messages.error(request, f"Error al procesar el cobro: {str(e)}")
 
-        # 4. Pantalla de confirmación con opciones de impresión y WhatsApp
-        return redirect('confirmacion_pago_recibo', recibo_id=recibo.id)
-
-    # Si solo está entrando a ver la pantalla (Método GET), le mostramos el formulario
-    from .whatsapp_links import normalizar_telefono
-    inq_cobro = factura.contrato.inquilino if factura.contrato else None
-    tel_norm_cobro = normalizar_telefono(inq_cobro.telefono if inq_cobro else None)
+    # Si solo está entrando a ver la pantalla (Método GET) o tras error
+    idempotency_token_nuevo = str(uuid.uuid4())
     context = {
         'titulo_pagina': f'Cobrar Factura #{factura.id}',
         'factura': factura,
         'inquilino': inq_cobro,
         'tiene_telefono_valido': bool(tel_norm_cobro),
+        'idempotency_token': idempotency_token_nuevo,
+        'datos_previos': datos_previos,
+        'alerta_duplicado': alerta_duplicado,
+        'excedente_detectado': excedente_detectado,
+        'excedente_monto': excedente_monto,
+        'monto_intentado': monto_intentado,
     }
     return render(request, 'gestion_propiedades/registrar_pago.html', context)
 
@@ -3485,7 +3526,15 @@ def registrar_pago_anticipado(request, contrato_id):
                     metodo_pago=metodo,
                     referencia_transaccion=referencia,
                     comprobante_imagen=comprobante,
-                    registrado_por=request.user
+                    registrado_por=request.user,
+                    estado='ACTIVO'
+                )
+                AuditLog.objects.create(
+                    accion='CREAR',
+                    modulo='ReciboPago',
+                    descripcion=f"Pago anticipado de RD$ {monto_total_adelanto:,.2f} generado para factura futura #{nueva_factura.id}.",
+                    usuario=request.user,
+                    portafolio=contrato.propiedad.portafolio
                 )
         except Exception as e:
             if comprobante:

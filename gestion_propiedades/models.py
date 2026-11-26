@@ -503,6 +503,7 @@ class Contrato(models.Model):
     foto_entrega_3 = models.FileField(upload_to='entregas_galeria/', blank=True, null=True)
     foto_entrega_4 = models.FileField(upload_to='entregas_galeria/', blank=True, null=True)
     foto_entrega_5 = models.FileField(upload_to='entregas_galeria/', blank=True, null=True)
+    saldo_a_favor = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Saldo a favor acumulado por pagos anticipados o sobrepagos")
     activo = models.BooleanField(default=True, db_index=True)
 
     class Meta:
@@ -543,13 +544,14 @@ class Contrato(models.Model):
 
     @property
     def balance_a_favor(self):
-        """Calcula pagos adelantados a períodos futuros y sobrepagos a favor del contrato."""
+        """Calcula pagos adelantados a períodos futuros, saldo a favor y sobrepagos del contrato."""
         from datetime import date
         hoy = date.today()
         futuras = self.facturas.filter(estado='PAGADA', fecha_emision__gt=hoy)
         adelantos_futuros = sum((f.monto_pagado_total for f in futuras), Decimal('0.00'))
         sobrepagos = sum((max(Decimal('0.00'), f.monto_pagado_total - f.monto_total_con_mora) for f in self.facturas.all()), Decimal('0.00'))
-        return adelantos_futuros + sobrepagos
+        saldo_favor_directo = Decimal(str(self.saldo_a_favor)) if self.saldo_a_favor else Decimal('0.00')
+        return saldo_favor_directo + adelantos_futuros + sobrepagos
 
     def __str__(self):
         return f"{self.propiedad} - {self.inquilino.nombre}"
@@ -643,7 +645,7 @@ class Factura(models.Model):
     @property
     def monto_pagado_total(self):
         from django.db.models import Sum
-        res = self.recibos.aggregate(total=Sum('monto_pagado'))['total']
+        res = self.recibos.filter(estado='ACTIVO').aggregate(total=Sum('monto_pagado'))['total']
         return Decimal(str(res)) if res is not None else Decimal('0.00')
 
     @property
@@ -822,6 +824,10 @@ class ReciboPago(models.Model):
         ('CHEQUE', 'Cheque'),
         ('OTRO', 'Otro'),
     ]
+    ESTADO_CHOICES = [
+        ('ACTIVO', 'Activo'),
+        ('ANULADO', 'Anulado'),
+    ]
 
     factura = models.ForeignKey(Factura, on_delete=models.CASCADE, related_name='recibos')
     fecha_pago = models.DateField(db_index=True)
@@ -834,10 +840,16 @@ class ReciboPago(models.Model):
     comprobante_imagen = models.FileField(upload_to=ruta_comprobante_pago, blank=True, null=True, help_text="Comprobante, volante o voucher de pago (JPG, PNG o PDF)")
     registrado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='recibos_cobrados', help_text="Usuario que estaba logueado y registró este cobro")
     registrado_en = models.DateTimeField(auto_now_add=True)
+    idempotency_token = models.UUIDField(null=True, blank=True, unique=True, db_index=True, help_text="Token único para prevenir cobros duplicados")
+    estado = models.CharField(max_length=10, choices=ESTADO_CHOICES, default='ACTIVO', db_index=True)
+    motivo_anulacion = models.TextField(blank=True, null=True)
+    anulado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='recibos_anulados')
+    anulado_en = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         indexes = [
             models.Index(fields=['factura', 'fecha_pago'], name='recibo_fact_fpago_idx'),
+            models.Index(fields=['factura', 'estado'], name='recibo_fact_estado_idx'),
         ]
 
     @property
@@ -858,8 +870,8 @@ class ReciboPago(models.Model):
 
         if is_new and (m_mora == Decimal('0.00') and m_serv == Decimal('0.00') and m_rent == Decimal('0.00')) and m_pagado > Decimal('0.00'):
             factura = self.factura
-            # Pagos previos registrados en la factura
-            pagos_previos = sum((Decimal(str(r.monto_pagado)) for r in factura.recibos.all()), Decimal('0.00'))
+            # Pagos previos registrados en la factura (solo activos)
+            pagos_previos = sum((Decimal(str(r.monto_pagado)) for r in factura.recibos.filter(estado='ACTIVO').exclude(pk=self.pk)), Decimal('0.00'))
             
             # Mora pendiente antes de este recibo
             mora_pagada_antes = min(pagos_previos, factura.total_mora)
@@ -997,6 +1009,8 @@ class AuditLog(models.Model):
         ('EDITAR', 'Editó'),
         ('ELIMINAR', 'Eliminó'),
         ('ENVIAR', 'Envió'),
+        ('RECHAZAR', 'Rechazó'),
+        ('ANULAR', 'Anuló'),
     ]
 
     accion = models.CharField(max_length=10, choices=ACCION_CHOICES)
