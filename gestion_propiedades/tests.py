@@ -2568,6 +2568,477 @@ class ConcurrenciaPagosDuplicadosTests(TransactionTestCase):
         self.assertEqual(self.factura.saldo_pendiente, Decimal('3000.00'))
 
 
+class PoliticaDestinoMoraTests(TestCase):
+    def setUp(self):
+        from .middleware import _thread_local
+        _thread_local.usuario = None
+
+        self.plan = PlanSaaS.objects.create(nombre='Plan Mora Test', precio_mensual=10.00, limite_propiedades=100, activo=True)
+        self.owner_a = User.objects.create_user(username='dueno_agencia_a', password='password123')
+        self.owner_b = User.objects.create_user(username='dueno_agencia_b', password='password123')
+        self.asistente_a = User.objects.create_user(username='asistente_agencia_a', password='password123')
+
+        SuscripcionCliente.objects.create(usuario=self.owner_a, plan_saas=self.plan, estado='ACTIVA')
+        SuscripcionCliente.objects.create(usuario=self.owner_b, plan_saas=self.plan, estado='ACTIVA')
+
+        self.portafolio_a = Portafolio.objects.create(nombre='Despacho Legal A', propietario=self.owner_a)
+        self.portafolio_b = Portafolio.objects.create(nombre='Despacho Legal B', propietario=self.owner_b)
+
+        from .models import AccesoPortafolio
+        AccesoPortafolio.objects.create(portafolio=self.portafolio_a, usuario=self.asistente_a, rol='ASISTENTE')
+
+        self.prop_owner_a = PropietarioInmueble.objects.create(
+            portafolio=self.portafolio_a,
+            nombre='Propietario Alfa',
+            tipo_comision='PORCENTAJE',
+            porcentaje_comision=Decimal('10.00'),
+        )
+        self.prop_owner_b = PropietarioInmueble.objects.create(
+            portafolio=self.portafolio_b,
+            nombre='Propietario Beta',
+            tipo_comision='PORCENTAJE',
+            porcentaje_comision=Decimal('10.00'),
+        )
+
+        self.propiedad_a = Propiedad.objects.create(
+            portafolio=self.portafolio_a,
+            propietario_inmueble=self.prop_owner_a,
+            nombre_o_numero='Apt A-101',
+            estado='OCUPADO',
+        )
+        self.propiedad_b = Propiedad.objects.create(
+            portafolio=self.portafolio_b,
+            propietario_inmueble=self.prop_owner_b,
+            nombre_o_numero='Apt B-202',
+            estado='OCUPADO',
+        )
+
+        self.inquilino_a = Inquilino.objects.create(nombre='Inquilino Alfa', telefono='809-555-1111', creado_por=self.owner_a)
+        self.inquilino_b = Inquilino.objects.create(nombre='Inquilino Beta', telefono='809-555-2222', creado_por=self.owner_b)
+
+        self.contrato_a = Contrato.objects.create(
+            propiedad=self.propiedad_a,
+            inquilino=self.inquilino_a,
+            fecha_inicio=date(2026, 1, 1),
+            monto_renta=Decimal('10000.00'),
+            dia_de_pago=5,
+            porcentaje_mora=Decimal('5.00'),
+            activo=True,
+        )
+        self.contrato_b = Contrato.objects.create(
+            propiedad=self.propiedad_b,
+            inquilino=self.inquilino_b,
+            fecha_inicio=date(2026, 1, 1),
+            monto_renta=Decimal('10000.00'),
+            dia_de_pago=5,
+            porcentaje_mora=Decimal('5.00'),
+            activo=True,
+        )
+
+    def _crear_factura_con_mora(self, contrato, renta=Decimal('10000.00'), mora=Decimal('500.00'), mes=11, anio=2026):
+        factura = Factura.objects.create(
+            contrato=contrato,
+            fecha_emision=date(anio, mes, 1),
+            fecha_vencimiento=date(anio, mes, 5),
+            monto_base=renta,
+            monto_renta=renta,
+            monto_servicios=Decimal('0.00'),
+            concepto=f'Renta {mes}/{anio}',
+            estado='ATRASADA' if mora > 0 else 'PENDIENTE',
+        )
+        if mora > 0:
+            CargoMora.objects.create(factura=factura, monto=mora, mes_aplicado=mes, anio_aplicado=anio)
+        return factura
+
+    def test_politica_propietario_comportamiento_actual(self):
+        from .services.pago_service import registrar_pago_factura
+        factura = self._crear_factura_con_mora(self.contrato_a, Decimal('10000.00'), Decimal('500.00'))
+        res = registrar_pago_factura(factura.id, Decimal('10500.00'), fecha_pago=date(2026, 11, 10), usuario=self.owner_a)
+        recibo = res['recibo']
+
+        self.assertEqual(recibo.monto_a_mora, Decimal('500.00'))
+        self.assertEqual(recibo.monto_mora_propietario, Decimal('500.00'))
+        self.assertEqual(recibo.monto_mora_agencia, Decimal('0.00'))
+
+        self.client.login(username='dueno_agencia_a', password='password123')
+        res_liq = self.client.post(reverse('procesar_liquidacion_propietario', args=[self.prop_owner_a.id]), {
+            'mes': 11, 'anio': 2026, 'fecha_pago': '2026-11-15', 'metodo_pago': 'TRANSFERENCIA',
+        })
+        self.assertEqual(res_liq.status_code, 302)
+        liq = LiquidacionPropietario.objects.get(propietario_inmueble=self.prop_owner_a, periodo_mes=11, periodo_anio=2026)
+        self.assertEqual(liq.monto_rentas_cobradas, Decimal('10500.00'))
+        self.assertEqual(liq.monto_comision, Decimal('1000.00'))
+        self.assertEqual(liq.monto_neto_pagado, Decimal('9500.00'))
+
+    def test_politica_agencia_excluye_mora_de_liquidacion_comision_impuestos_y_aparece_en_reportes(self):
+        from .services.pago_service import registrar_pago_factura
+        self.portafolio_a.destino_mora = 'AGENCIA'
+        self.portafolio_a.save()
+
+        factura = self._crear_factura_con_mora(self.contrato_a, Decimal('10000.00'), Decimal('500.00'))
+        res = registrar_pago_factura(factura.id, Decimal('10500.00'), fecha_pago=date(2026, 11, 10), usuario=self.owner_a)
+        recibo = res['recibo']
+
+        self.assertEqual(recibo.monto_a_mora, Decimal('500.00'))
+        self.assertEqual(recibo.monto_mora_propietario, Decimal('0.00'))
+        self.assertEqual(recibo.monto_mora_agencia, Decimal('500.00'))
+
+        self.client.login(username='dueno_agencia_a', password='password123')
+        url_rep = f"{reverse('reporte_propietario')}?propietario_id={self.prop_owner_a.id}&mes=11&anio=2026"
+        res_rep = self.client.get(url_rep)
+        self.assertEqual(res_rep.status_code, 200)
+        self.assertEqual(res_rep.context['total_ingresos'], Decimal('10000.00'))
+        self.assertEqual(res_rep.context['total_renta_cobrada'], Decimal('10000.00'))
+        self.assertEqual(res_rep.context['monto_comision'], Decimal('1000.00'))
+        self.assertEqual(res_rep.context['base_renta_sugerida'], Decimal('10000.00'))
+        self.assertEqual(res_rep.context['itbis_18_calculado'], Decimal('1800.00'))
+        self.assertEqual(res_rep.context['neto_a_liquidar'], Decimal('9000.00'))
+
+        # Opción informativa desactivada: pantalla y PDF no mencionan mora ni 500
+        html_rep = res_rep.content.decode('utf-8')
+        self.assertNotIn('Mora retenida por administración', html_rep)
+        self.assertNotIn('10,500.00', html_rep)
+
+        url_pdf = f"{reverse('imprimir_liquidacion_propietario', args=[self.prop_owner_a.id])}?mes=11&anio=2026"
+        res_pdf = self.client.get(url_pdf)
+        self.assertEqual(res_pdf.status_code, 200)
+        html_pdf = res_pdf.content.decode('utf-8')
+        self.assertNotIn('Moras Cobradas', html_pdf)
+        self.assertNotIn('Mora retenida', html_pdf)
+        self.assertNotIn('10,500.00', html_pdf)
+        self.assertIn('$9,000.00', html_pdf)
+
+        # Opción informativa activada: aparece solo como línea informativa y no altera el neto
+        self.portafolio_a.mostrar_mora_agencia_en_liquidacion = True
+        self.portafolio_a.save()
+        res_rep_info = self.client.get(url_rep)
+        self.assertIn('Mora retenida por administración (informativo)', res_rep_info.content.decode('utf-8'))
+        self.assertEqual(res_rep_info.context['neto_a_liquidar'], Decimal('9000.00'))
+
+        res_pdf_info = self.client.get(url_pdf)
+        html_pdf_info = res_pdf_info.content.decode('utf-8')
+        self.assertIn('Nota informativa:', html_pdf_info)
+        self.assertIn('500.00', html_pdf_info)
+        self.assertEqual(res_pdf_info.context['neto_a_pagar'], Decimal('9000.00'))
+
+        # Reporte financiero global incluye cargos por mora como ingreso de agencia
+        res_fin = self.client.get(f"{reverse('reporte_financiero')}?mes=11&anio=2026&portafolio_id={self.portafolio_a.id}")
+        self.assertEqual(res_fin.status_code, 200)
+        self.assertEqual(res_fin.context['total_ingresos_propietario'], Decimal('10000.00'))
+        self.assertEqual(res_fin.context['total_mora_agencia'], Decimal('500.00'))
+        self.assertEqual(res_fin.context['total_ingresos'], Decimal('10500.00'))
+
+    def test_politica_compartida_redondeo_sin_perder_centavos(self):
+        from .services.pago_service import registrar_pago_factura
+        self.portafolio_a.destino_mora = 'COMPARTIDA'
+        self.portafolio_a.porcentaje_mora_agencia = Decimal('60.00')
+        self.portafolio_a.save()
+
+        # 333.33 * 60% = 199.998 -> 200.00 agencia; resto = 133.33 propietario (suma exacta = 333.33)
+        # 100.01 * 60% = 60.006 -> 60.01 agencia; resto = 40.00 propietario (suma exacta = 100.01)
+        f1 = self._crear_factura_con_mora(self.contrato_a, Decimal('10000.00'), Decimal('333.33'), mes=10, anio=2026)
+        r1 = registrar_pago_factura(f1.id, Decimal('10333.33'), fecha_pago=date(2026, 10, 10), usuario=self.owner_a)['recibo']
+        self.assertEqual(r1.monto_mora_agencia, Decimal('200.00'))
+        self.assertEqual(r1.monto_mora_propietario, Decimal('133.33'))
+        self.assertEqual(r1.monto_mora_agencia + r1.monto_mora_propietario, r1.monto_a_mora)
+
+        f2 = self._crear_factura_con_mora(self.contrato_a, Decimal('10000.00'), Decimal('100.01'), mes=11, anio=2026)
+        r2 = registrar_pago_factura(f2.id, Decimal('10100.01'), fecha_pago=date(2026, 11, 10), usuario=self.owner_a)['recibo']
+        self.assertEqual(r2.monto_mora_agencia, Decimal('60.01'))
+        self.assertEqual(r2.monto_mora_propietario, Decimal('40.00'))
+        self.assertEqual(r2.monto_mora_agencia + r2.monto_mora_propietario, r2.monto_a_mora)
+
+        self.client.login(username='dueno_agencia_a', password='password123')
+        res_rep = self.client.get(f"{reverse('reporte_propietario')}?propietario_id={self.prop_owner_a.id}&mes=11&anio=2026")
+        self.assertEqual(res_rep.context['total_mora_cobrada'], Decimal('40.00'))
+        self.assertEqual(res_rep.context['total_ingresos'], Decimal('10040.00'))
+
+    def test_excepcion_por_propietario_prevalece_sobre_agencia(self):
+        from .services.pago_service import registrar_pago_factura
+        self.portafolio_a.destino_mora = 'AGENCIA'
+        self.portafolio_a.save()
+
+        self.prop_owner_a.politica_mora = 'PROPIETARIO'
+        self.prop_owner_a.save()
+
+        f = self._crear_factura_con_mora(self.contrato_a, Decimal('10000.00'), Decimal('500.00'))
+        recibo = registrar_pago_factura(f.id, Decimal('10500.00'), fecha_pago=date(2026, 11, 10), usuario=self.owner_a)['recibo']
+        self.assertEqual(recibo.monto_mora_propietario, Decimal('500.00'))
+        self.assertEqual(recibo.monto_mora_agencia, Decimal('0.00'))
+
+    def test_cambiar_politica_no_altera_pagos_ni_liquidaciones_anteriores_y_audita(self):
+        from .services.pago_service import registrar_pago_factura
+        # Pago y liquidación cerrada bajo política PROPIETARIO
+        f1 = self._crear_factura_con_mora(self.contrato_a, Decimal('10000.00'), Decimal('500.00'), mes=10, anio=2026)
+        r1 = registrar_pago_factura(f1.id, Decimal('10500.00'), fecha_pago=date(2026, 10, 10), usuario=self.owner_a)['recibo']
+
+        self.client.login(username='dueno_agencia_a', password='password123')
+        self.client.post(reverse('procesar_liquidacion_propietario', args=[self.prop_owner_a.id]), {
+            'mes': 10, 'anio': 2026, 'fecha_pago': '2026-10-20', 'metodo_pago': 'TRANSFERENCIA',
+        })
+        liq_oct = LiquidacionPropietario.objects.get(propietario_inmueble=self.prop_owner_a, periodo_mes=10, periodo_anio=2026)
+
+        # Dueño cambia política a AGENCIA desde la vista (AuditLog + vigencia)
+        res_edit = self.client.post(reverse('editar_portafolio'), {
+            'portafolio_id': self.portafolio_a.id,
+            'nombre': self.portafolio_a.nombre,
+            'formato_impresion': 'A4',
+            'formato_concepto_factura': 'MES_ANIO',
+            'config_meses_deposito': 2,
+            'config_meses_adelanto': 0,
+            'destino_mora': 'AGENCIA',
+            'porcentaje_mora_agencia': '0.00',
+        })
+        self.assertEqual(res_edit.status_code, 302)
+        self.portafolio_a.refresh_from_db()
+        self.assertEqual(self.portafolio_a.destino_mora, 'AGENCIA')
+        self.assertIsNotNone(self.portafolio_a.destino_mora_vigencia_desde)
+        self.assertTrue(AuditLog.objects.filter(modulo='PoliticaMora', portafolio=self.portafolio_a).exists())
+
+        # Pago anterior y liquidación cerrada permanecen intactos
+        r1.refresh_from_db()
+        liq_oct.refresh_from_db()
+        self.assertEqual(r1.monto_mora_propietario, Decimal('500.00'))
+        self.assertEqual(r1.monto_mora_agencia, Decimal('0.00'))
+        self.assertEqual(liq_oct.monto_rentas_cobradas, Decimal('10500.00'))
+        self.assertEqual(liq_oct.monto_neto_pagado, Decimal('9500.00'))
+
+        # Intentar recalcular liquidación cerrada no modifica sus montos
+        self.client.post(reverse('procesar_liquidacion_propietario', args=[self.prop_owner_a.id]), {
+            'mes': 10, 'anio': 2026, 'fecha_pago': '2026-10-20', 'metodo_pago': 'TRANSFERENCIA',
+            'accion_liquidacion': 'recalcular',
+        })
+        liq_oct.refresh_from_db()
+        self.assertEqual(liq_oct.monto_rentas_cobradas, Decimal('10500.00'))
+
+    def test_abono_parcial_solo_mora_se_reparte_y_no_cobra_comision_ni_itbis(self):
+        from .services.pago_service import registrar_pago_factura
+        self.portafolio_a.destino_mora = 'COMPARTIDA'
+        self.portafolio_a.porcentaje_mora_agencia = Decimal('60.00')
+        self.portafolio_a.save()
+
+        f = self._crear_factura_con_mora(self.contrato_a, Decimal('10000.00'), Decimal('1000.00'))
+        # Abono parcial de RD$ 400.00: cubre solo parte de la mora (0 de renta)
+        recibo = registrar_pago_factura(f.id, Decimal('400.00'), fecha_pago=date(2026, 11, 10), usuario=self.owner_a)['recibo']
+
+        self.assertEqual(recibo.monto_a_mora, Decimal('400.00'))
+        self.assertEqual(recibo.monto_a_renta, Decimal('0.00'))
+        self.assertEqual(recibo.monto_mora_agencia, Decimal('240.00'))
+        self.assertEqual(recibo.monto_mora_propietario, Decimal('160.00'))
+
+        self.client.login(username='dueno_agencia_a', password='password123')
+        res_rep = self.client.get(f"{reverse('reporte_propietario')}?propietario_id={self.prop_owner_a.id}&mes=11&anio=2026")
+        self.assertEqual(res_rep.context['total_ingresos'], Decimal('160.00'))
+        self.assertEqual(res_rep.context['total_renta_cobrada'], Decimal('0.00'))
+        self.assertEqual(res_rep.context['monto_comision'], Decimal('0.00'))
+
+    def test_anular_pago_revierte_montos_por_beneficiario(self):
+        from .services.pago_service import registrar_pago_factura, anular_pago_recibo
+        self.portafolio_a.destino_mora = 'AGENCIA'
+        self.portafolio_a.save()
+
+        f = self._crear_factura_con_mora(self.contrato_a, Decimal('10000.00'), Decimal('500.00'))
+        recibo = registrar_pago_factura(f.id, Decimal('10500.00'), fecha_pago=date(2026, 11, 10), usuario=self.owner_a)['recibo']
+        self.assertEqual(recibo.monto_mora_agencia, Decimal('500.00'))
+
+        anular_pago_recibo(recibo.id, usuario=self.owner_a, motivo='Error de digitación', destino_excedente='REVERTIR')
+        recibo.refresh_from_db()
+        self.assertEqual(recibo.estado, 'ANULADO')
+        self.assertEqual(recibo.monto_mora_propietario, Decimal('0.00'))
+        self.assertEqual(recibo.monto_mora_agencia, Decimal('0.00'))
+        self.assertEqual(recibo.mora_para_agencia, Decimal('0.00'))
+        self.assertEqual(recibo.mora_para_propietario, Decimal('0.00'))
+
+        self.client.login(username='dueno_agencia_a', password='password123')
+        res_fin = self.client.get(f"{reverse('reporte_financiero')}?mes=11&anio=2026&portafolio_id={self.portafolio_a.id}")
+        self.assertEqual(res_fin.context['total_ingresos'], Decimal('0.00'))
+        self.assertEqual(res_fin.context['total_mora_agencia'], Decimal('0.00'))
+
+    def test_mora_exonerada_no_genera_ingreso_para_nadie(self):
+        from .services.pago_service import registrar_pago_factura
+        self.portafolio_a.destino_mora = 'AGENCIA'
+        self.portafolio_a.save()
+
+        f = self._crear_factura_con_mora(self.contrato_a, Decimal('10000.00'), Decimal('500.00'))
+        self.client.login(username='dueno_agencia_a', password='password123')
+        self.client.post(reverse('quitar_mora_factura', args=[f.id]))
+        f.refresh_from_db()
+        self.assertTrue(f.mora_exonerada)
+        self.assertEqual(f.total_mora, Decimal('0.00'))
+
+        recibo = registrar_pago_factura(f.id, Decimal('10000.00'), fecha_pago=date(2026, 11, 10), usuario=self.owner_a)['recibo']
+        self.assertEqual(recibo.monto_a_mora, Decimal('0.00'))
+        self.assertEqual(recibo.monto_mora_propietario, Decimal('0.00'))
+        self.assertEqual(recibo.monto_mora_agencia, Decimal('0.00'))
+
+    def test_aislamiento_entre_agencias_y_rbac_dueno(self):
+        from .services.pago_service import registrar_pago_factura
+        self.portafolio_a.destino_mora = 'AGENCIA'
+        self.portafolio_a.save()
+
+        # Agencia B mantiene PROPIETARIO por defecto
+        fb = self._crear_factura_con_mora(self.contrato_b, Decimal('10000.00'), Decimal('500.00'))
+        rb = registrar_pago_factura(fb.id, Decimal('10500.00'), fecha_pago=date(2026, 11, 10), usuario=self.owner_b)['recibo']
+        self.assertEqual(rb.monto_mora_propietario, Decimal('500.00'))
+        self.assertEqual(rb.monto_mora_agencia, Decimal('0.00'))
+
+        # Asistente no puede cambiar la política de la agencia
+        self.client.login(username='asistente_agencia_a', password='password123')
+        self.client.post(reverse('editar_portafolio'), {
+            'portafolio_id': self.portafolio_a.id,
+            'nombre': self.portafolio_a.nombre,
+            'formato_impresion': 'A4',
+            'formato_concepto_factura': 'MES_ANIO',
+            'config_meses_deposito': 2,
+            'config_meses_adelanto': 0,
+            'destino_mora': 'PROPIETARIO',
+            'porcentaje_mora_agencia': '0.00',
+        })
+        self.portafolio_a.refresh_from_db()
+        self.assertEqual(self.portafolio_a.destino_mora, 'AGENCIA')
+
+    def test_reportes_excel_y_rentabilidad_cuadran(self):
+        import io
+        import openpyxl
+        from .services.pago_service import registrar_pago_factura
+        self.portafolio_a.destino_mora = 'COMPARTIDA'
+        self.portafolio_a.porcentaje_mora_agencia = Decimal('60.00')
+        self.portafolio_a.save()
+
+        f = self._crear_factura_con_mora(self.contrato_a, Decimal('10000.00'), Decimal('500.00'))
+        # 500 mora -> 300 agencia, 200 propietario
+        registrar_pago_factura(f.id, Decimal('10500.00'), fecha_pago=date(2026, 11, 10), usuario=self.owner_a)
+
+        self.client.login(username='dueno_agencia_a', password='password123')
+        res_mov = self.client.get(
+            f"{reverse('reporte_movimientos_detallados')}?fecha_inicio=2026-11-01&fecha_fin=2026-11-30&portafolio_id={self.portafolio_a.id}"
+        )
+        self.assertEqual(res_mov.status_code, 200)
+        self.assertEqual(res_mov.context['total_ingresos_propietario'], Decimal('10200.00'))
+        self.assertEqual(res_mov.context['total_ingresos_mora_agencia'], Decimal('300.00'))
+        self.assertEqual(res_mov.context['total_ingresos'], Decimal('10500.00'))
+        conceptos = [m['concepto'] for m in res_mov.context['movimientos']]
+        self.assertTrue(any('Cargos por mora' in c for c in conceptos))
+
+        res_excel = self.client.get(
+            f"{reverse('exportar_movimientos_excel')}?fecha_inicio=2026-11-01&fecha_fin=2026-11-30&portafolio_id={self.portafolio_a.id}"
+        )
+        self.assertEqual(res_excel.status_code, 200)
+        wb = openpyxl.load_workbook(io.BytesIO(res_excel.content))
+        ws = wb.active
+        valores = [cell.value for row in ws.iter_rows(min_row=7) for cell in row if cell.value is not None]
+        self.assertTrue(any('Cargos por mora' in str(v) for v in valores))
+
+        # Rentabilidad excluye mora de la agencia (solo 10,200 del inmueble)
+        res_rent = self.client.get(reverse('reporte_rentabilidad'))
+        self.assertEqual(res_rent.status_code, 200)
+        row_a = next(x for x in res_rent.context['resultado'] if x['propiedad'].id == self.propiedad_a.id)
+        self.assertEqual(row_a['ingresos'], 10200.00)
+
+    def test_recibo_inquilino_muestra_mora_igual_en_a4_pos80_pos58(self):
+        from .services.pago_service import registrar_pago_factura
+        self.portafolio_a.destino_mora = 'AGENCIA'
+        self.portafolio_a.save()
+        f = self._crear_factura_con_mora(self.contrato_a, Decimal('10000.00'), Decimal('500.00'))
+        recibo = registrar_pago_factura(f.id, Decimal('10500.00'), fecha_pago=date(2026, 11, 10), usuario=self.owner_a)['recibo']
+
+        self.client.login(username='dueno_agencia_a', password='password123')
+        for fmt in ('A4', 'POS80', 'POS58'):
+            self.portafolio_a.formato_impresion = fmt
+            self.portafolio_a.save()
+            res = self.client.get(reverse('imprimir_recibo', args=[recibo.id]))
+            self.assertEqual(res.status_code, 200)
+            html = res.content.decode('utf-8')
+            self.assertIn('Cargo por Mora:', html)
+            self.assertIn('Pago a Mora:', html)
+            self.assertIn('500.00', html)
+            self.assertIn('10,500.00', html)
+
+    def test_simular_destino_mora_no_modifica_datos(self):
+        import io
+        from django.core.management import call_command
+        from .services.pago_service import registrar_pago_factura
+
+        f = self._crear_factura_con_mora(self.contrato_a, Decimal('10000.00'), Decimal('500.00'))
+        recibo = registrar_pago_factura(f.id, Decimal('10500.00'), fecha_pago=date(2026, 11, 10), usuario=self.owner_a)['recibo']
+        borrador = LiquidacionPropietario.objects.create(
+            propietario_inmueble=self.prop_owner_a,
+            periodo_mes=11,
+            periodo_anio=2026,
+            monto_rentas_cobradas=Decimal('10500.00'),
+            monto_comision=Decimal('1000.00'),
+            monto_neto_pagado=Decimal('9500.00'),
+            estado='PENDIENTE',
+        )
+
+        out = io.StringIO()
+        call_command(
+            'simular_destino_mora',
+            portafolio_id=self.portafolio_a.id,
+            desde='2026-11-01',
+            hasta='2026-11-30',
+            destino='AGENCIA',
+            stdout=out,
+        )
+        salida = out.getvalue()
+        self.assertIn('RD$ 500.00', salida)
+        self.assertIn('Liquidaciones abiertas (PENDIENTE) afectadas: 1', salida)
+
+        # No modificó absolutamente nada en BD
+        recibo.refresh_from_db()
+        borrador.refresh_from_db()
+        self.portafolio_a.refresh_from_db()
+        self.assertEqual(recibo.monto_mora_propietario, Decimal('500.00'))
+        self.assertEqual(recibo.monto_mora_agencia, Decimal('0.00'))
+        self.assertEqual(borrador.monto_neto_pagado, Decimal('9500.00'))
+        self.assertEqual(self.portafolio_a.destino_mora, 'PROPIETARIO')
+
+    def test_borrador_liquidacion_avisa_diferencia_antes_de_recalcular(self):
+        from .services.pago_service import registrar_pago_factura
+        self.portafolio_a.destino_mora = 'AGENCIA'
+        self.portafolio_a.save()
+
+        f = self._crear_factura_con_mora(self.contrato_a, Decimal('10000.00'), Decimal('500.00'))
+        registrar_pago_factura(f.id, Decimal('10500.00'), fecha_pago=date(2026, 11, 10), usuario=self.owner_a)
+
+        # Borrador previo desactualizado
+        borrador = LiquidacionPropietario.objects.create(
+            propietario_inmueble=self.prop_owner_a,
+            periodo_mes=11,
+            periodo_anio=2026,
+            monto_rentas_cobradas=Decimal('10500.00'),
+            monto_comision=Decimal('1000.00'),
+            monto_neto_pagado=Decimal('9500.00'),
+            estado='PENDIENTE',
+        )
+
+        self.client.login(username='dueno_agencia_a', password='password123')
+        res_rep = self.client.get(f"{reverse('reporte_propietario')}?propietario_id={self.prop_owner_a.id}&mes=11&anio=2026")
+        self.assertIsNotNone(res_rep.context['diferencia_borrador'])
+        self.assertIn('El cálculo actual del período difiere del borrador guardado', res_rep.content.decode('utf-8'))
+
+        # Sin confirmación explícita no sobrescribe el borrador
+        self.client.post(reverse('procesar_liquidacion_propietario', args=[self.prop_owner_a.id]), {
+            'mes': 11, 'anio': 2026, 'fecha_pago': '2026-11-15', 'metodo_pago': 'TRANSFERENCIA',
+            'estado_guardar': 'PAGADO',
+        })
+        borrador.refresh_from_db()
+        self.assertEqual(borrador.estado, 'PENDIENTE')
+        self.assertEqual(borrador.monto_neto_pagado, Decimal('9500.00'))
+
+        # Con confirmación explícita sí actualiza con los nuevos montos (sin mora de agencia)
+        self.client.post(reverse('procesar_liquidacion_propietario', args=[self.prop_owner_a.id]), {
+            'mes': 11, 'anio': 2026, 'fecha_pago': '2026-11-15', 'metodo_pago': 'TRANSFERENCIA',
+            'estado_guardar': 'PAGADO', 'confirmar_recalculo_borrador': '1',
+        })
+        borrador.refresh_from_db()
+        self.assertEqual(borrador.estado, 'PAGADO')
+        self.assertEqual(borrador.monto_rentas_cobradas, Decimal('10000.00'))
+        self.assertEqual(borrador.monto_neto_pagado, Decimal('9000.00'))
+
+
+
+
 
 
 
