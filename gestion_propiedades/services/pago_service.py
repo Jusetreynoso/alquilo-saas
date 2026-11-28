@@ -204,12 +204,18 @@ def registrar_pago_factura(
                     )
 
                 # 8. Registro de auditoría exitoso
+                detalle_mora_audit = ""
+                if recibo.monto_a_mora > decimal.Decimal('0.00'):
+                    detalle_mora_audit = (
+                        f" Mora RD$ {recibo.monto_a_mora:,.2f} "
+                        f"(Propietario: RD$ {recibo.mora_para_propietario:,.2f}, Agencia: RD$ {recibo.mora_para_agencia:,.2f})."
+                    )
                 AuditLog.objects.create(
                     accion='CREAR',
                     modulo='ReciboPago',
                     descripcion=(
                         f"Cobro registrado de RD$ {monto_para_factura:,.2f} en Factura #{factura.id} "
-                        f"(Recibo #{recibo.id}, Método: {metodo_pago})."
+                        f"(Recibo #{recibo.id}, Método: {metodo_pago}).{detalle_mora_audit}"
                     ),
                     usuario=usuario,
                     portafolio=portafolio
@@ -345,11 +351,19 @@ def anular_pago_recibo(recibo_id, usuario, motivo, destino_excedente='SALDO_A_FA
         factura = Factura.objects.select_for_update().get(id=recibo.factura_id)
         portafolio = recibo.factura.contrato.propiedad.portafolio if recibo.factura.contrato else None
 
+        mora_prop_revertida = recibo.mora_para_propietario
+        mora_ag_revertida = recibo.mora_para_agencia
+
         recibo.estado = 'ANULADO'
         recibo.motivo_anulacion = motivo
         recibo.anulado_por = usuario
         recibo.anulado_en = timezone.now()
-        recibo.save(update_fields=['estado', 'motivo_anulacion', 'anulado_por', 'anulado_en'])
+        recibo.monto_mora_propietario = decimal.Decimal('0.00')
+        recibo.monto_mora_agencia = decimal.Decimal('0.00')
+        recibo.save(update_fields=[
+            'estado', 'motivo_anulacion', 'anulado_por', 'anulado_en',
+            'monto_mora_propietario', 'monto_mora_agencia',
+        ])
 
         # Si el despacho decide que el dinero queda a favor del contrato:
         if destino_excedente == 'SALDO_A_FAVOR' and recibo.factura.contrato:
@@ -372,6 +386,7 @@ def anular_pago_recibo(recibo_id, usuario, motivo, destino_excedente='SALDO_A_FA
             modulo='ReciboPago',
             descripcion=(
                 f"Recibo #{recibo.id} de RD$ {recibo.monto_pagado:,.2f} marcado como ANULADO. "
+                f"Mora revertida (Propietario: RD$ {mora_prop_revertida:,.2f}, Agencia: RD$ {mora_ag_revertida:,.2f}). "
                 f"Motivo: {motivo}. Destino excedente: {destino_excedente}."
             ),
             usuario=usuario,

@@ -931,6 +931,10 @@ class ReciboPago(models.Model):
     fecha_pago = models.DateField(db_index=True)
     monto_pagado = models.DecimalField(max_digits=10, decimal_places=2)
     monto_a_mora = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Monto de este abono destinado a saldar mora")
+    monto_mora_propietario = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Porción de la mora pagada que corresponde al propietario")
+    monto_mora_agencia = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Porción de la mora pagada que corresponde a la agencia")
+    politica_mora_aplicada = models.CharField(max_length=20, blank=True, default='', help_text="Política vigente al registrar este pago")
+    porcentaje_mora_agencia_aplicado = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="Porcentaje aplicado a la agencia al registrar el pago")
     monto_a_servicios = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Monto de este abono destinado a saldar servicios")
     monto_a_renta = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Monto de este abono destinado a saldar alquiler")
     metodo_pago = models.CharField(max_length=20, choices=METODO_CHOICES, default='TRANSFERENCIA')
@@ -955,6 +959,66 @@ class ReciboPago(models.Model):
         if self.factura and self.factura.contrato and self.factura.contrato.inquilino:
             return self.factura.contrato.inquilino.tiene_telefono_valido
         return False
+
+    @property
+    def mora_para_propietario(self):
+        """Retorna la porción de mora que pertenece al propietario (0.00 si está anulado)."""
+        if self.estado != 'ACTIVO':
+            return Decimal('0.00')
+        if (
+            not self.politica_mora_aplicada
+            and (self.monto_mora_propietario or Decimal('0.00')) == Decimal('0.00')
+            and (self.monto_mora_agencia or Decimal('0.00')) == Decimal('0.00')
+            and (self.monto_a_mora or Decimal('0.00')) > Decimal('0.00')
+        ):
+            return Decimal(str(self.monto_a_mora))
+        return Decimal(str(self.monto_mora_propietario or '0.00'))
+
+    @property
+    def mora_para_agencia(self):
+        """Retorna la porción de mora que pertenece a la agencia (0.00 si está anulado)."""
+        if self.estado != 'ACTIVO':
+            return Decimal('0.00')
+        return Decimal(str(self.monto_mora_agencia or '0.00'))
+
+    @property
+    def monto_para_propietario(self):
+        """Total del recibo que corresponde al propietario: renta + servicios + su porción de mora."""
+        if self.estado != 'ACTIVO':
+            return Decimal('0.00')
+        return (
+            Decimal(str(self.monto_a_renta or '0.00'))
+            + Decimal(str(self.monto_a_servicios or '0.00'))
+            + self.mora_para_propietario
+        )
+
+    def _resolver_politica_mora_vigente(self):
+        """Obtiene (destino, porcentaje_agencia) vigente al momento del pago."""
+        try:
+            contrato = self.factura.contrato if self.factura_id else None
+            propiedad = contrato.propiedad if contrato else None
+            if propiedad and propiedad.propietario_inmueble:
+                return propiedad.propietario_inmueble.obtener_politica_mora_efectiva()
+            if propiedad and propiedad.portafolio:
+                return propiedad.portafolio.obtener_politica_mora_efectiva()
+        except Exception:
+            pass
+        return ('PROPIETARIO', Decimal('0.00'))
+
+    def calcular_reparto_mora(self, monto_mora):
+        """Calcula (mora_propietario, mora_agencia, destino, pct_agencia) redondeado a 2 decimales."""
+        from decimal import ROUND_HALF_UP
+        mora_val = Decimal(str(monto_mora or '0.00')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        destino, pct_ag = self._resolver_politica_mora_vigente()
+        if mora_val <= Decimal('0.00'):
+            return (Decimal('0.00'), Decimal('0.00'), destino, pct_ag)
+        if destino == 'AGENCIA':
+            return (Decimal('0.00'), mora_val, 'AGENCIA', Decimal('100.00'))
+        if destino == 'COMPARTIDA':
+            m_ag = (mora_val * pct_ag / Decimal('100.00')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            m_prop = mora_val - m_ag
+            return (m_prop, m_ag, 'COMPARTIDA', pct_ag)
+        return (mora_val, Decimal('0.00'), 'PROPIETARIO', Decimal('0.00'))
 
     def __str__(self):
         return f"Recibo #{self.id} - Factura #{self.factura.id}"
@@ -1003,6 +1067,16 @@ class ReciboPago(models.Model):
             self.monto_a_mora = p_mora
             self.monto_a_servicios = p_serv
             self.monto_a_renta = p_renta
+
+        if is_new and not self.politica_mora_aplicada:
+            mora_final = Decimal(str(self.monto_a_mora or '0.00'))
+            m_prop, m_ag, pol, pct_ag = self.calcular_reparto_mora(mora_final)
+            if (Decimal(str(self.monto_mora_propietario or '0.00')) == Decimal('0.00')
+                    and Decimal(str(self.monto_mora_agencia or '0.00')) == Decimal('0.00')):
+                self.monto_mora_propietario = m_prop
+                self.monto_mora_agencia = m_ag
+            self.politica_mora_aplicada = pol
+            self.porcentaje_mora_agencia_aplicado = pct_ag
 
         super().save(*args, **kwargs)
 
