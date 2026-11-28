@@ -84,8 +84,10 @@
                 <p class="mb-1 small"><strong>Tipo Cuenta:</strong> {{ propietario.tipo_cuenta|default:"---" }}</p>
                 <p class="mb-1 small"><strong>No. Cuenta:</strong> {{ propietario.numero_cuenta|default:"---" }}</p>
                 <p class="mb-0 small"><strong>Estado Pago:</strong> 
-                    {% if liquidacion %}
+                    {% if liquidacion and liquidacion.estado == 'PAGADO' %}
                         <span class="badge bg-success">Liquidado ({{ liquidacion.fecha_pago|date:"d/m/Y" }})</span>
+                    {% elif liquidacion %}
+                        <span class="badge bg-warning text-dark">Borrador Pendiente</span>
                     {% else %}
                         <span class="badge bg-warning text-dark">Pendiente</span>
                     {% endif %}
@@ -116,7 +118,7 @@
                     <small class="text-muted d-block">Factura #{{ r.factura.id }}</small>
                 </td>
                 <td>{{ r.fecha_pago|date:"d/m/Y" }}</td>
-                <td class="text-end fw-bold">${{ r.monto_pagado|dinero }}</td>
+                <td class="text-end fw-bold">${{ r.monto_propietario_liquidacion|dinero }}</td>
             </tr>
             {% empty %}
             <tr>
@@ -217,6 +219,12 @@
             </div>
         </div>
     </div>
+
+    {% if mostrar_mora_agencia %}
+    <div class="alert alert-light border small text-muted mb-4">
+        <strong>Nota informativa:</strong> En este período la administración retuvo RD$ {{ total_mora_agencia|dinero }} por cargos de mora (no sumados ni deducidos en esta liquidación).
+    </div>
+    {% endif %}
 
     <!-- Firmas -->
     <div class="row mt-5 pt-4 text-center">
