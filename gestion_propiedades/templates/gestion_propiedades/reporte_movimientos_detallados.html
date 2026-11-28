@@ -150,7 +150,14 @@
                 <div class="card-body">
                     <h6 class="text-muted fw-bold text-uppercase small mb-1">Total Ingresos Cobrados</h6>
                     <h3 class="mb-0 fw-bold text-success">$ {{ total_ingresos|dinero }}</h3>
+                    {% if total_ingresos_mora_agencia > 0 %}
+                    <small class="text-muted d-block mt-1">
+                        Propietarios: <strong>${{ total_ingresos_propietario|dinero }}</strong> |
+                        Cargos por mora (Agencia): <strong>${{ total_ingresos_mora_agencia|dinero }}</strong>
+                    </small>
+                    {% else %}
                     <small class="text-muted">En el período seleccionado</small>
+                    {% endif %}
                 </div>
             </div>
         </div>

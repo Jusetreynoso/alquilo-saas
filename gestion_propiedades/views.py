@@ -150,7 +150,8 @@ def dashboard(request):
     ingresos_mes = ReciboPago.objects.filter(
         factura__contrato__propiedad__portafolio__in=portafolios,
         fecha_pago__year=hoy.year,
-        fecha_pago__month=hoy.month
+        fecha_pago__month=hoy.month,
+        estado='ACTIVO',
     ).aggregate(total=Sum('monto_pagado'))['total'] or 0
 
     # Gastos programados activos del mes
@@ -1446,10 +1447,12 @@ def reporte_financiero(request):
     elif filtro_tipo == 'INQUILINO' and inquilino_id:
         propiedades_qs = propiedades_qs.filter(contratos__inquilino_id=inquilino_id)
 
-    # Base QuerySet Recibos de Pago (Ingresos)
+    # Base QuerySet Recibos de Pago (Ingresos activos)
     recibos_qs = ReciboPago.objects.filter(
-        factura__contrato__propiedad__in=propiedades_qs
+        factura__contrato__propiedad__in=propiedades_qs,
+        estado='ACTIVO',
     ).select_related(
+        'factura__contrato__propiedad__portafolio',
         'factura__contrato__propiedad__propietario_inmueble',
         'factura__contrato__inquilino'
     )
@@ -1487,11 +1490,25 @@ def reporte_financiero(request):
         recibos_qs = recibos_qs.filter(factura__contrato__inquilino_id=inquilino_id)
 
     # Calcular Totales
+    from .services.liquidacion_service import desglosar_recibo_propietario
     recibos_list = list(recibos_qs.order_by('-fecha_pago'))
     mantenimientos_list = list(mantenimientos_qs.order_by('-fecha_reporte'))
     gastos_gen_list = list(gastos_gen_qs.order_by('-fecha'))
 
-    total_ingresos = sum(r.monto_pagado for r in recibos_list) or decimal.Decimal('0.00')
+    total_ingresos_propietario = decimal.Decimal('0.00')
+    total_mora_agencia = decimal.Decimal('0.00')
+    ingresos_mora_agencia_list = []
+
+    for r in recibos_list:
+        d = desglosar_recibo_propietario(r)
+        r.monto_propietario_reporte = d['total_propietario']
+        r.monto_mora_agencia_reporte = d['mora_agencia']
+        total_ingresos_propietario += d['total_propietario']
+        total_mora_agencia += d['mora_agencia']
+        if d['mora_agencia'] > decimal.Decimal('0.00'):
+            ingresos_mora_agencia_list.append(r)
+
+    total_ingresos = total_ingresos_propietario + total_mora_agencia
     total_gastos_directos = sum(m.costo for m in mantenimientos_list) or decimal.Decimal('0.00')
     total_gastos_generales = sum(g.monto for g in gastos_gen_list) or decimal.Decimal('0.00')
     total_gastos = total_gastos_directos + total_gastos_generales
@@ -1515,7 +1532,7 @@ def reporte_financiero(request):
         datos['nombre_propiedad'] = r.factura.contrato.propiedad.nombre_o_numero
         datos['mes_formateado'] = f"{obtener_nombre_mes(r.fecha_pago.month)} {r.fecha_pago.year}"
         datos['mes_date'] = mes_trunc
-        datos['ingresos'] += float(r.monto_pagado)
+        datos['ingresos'] += float(r.monto_propietario_reporte)
 
     for m in mantenimientos_list:
         mes_trunc = date(m.fecha_reporte.year, m.fecha_reporte.month, 1)
@@ -1547,6 +1564,9 @@ def reporte_financiero(request):
         'anio': anio,
         'anios_disponibles': range(date.today().year - 2, date.today().year + 2),
         'total_ingresos': total_ingresos,
+        'total_ingresos_propietario': total_ingresos_propietario,
+        'total_mora_agencia': total_mora_agencia,
+        'ingresos_mora_agencia_list': ingresos_mora_agencia_list,
         'total_gastos_directos': total_gastos_directos,
         'total_gastos_generales': total_gastos_generales,
         'total_gastos': total_gastos,
@@ -1609,11 +1629,15 @@ def _obtener_datos_movimientos_detallados(request):
 
     movimientos = []
 
-    # 1. INGRESOS (Recibos de Pago)
+    # 1. INGRESOS (Recibos de Pago activos desglosados por beneficiario)
+    from .services.liquidacion_service import desglosar_recibo_propietario
+    total_ingresos_propietario = decimal.Decimal('0.00')
+    total_ingresos_mora_agencia = decimal.Decimal('0.00')
     if tipo_movimiento in ['TODOS', 'INGRESO']:
         recibos_qs = ReciboPago.objects.filter(
             factura__contrato__propiedad__in=propiedades_qs,
-            fecha_pago__range=[fecha_inicio, fecha_fin]
+            fecha_pago__range=[fecha_inicio, fecha_fin],
+            estado='ACTIVO',
         ).select_related(
             'factura', 'factura__contrato', 'factura__contrato__propiedad',
             'factura__contrato__propiedad__portafolio',
@@ -1633,17 +1657,38 @@ def _obtener_datos_movimientos_detallados(request):
                 if (p.portafolio and p.portafolio.propietario) else 'Propietario General'
             )
             persona_nom = r.factura.contrato.inquilino.nombre if (r.factura and r.factura.contrato and r.factura.contrato.inquilino) else 'Inquilino General'
-            movimientos.append({
-                'fecha': r.fecha_pago,
-                'propiedad': p.nombre_o_numero,
-                'grupo_o_residencial': p.grupo_o_residencial or '',
-                'propietario': propietario_nom,
-                'persona': persona_nom,
-                'tipo': 'INGRESO',
-                'concepto': f"Cobro Renta (Recibo #{r.id}) - {r.factura.concepto if r.factura else 'Renta'}",
-                'monto': r.monto_pagado,
-                'referencia_id': f"REC-{r.id}"
-            })
+            d = desglosar_recibo_propietario(r)
+
+            if d['total_propietario'] > decimal.Decimal('0.00'):
+                total_ingresos_propietario += d['total_propietario']
+                movimientos.append({
+                    'fecha': r.fecha_pago,
+                    'propiedad': p.nombre_o_numero,
+                    'grupo_o_residencial': p.grupo_o_residencial or '',
+                    'propietario': propietario_nom,
+                    'persona': persona_nom,
+                    'tipo': 'INGRESO',
+                    'beneficiario': 'Propietario',
+                    'concepto': f"Cobro Renta (Recibo #{r.id}) - {r.factura.concepto if r.factura else 'Renta'}",
+                    'monto': d['total_propietario'],
+                    'referencia_id': f"REC-{r.id}"
+                })
+
+            if d['mora_agencia'] > decimal.Decimal('0.00'):
+                total_ingresos_mora_agencia += d['mora_agencia']
+                agencia_nom = p.portafolio.nombre if p.portafolio else 'Agencia'
+                movimientos.append({
+                    'fecha': r.fecha_pago,
+                    'propiedad': p.nombre_o_numero,
+                    'grupo_o_residencial': p.grupo_o_residencial or '',
+                    'propietario': f"Agencia ({agencia_nom})",
+                    'persona': persona_nom,
+                    'tipo': 'INGRESO',
+                    'beneficiario': 'Agencia',
+                    'concepto': f"Cargos por mora (Recibo #{r.id}) - {r.factura.concepto if r.factura else 'Mora'}",
+                    'monto': d['mora_agencia'],
+                    'referencia_id': f"REC-{r.id}-MORA"
+                })
 
     # 2. GASTOS DE MANTENIMIENTO DE UNIDAD
     if tipo_movimiento in ['TODOS', 'GASTO'] and (inquilino_id == 'TODOS'):
@@ -1727,6 +1772,8 @@ def _obtener_datos_movimientos_detallados(request):
     return {
         'movimientos': movimientos,
         'total_ingresos': total_ingresos,
+        'total_ingresos_propietario': total_ingresos_propietario,
+        'total_ingresos_mora_agencia': total_ingresos_mora_agencia,
         'total_gastos': total_gastos,
         'balance_neto': balance_neto,
         'fecha_inicio': fecha_inicio,
@@ -1762,7 +1809,9 @@ def exportar_movimientos_excel(request):
         data['balance_neto'],
         data['fecha_inicio'],
         data['fecha_fin'],
-        portafolio=data.get('portafolio_actual')
+        portafolio=data.get('portafolio_actual'),
+        total_ingresos_propietario=data.get('total_ingresos_propietario'),
+        total_mora_agencia=data.get('total_ingresos_mora_agencia'),
     )
 
     filename = f"Reporte_Movimientos_{data['fecha_inicio'].strftime('%Y%m%d')}_a_{data['fecha_fin'].strftime('%Y%m%d')}.xlsx"
@@ -1791,7 +1840,9 @@ def enviar_movimientos_correo(request):
                     data['balance_neto'],
                     data['fecha_inicio'],
                     data['fecha_fin'],
-                    portafolio=data.get('portafolio_actual')
+                    portafolio=data.get('portafolio_actual'),
+                    total_ingresos_propietario=data.get('total_ingresos_propietario'),
+                    total_mora_agencia=data.get('total_ingresos_mora_agencia'),
                 )
 
                 nombre_archivo = f"Reporte_Movimientos_{data['fecha_inicio'].strftime('%Y%m%d')}_a_{data['fecha_fin'].strftime('%Y%m%d')}.xlsx"
@@ -1910,7 +1961,8 @@ def _obtener_datos_estado_propiedades_propietario(request):
                     fecha_vencimiento__year=anio_num
                 ).first()
 
-        recibo = ReciboPago.objects.filter(factura=factura_mes).first() if factura_mes else None
+        recibos_activos_fact = list(ReciboPago.objects.filter(factura=factura_mes, estado='ACTIVO').order_by('fecha_pago', 'id')) if factura_mes else []
+        recibo = recibos_activos_fact[-1] if recibos_activos_fact else None
         cargos_mora = CargoMora.objects.filter(factura=factura_mes).first() if factura_mes else None
 
         estado_codigo = 'VACANTE'
@@ -1923,7 +1975,8 @@ def _obtener_datos_estado_propiedades_propietario(request):
 
         if factura_mes:
             if factura_mes.estado == 'PAGADA' and recibo:
-                monto_pagado = recibo.monto_pagado
+                from .services.liquidacion_service import desglosar_recibo_propietario
+                monto_pagado = sum((desglosar_recibo_propietario(r)['total_propietario'] for r in recibos_activos_fact), decimal.Decimal('0.00'))
                 totales_resumen['total_cobrado'] += monto_pagado
                 fecha_pago_str = recibo.fecha_pago.strftime('%d/%m/%Y')
                 
@@ -2056,13 +2109,17 @@ def reporte_rentabilidad(request):
             Q(propietario=request.user) | Q(accesos__usuario=request.user)
         ).distinct()
 
+    from .services.liquidacion_service import desglosar_recibo_propietario
     propiedades = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False)
 
     resultado = []
     for prop in propiedades:
-        ingresos = ReciboPago.objects.filter(
-            factura__contrato__propiedad=prop
-        ).aggregate(total=Sum('monto_pagado'))['total'] or 0
+        # Por defecto la mora de la agencia no cuenta en la rentabilidad del inmueble
+        recibos_prop = ReciboPago.objects.filter(
+            factura__contrato__propiedad=prop,
+            estado='ACTIVO',
+        )
+        ingresos = sum((desglosar_recibo_propietario(r)['total_propietario'] for r in recibos_prop), decimal.Decimal('0.00'))
 
         egresos = MantenimientoUnidad.objects.filter(
             propiedad=prop
@@ -3392,6 +3449,7 @@ def reporte_transparencia(request):
         factura__contrato__propiedad__portafolio__in=portafolios,
         fecha_pago__year=anio,
         fecha_pago__month=mes,
+        estado='ACTIVO',
     ).aggregate(total=Sum('monto_pagado'))['total'] or 0
 
     faltan_cobrar = max(float(debimos_cobrar) - float(hemos_cobrado), 0)
@@ -5607,7 +5665,8 @@ def exportar_datos_csv_zip(request):
             writer.writerow([
                 'No. Recibo', 'No. Factura', 'Propiedad', 'Inquilino', 'Fecha Pago',
                 'Monto Pagado', 'Abono Renta', 'Abono Servicios', 'Abono Mora',
-                'Método Pago', 'Referencia Transacción', 'Registrado Por', 'Fecha Registro'
+                'Método Pago', 'Referencia Transacción', 'Registrado Por', 'Fecha Registro',
+                'Estado', 'Mora Propietario', 'Mora Agencia', 'Política Mora'
             ])
             for r in recibos_qs:
                 f_obj = r.factura
@@ -5619,7 +5678,8 @@ def exportar_datos_csv_zip(request):
                 writer.writerow([
                     r.id, r.factura_id or '', prop_nom, inq_nom, r.fecha_pago,
                     r.monto_pagado, r.monto_a_renta, r.monto_a_servicios, r.monto_a_mora,
-                    metodo_txt, r.referencia_transaccion or '', user_nom, r.registrado_en
+                    metodo_txt, r.referencia_transaccion or '', user_nom, r.registrado_en,
+                    r.estado, r.mora_para_propietario, r.mora_para_agencia, r.politica_mora_aplicada or 'PROPIETARIO'
                 ])
             zip_file.writestr('6_Recibos_y_Cobros.csv', output_rec.getvalue().encode('utf-8-sig'))
 

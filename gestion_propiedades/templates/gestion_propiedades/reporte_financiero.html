@@ -139,7 +139,13 @@
                 <div class="card-body">
                     <h6 class="card-title text-white-50 text-uppercase fw-bold"><i class="bi bi-arrow-down-left-circle"></i> Total Ingresos (Cobros)</h6>
                     <h2 class="mb-0 fw-bold">${{ total_ingresos|dinero }}</h2>
-                    <small>Recibos de Renta Cobrados</small>
+                    <small>Recibos cobrados en el período</small>
+                    {% if total_mora_agencia > 0 %}
+                    <div class="small text-white-50 mt-1 border-top border-white border-opacity-25 pt-1">
+                        Propietarios: <strong>${{ total_ingresos_propietario|dinero }}</strong><br>
+                        Cargos por mora (Agencia): <strong>${{ total_mora_agencia|dinero }}</strong>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -260,7 +266,9 @@
                                     <th class="py-3">Inquilino</th>
                                     <th class="py-3">Propietario Inmueble</th>
                                     <th class="py-3">Método Pago</th>
-                                    <th class="py-3 text-end px-4">Monto Cobrado</th>
+                                    <th class="py-3 text-end">Propietario</th>
+                                    <th class="py-3 text-end">Cargos por mora (Agencia)</th>
+                                    <th class="py-3 text-end px-4">Total Cobrado</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -273,11 +281,13 @@
                                         {{ r.factura.contrato.propiedad.propietario_inmueble.nombre|default:"Genérico" }}
                                     </td>
                                     <td class="py-3"><span class="badge bg-light text-dark border">{{ r.metodo_pago }}</span></td>
+                                    <td class="py-3 text-end text-success fw-semibold">${{ r.monto_propietario_reporte|dinero }}</td>
+                                    <td class="py-3 text-end {% if r.monto_mora_agencia_reporte > 0 %}text-primary fw-bold{% else %}text-muted{% endif %}">${{ r.monto_mora_agencia_reporte|dinero }}</td>
                                     <td class="py-3 text-end px-4 text-success fw-bold fs-6">+ ${{ r.monto_pagado|dinero }}</td>
                                 </tr>
                                 {% empty %}
                                 <tr>
-                                    <td colspan="6" class="text-center py-5 text-muted">No se registraron cobros de ingresos en este período.</td>
+                                    <td colspan="8" class="text-center py-5 text-muted">No se registraron cobros de ingresos en este período.</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>

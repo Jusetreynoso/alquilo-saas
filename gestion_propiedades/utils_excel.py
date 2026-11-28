@@ -105,7 +105,17 @@ def _insertar_logo_excel(ws, portafolio, anchor='A1'):
         return False
 
 
-def generar_excel_movimientos_detallados(movimientos, total_ingresos, total_gastos, balance_neto, fecha_inicio, fecha_fin, portafolio=None):
+def generar_excel_movimientos_detallados(
+    movimientos,
+    total_ingresos,
+    total_gastos,
+    balance_neto,
+    fecha_inicio,
+    fecha_fin,
+    portafolio=None,
+    total_ingresos_propietario=None,
+    total_mora_agencia=None,
+):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Movimientos Detallados"
@@ -218,7 +228,23 @@ def generar_excel_movimientos_detallados(movimientos, total_ingresos, total_gast
 
     # Fila de Totales
     current_row = len(movimientos) + 8
-    
+
+    if total_mora_agencia is not None and float(total_mora_agencia) > 0:
+        if total_ingresos_propietario is not None:
+            ws.cell(row=current_row, column=6, value="INGRESOS PROPIETARIOS:").font = Font(bold=True, color='555555')
+            ws.cell(row=current_row, column=6).alignment = Alignment(horizontal='right')
+            tot_prop = ws.cell(row=current_row, column=7, value=float(total_ingresos_propietario))
+            tot_prop.font = Font(color='27AE60', bold=True)
+            tot_prop.number_format = '$#,##0.00'
+            current_row += 1
+
+        ws.cell(row=current_row, column=6, value="CARGOS POR MORA (AGENCIA):").font = Font(bold=True, color='555555')
+        ws.cell(row=current_row, column=6).alignment = Alignment(horizontal='right')
+        tot_ag = ws.cell(row=current_row, column=7, value=float(total_mora_agencia))
+        tot_ag.font = Font(color='1B4F72', bold=True)
+        tot_ag.number_format = '$#,##0.00'
+        current_row += 1
+
     ws.cell(row=current_row, column=6, value="TOTAL INGRESOS:").font = Font(bold=True)
     ws.cell(row=current_row, column=6).alignment = Alignment(horizontal='right')
     tot_ing = ws.cell(row=current_row, column=7, value=float(total_ingresos))
