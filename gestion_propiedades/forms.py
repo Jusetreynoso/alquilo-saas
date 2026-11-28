@@ -16,8 +16,14 @@ class PortafolioForm(forms.ModelForm):
         fields = [
             'nombre', 'eslogan', 'direccion_fisica', 'telefono_contacto', 
             'logo_empresa', 'formato_impresion', 'formato_concepto_factura',
-            'config_meses_deposito', 'config_meses_adelanto'
+            'config_meses_deposito', 'config_meses_adelanto',
+            'destino_mora', 'porcentaje_mora_agencia', 'mostrar_mora_agencia_en_liquidacion'
         ]
+        labels = {
+            'destino_mora': 'Destino de la mora cobrada',
+            'porcentaje_mora_agencia': 'Porcentaje de la mora para la agencia (%)',
+            'mostrar_mora_agencia_en_liquidacion': 'Mostrar en el estado de cuenta del propietario la mora retenida por la administración',
+        }
         widgets = {
             'nombre': forms.TextInput(attrs={'class': 'form-control', 'required': True}),
             'eslogan': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Tu hogar ideal (Opcional)'}),
@@ -28,7 +34,42 @@ class PortafolioForm(forms.ModelForm):
             'formato_concepto_factura': forms.Select(attrs={'class': 'form-select'}),
             'config_meses_deposito': forms.NumberInput(attrs={'class': 'form-control'}),
             'config_meses_adelanto': forms.NumberInput(attrs={'class': 'form-control'}),
+            'destino_mora': forms.Select(attrs={'class': 'form-select', 'id': 'id_destino_mora'}),
+            'porcentaje_mora_agencia': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0', 'max': '100', 'id': 'id_porcentaje_mora_agencia', 'placeholder': 'Ej: 60.00'}),
+            'mostrar_mora_agencia_en_liquidacion': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_mostrar_mora_agencia_en_liquidacion'}),
         }
+
+    def __init__(self, *args, puede_editar_politica_mora=True, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.puede_editar_politica_mora = puede_editar_politica_mora
+        self.fields['destino_mora'].required = False
+        self.fields['porcentaje_mora_agencia'].required = False
+        self.fields['mostrar_mora_agencia_en_liquidacion'].required = False
+        if not puede_editar_politica_mora:
+            for fname in ('destino_mora', 'porcentaje_mora_agencia', 'mostrar_mora_agencia_en_liquidacion'):
+                self.fields[fname].disabled = True
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if not self.puede_editar_politica_mora and self.instance and self.instance.pk:
+            cleaned_data['destino_mora'] = self.instance.destino_mora
+            cleaned_data['porcentaje_mora_agencia'] = self.instance.porcentaje_mora_agencia
+            cleaned_data['mostrar_mora_agencia_en_liquidacion'] = self.instance.mostrar_mora_agencia_en_liquidacion
+            return cleaned_data
+
+        destino = cleaned_data.get('destino_mora') or 'PROPIETARIO'
+        cleaned_data['destino_mora'] = destino
+        pct = cleaned_data.get('porcentaje_mora_agencia')
+
+        if destino == 'COMPARTIDA':
+            if pct is None:
+                self.add_error('porcentaje_mora_agencia', 'Indica el porcentaje que corresponde a la agencia (entre 0 y 100).')
+            elif pct < decimal.Decimal('0.00') or pct > decimal.Decimal('100.00'):
+                self.add_error('porcentaje_mora_agencia', 'El porcentaje para la agencia debe estar entre 0 y 100.')
+        else:
+            cleaned_data['porcentaje_mora_agencia'] = decimal.Decimal('0.00')
+
+        return cleaned_data
 
 class PropiedadForm(forms.ModelForm):
     class Meta:
@@ -470,8 +511,13 @@ class PropietarioInmuebleForm(forms.ModelForm):
         fields = [
             'nombre', 'cedula_o_rnc', 'telefono', 'correo', 'direccion',
             'tipo_comision', 'porcentaje_comision', 'monto_comision_fijo',
+            'politica_mora', 'porcentaje_mora_agencia',
             'banco_nombre', 'tipo_cuenta', 'numero_cuenta', 'dia_pago_acordado', 'notas_pago', 'activo'
         ]
+        labels = {
+            'politica_mora': 'Política de mora para este propietario',
+            'porcentaje_mora_agencia': 'Porcentaje de mora para la agencia (%)',
+        }
         widgets = {
             'nombre': forms.TextInput(attrs={'class': 'form-control', 'required': True, 'placeholder': 'Ej: Juan Pérez / Inmobiliaria S.A.'}),
             'cedula_o_rnc': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: 001-0000000-0'}),
@@ -481,6 +527,8 @@ class PropietarioInmuebleForm(forms.ModelForm):
             'tipo_comision': forms.Select(attrs={'class': 'form-select'}),
             'porcentaje_comision': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': 'Ej: 10.00'}),
             'monto_comision_fijo': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': 'Ej: 5000.00'}),
+            'politica_mora': forms.Select(attrs={'class': 'form-select', 'id': 'id_politica_mora_propietario'}),
+            'porcentaje_mora_agencia': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0', 'max': '100', 'id': 'id_porcentaje_mora_agencia_propietario', 'placeholder': 'Ej: 60.00'}),
             'banco_nombre': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Banco Popular'}),
             'tipo_cuenta': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Ahorros / Corriente'}),
             'numero_cuenta': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: 123456789'}),
@@ -491,9 +539,12 @@ class PropietarioInmuebleForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         portafolios = kwargs.pop('portafolios', None)
+        self.puede_editar_politica_mora = kwargs.pop('puede_editar_politica_mora', True)
         super().__init__(*args, **kwargs)
         self.fields['porcentaje_comision'].required = False
         self.fields['monto_comision_fijo'].required = False
+        self.fields['politica_mora'].required = False
+        self.fields['porcentaje_mora_agencia'].required = False
         self.fields['cedula_o_rnc'].required = False
         self.fields['telefono'].required = False
         self.fields['correo'].required = False
@@ -503,6 +554,10 @@ class PropietarioInmuebleForm(forms.ModelForm):
         self.fields['numero_cuenta'].required = False
         self.fields['dia_pago_acordado'].required = False
         self.fields['notas_pago'].required = False
+
+        if not self.puede_editar_politica_mora:
+            self.fields['politica_mora'].disabled = True
+            self.fields['porcentaje_mora_agencia'].disabled = True
 
         if portafolios is not None:
             self.fields['propiedades'].queryset = Propiedad.objects.filter(portafolio__in=portafolios, is_deleted=False).order_by('nombre_o_numero')
@@ -523,6 +578,31 @@ class PropietarioInmuebleForm(forms.ModelForm):
     def clean_dia_pago_acordado(self):
         val = self.cleaned_data.get('dia_pago_acordado')
         return val if val else 15
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if not self.puede_editar_politica_mora:
+            if self.instance and self.instance.pk:
+                cleaned_data['politica_mora'] = self.instance.politica_mora
+                cleaned_data['porcentaje_mora_agencia'] = self.instance.porcentaje_mora_agencia
+            else:
+                cleaned_data['politica_mora'] = 'USAR_AGENCIA'
+                cleaned_data['porcentaje_mora_agencia'] = decimal.Decimal('0.00')
+            return cleaned_data
+
+        pol = cleaned_data.get('politica_mora') or 'USAR_AGENCIA'
+        cleaned_data['politica_mora'] = pol
+        pct = cleaned_data.get('porcentaje_mora_agencia')
+
+        if pol == 'COMPARTIDA':
+            if pct is None:
+                self.add_error('porcentaje_mora_agencia', 'Indica el porcentaje de mora para la agencia (entre 0 y 100).')
+            elif pct < decimal.Decimal('0.00') or pct > decimal.Decimal('100.00'):
+                self.add_error('porcentaje_mora_agencia', 'El porcentaje para la agencia debe estar entre 0 y 100.')
+        else:
+            cleaned_data['porcentaje_mora_agencia'] = decimal.Decimal('0.00')
+
+        return cleaned_data
 
 
 class GastoGeneralPropietarioForm(forms.ModelForm):

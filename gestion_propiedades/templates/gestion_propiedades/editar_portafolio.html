@@ -111,6 +111,59 @@
                         </div>
                     </div>
 
+                    <hr class="my-4">
+
+                    <div class="p-3 bg-light rounded border border-primary-subtle mb-3" id="seccionPoliticaMora">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                            <h6 class="fw-bold mb-0 text-primary">⚖️ Política de Destino de la Mora Cobrada</h6>
+                            {% if portafolio.destino_mora_vigencia_desde %}
+                                <span class="badge bg-white text-secondary border">
+                                    Vigente desde: {{ portafolio.destino_mora_vigencia_desde|date:"d/m/Y H:i" }}
+                                </span>
+                            {% endif %}
+                        </div>
+                        <p class="text-muted small mb-3">
+                            Define a quién pertenece la mora que pagan los inquilinos. Cambiar esta regla solo aplica a los pagos registrados a partir de este momento y no modifica pagos ni liquidaciones anteriores.
+                        </p>
+
+                        {% if not puede_editar_politica_mora %}
+                            <div class="alert alert-warning py-2 small mb-3">
+                                Solo el dueño de la agencia puede modificar esta política.
+                            </div>
+                        {% endif %}
+
+                        <div class="row g-3">
+                            <div class="col-md-7">
+                                <label class="form-label fw-bold small" for="{{ form.destino_mora.id_for_label }}">{{ form.destino_mora.label }}</label>
+                                {{ form.destino_mora }}
+                                {% if form.destino_mora.errors %}
+                                    <div class="text-danger small mt-1">{{ form.destino_mora.errors }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-5" id="bloquePorcentajeMoraAgencia">
+                                <label class="form-label fw-bold small" for="{{ form.porcentaje_mora_agencia.id_for_label }}">{{ form.porcentaje_mora_agencia.label }}</label>
+                                <div class="input-group">
+                                    {{ form.porcentaje_mora_agencia }}
+                                    <span class="input-group-text fw-bold">%</span>
+                                </div>
+                                <div class="form-text small" id="textoRestoPropietario">El porcentaje restante corresponde al propietario.</div>
+                                {% if form.porcentaje_mora_agencia.errors %}
+                                    <div class="text-danger small mt-1">{{ form.porcentaje_mora_agencia.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="form-check form-switch mt-3 pt-3 border-top">
+                            {{ form.mostrar_mora_agencia_en_liquidacion }}
+                            <label class="form-check-label fw-semibold small" for="{{ form.mostrar_mora_agencia_en_liquidacion.id_for_label }}">
+                                {{ form.mostrar_mora_agencia_en_liquidacion.label }}
+                            </label>
+                            <div class="form-text small">
+                                Desactivado por defecto: si la mora es de la agencia, el propietario no la ve ni la recibe en su estado de cuenta ni en el PDF. Si lo activas, aparecerá solo como dato informativo sin sumarse ni restarse del neto.
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="d-grid mt-4">
                         <button type="submit" class="btn btn-primary btn-lg fw-bold shadow-sm">
                             <i class="fa-solid fa-floppy-disk"></i> Guardar Ajustes
@@ -121,4 +174,37 @@
         </div>
     </div>
 </div>
+
+<script>
+    (function() {
+        const selDestino = document.getElementById('id_destino_mora');
+        const bloquePct = document.getElementById('bloquePorcentajeMoraAgencia');
+        const inpPct = document.getElementById('id_porcentaje_mora_agencia');
+        const textoResto = document.getElementById('textoRestoPropietario');
+
+        function actualizarVistaMora() {
+            if (!selDestino || !bloquePct) return;
+            const esCompartida = selDestino.value === 'COMPARTIDA';
+            bloquePct.style.display = esCompartida ? 'block' : 'none';
+            if (esCompartida && inpPct && textoResto) {
+                const val = parseFloat(inpPct.value);
+                if (!isNaN(val) && val >= 0 && val <= 100) {
+                    const resto = (100 - val).toFixed(2);
+                    textoResto.innerText = `Agencia: ${val.toFixed(2)}% | Propietario: ${resto}%`;
+                } else {
+                    textoResto.innerText = 'El porcentaje restante corresponde al propietario.';
+                }
+            }
+        }
+
+        if (selDestino) {
+            selDestino.addEventListener('change', actualizarVistaMora);
+        }
+        if (inpPct) {
+            inpPct.addEventListener('input', actualizarVistaMora);
+        }
+        document.addEventListener('DOMContentLoaded', actualizarVistaMora);
+        actualizarVistaMora();
+    })();
+</script>
 {% endblock %}

@@ -58,6 +58,15 @@
                         {% endif %}
                     </li>
                     <li class="list-group-item px-0 pt-3">
+                        <h6 class="fw-bold text-secondary mb-2">⚖️ Política de Destino de Mora</h6>
+                        <div class="alert alert-light border py-2 mb-0 small">
+                            <strong>{{ propietario.descripcion_politica_mora }}</strong>
+                            <div class="text-muted mt-1">
+                                Define a quién corresponde la mora cobrada al inquilino en pagos nuevos.
+                            </div>
+                        </div>
+                    </li>
+                    <li class="list-group-item px-0 pt-3">
                         <h6 class="fw-bold text-secondary mb-2">🏦 Datos Bancarios de Transferencia</h6>
                         <div class="bg-light p-3 rounded">
                             <p class="mb-1"><strong>Banco:</strong> {{ propietario.banco_nombre|default:"No especificado" }}</p>

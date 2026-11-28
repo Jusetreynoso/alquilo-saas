@@ -38,6 +38,55 @@ class Portafolio(models.Model):
         help_text="Formato con el que se generará el concepto de las facturas de alquiler"
     )
 
+    # Política de destino de la mora cobrada
+    OPCIONES_DESTINO_MORA = [
+        ('PROPIETARIO', '100% del Propietario (Comportamiento actual)'),
+        ('AGENCIA', '100% de la Agencia Administradora'),
+        ('COMPARTIDA', 'Compartida por Porcentaje (Agencia / Propietario)'),
+    ]
+    destino_mora = models.CharField(
+        max_length=20,
+        choices=OPCIONES_DESTINO_MORA,
+        default='PROPIETARIO',
+        help_text="Define a quién pertenece la mora cobrada a los inquilinos en los nuevos pagos"
+    )
+    porcentaje_mora_agencia = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Porcentaje de la mora cobrada que corresponde a la agencia cuando el destino es Compartida (0 a 100)"
+    )
+    destino_mora_vigencia_desde = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Fecha desde la cual entró en vigencia la política actual de destino de mora"
+    )
+    mostrar_mora_agencia_en_liquidacion = models.BooleanField(
+        default=False,
+        help_text="Mostrar en el estado de cuenta del propietario la mora retenida por la administración (solo informativo)"
+    )
+
+    def obtener_politica_mora_efectiva(self):
+        """Retorna una tupla (destino, porcentaje_agencia) vigente para esta agencia."""
+        destino = self.destino_mora or 'PROPIETARIO'
+        if destino == 'AGENCIA':
+            return ('AGENCIA', Decimal('100.00'))
+        if destino == 'COMPARTIDA':
+            pct = self.porcentaje_mora_agencia if self.porcentaje_mora_agencia is not None else Decimal('0.00')
+            pct = max(Decimal('0.00'), min(Decimal('100.00'), Decimal(str(pct))))
+            return ('COMPARTIDA', pct)
+        return ('PROPIETARIO', Decimal('0.00'))
+
+    @property
+    def descripcion_politica_mora(self):
+        destino, pct_ag = self.obtener_politica_mora_efectiva()
+        if destino == 'AGENCIA':
+            return "100% de la Agencia Administradora"
+        if destino == 'COMPARTIDA':
+            pct_prop = Decimal('100.00') - pct_ag
+            return f"Compartida ({pct_ag:.2f}% Agencia / {pct_prop:.2f}% Propietario)"
+        return "100% del Propietario"
+
     def generar_concepto_factura(self, contrato, fecha_base=None, concepto_actual=None, es_anticipada=False):
         import calendar
         import re
@@ -272,8 +321,57 @@ class PropietarioInmueble(models.Model):
     dia_pago_acordado = models.IntegerField(default=15, blank=True, null=True, help_text="Día del mes acordado para transferirle los fondos al propietario (1-31)")
     notas_pago = models.TextField(blank=True, null=True, help_text="Instrucciones especiales o acuerdos de pago al propietario")
 
+    # Excepción de Política de Mora por Propietario
+    POLITICA_MORA_CHOICES = [
+        ('USAR_AGENCIA', 'Usar la política de la agencia'),
+        ('PROPIETARIO', '100% del Propietario'),
+        ('AGENCIA', '100% de la Agencia Administradora'),
+        ('COMPARTIDA', 'Compartida por Porcentaje (Agencia / Propietario)'),
+    ]
+    politica_mora = models.CharField(
+        max_length=20,
+        choices=POLITICA_MORA_CHOICES,
+        default='USAR_AGENCIA',
+        help_text="Define si este propietario sigue la política general de la agencia o tiene una regla propia"
+    )
+    porcentaje_mora_agencia = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Porcentaje de mora para la agencia si la excepción es Compartida (el resto es del propietario)"
+    )
+
     activo = models.BooleanField(default=True)
     creado_en = models.DateTimeField(auto_now_add=True)
+
+    def obtener_politica_mora_efectiva(self):
+        """Retorna (destino, porcentaje_agencia) considerando excepción del propietario o política de la agencia."""
+        if not self.politica_mora or self.politica_mora == 'USAR_AGENCIA':
+            if self.portafolio_id:
+                return self.portafolio.obtener_politica_mora_efectiva()
+            return ('PROPIETARIO', Decimal('0.00'))
+        if self.politica_mora == 'AGENCIA':
+            return ('AGENCIA', Decimal('100.00'))
+        if self.politica_mora == 'COMPARTIDA':
+            pct = self.porcentaje_mora_agencia if self.porcentaje_mora_agencia is not None else Decimal('0.00')
+            pct = max(Decimal('0.00'), min(Decimal('100.00'), Decimal(str(pct))))
+            return ('COMPARTIDA', pct)
+        return ('PROPIETARIO', Decimal('0.00'))
+
+    @property
+    def descripcion_politica_mora(self):
+        destino, pct_ag = self.obtener_politica_mora_efectiva()
+        if destino == 'AGENCIA':
+            detalle = "100% Agencia"
+        elif destino == 'COMPARTIDA':
+            pct_prop = Decimal('100.00') - pct_ag
+            detalle = f"{pct_ag:.2f}% Agencia / {pct_prop:.2f}% Propietario"
+        else:
+            detalle = "100% Propietario"
+
+        if not self.politica_mora or self.politica_mora == 'USAR_AGENCIA':
+            return f"Usa la política de la agencia ({detalle})"
+        return f"Política propia: {detalle}"
 
     def __str__(self):
         return self.nombre

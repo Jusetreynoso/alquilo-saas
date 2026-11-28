@@ -3713,12 +3713,57 @@ def editar_portafolio(request):
     if not portafolio:
         messages.error(request, "No tienes permisos de Administrador para editar los datos de Marca Blanca de este portafolio.")
         return redirect('dashboard')
-    
+
+    puede_editar_politica_mora = request.user.is_superuser or (portafolio.propietario_id == request.user.id)
+
     if request.method == 'POST':
-        form = PortafolioForm(request.POST, request.FILES, instance=portafolio)
+        old_destino = portafolio.destino_mora
+        old_pct = portafolio.porcentaje_mora_agencia
+        old_mostrar = portafolio.mostrar_mora_agencia_en_liquidacion
+
+        if not puede_editar_politica_mora:
+            post_dest = request.POST.get('destino_mora')
+            post_pct = request.POST.get('porcentaje_mora_agencia')
+            post_mostrar = 'mostrar_mora_agencia_en_liquidacion' in request.POST
+            intento_cambio_politica = (
+                (post_dest is not None and post_dest != old_destino)
+                or (post_pct is not None and str(post_pct).strip() not in ('', str(old_pct)))
+                or (post_mostrar != bool(old_mostrar))
+            )
+            if intento_cambio_politica:
+                messages.error(request, "Acceso restringido: solo el dueño de la agencia puede cambiar la política de destino de la mora.")
+                return redirect(f"{reverse('editar_portafolio')}?portafolio_id={portafolio.id}")
+
+        form = PortafolioForm(
+            request.POST,
+            request.FILES,
+            instance=portafolio,
+            puede_editar_politica_mora=puede_editar_politica_mora,
+        )
         if form.is_valid():
             try:
                 p = form.save()
+                cambio_destino = (p.destino_mora != old_destino) or (p.porcentaje_mora_agencia != old_pct)
+                cambio_mostrar = (p.mostrar_mora_agencia_en_liquidacion != old_mostrar)
+
+                if puede_editar_politica_mora and cambio_destino:
+                    p.destino_mora_vigencia_desde = timezone.now()
+                    p.save(update_fields=['destino_mora_vigencia_desde'])
+
+                if puede_editar_politica_mora and (cambio_destino or cambio_mostrar):
+                    old_desc = f"{old_destino} ({old_pct}% agencia, mostrar en estado de cuenta: {'Sí' if old_mostrar else 'No'})"
+                    new_desc = f"{p.destino_mora} ({p.porcentaje_mora_agencia}% agencia, mostrar en estado de cuenta: {'Sí' if p.mostrar_mora_agencia_en_liquidacion else 'No'})"
+                    AuditLog.objects.create(
+                        accion='EDITAR',
+                        modulo='PoliticaMora',
+                        descripcion=(
+                            f"Política de mora de la agencia '{p.nombre}' actualizada por {request.user.username} "
+                            f"el {timezone.now():%d/%m/%Y %H:%M}. Anterior: {old_desc} -> Nuevo: {new_desc}."
+                        ),
+                        usuario=request.user,
+                        portafolio=p,
+                    )
+
                 if form.cleaned_data.get('actualizar_facturas_existentes'):
                     from .models import Factura, Contrato
                     contratos = Contrato.objects.filter(propiedad__portafolio=p)
@@ -3739,12 +3784,13 @@ def editar_portafolio(request):
                 logging.getLogger(__name__).error(f"Error al guardar portafolio/logo: {e}", exc_info=True)
                 messages.error(request, f"Ocurrió un inconveniente al procesar la imagen del logotipo: {str(e)}. Intenta con otra imagen.")
     else:
-        form = PortafolioForm(instance=portafolio)
+        form = PortafolioForm(instance=portafolio, puede_editar_politica_mora=puede_editar_politica_mora)
     
     context = {
         'form': form,
         'portafolio': portafolio,
         'lista_portafolios': lista_portafolios,
+        'puede_editar_politica_mora': puede_editar_politica_mora,
         'titulo_pagina': "Ajustes de Marca Blanca y Portafolio"
     }
     return render(request, 'gestion_propiedades/editar_portafolio.html', context)
@@ -3866,18 +3912,40 @@ def crear_propietario(request):
     if not portafolios.exists():
         messages.error(request, "Debes tener al menos un portafolio activo.")
         return redirect('dashboard')
-        
+
+    portafolio_objetivo = portafolios.first()
+    if request.method == 'POST' and request.POST.get('portafolio_id'):
+        portafolio_objetivo = get_object_or_404(portafolios, id=request.POST.get('portafolio_id'))
+    puede_editar_politica_mora = request.user.is_superuser or (portafolio_objetivo.propietario_id == request.user.id)
+
     if request.method == 'POST':
-        form = PropietarioInmuebleForm(request.POST, portafolios=portafolios)
+        if not puede_editar_politica_mora and request.POST.get('politica_mora') not in (None, '', 'USAR_AGENCIA'):
+            messages.error(request, "Acceso restringido: solo el dueño de la agencia puede definir una política de mora propia para un propietario.")
+            return redirect('crear_propietario')
+
+        form = PropietarioInmuebleForm(
+            request.POST,
+            portafolios=portafolios,
+            puede_editar_politica_mora=puede_editar_politica_mora,
+        )
         if form.is_valid():
             propietario = form.save(commit=False)
-            portafolio_id = request.POST.get('portafolio_id')
-            if portafolio_id:
-                propietario.portafolio = get_object_or_404(portafolios, id=portafolio_id)
-            else:
-                propietario.portafolio = portafolios.first()
+            propietario.portafolio = portafolio_objetivo
             propietario.save()
-            
+
+            if puede_editar_politica_mora and propietario.politica_mora != 'USAR_AGENCIA':
+                AuditLog.objects.create(
+                    accion='CREAR',
+                    modulo='PoliticaMora',
+                    descripcion=(
+                        f"Excepción de política de mora definida para propietario '{propietario.nombre}' "
+                        f"por {request.user.username} el {timezone.now():%d/%m/%Y %H:%M}: "
+                        f"{propietario.politica_mora} ({propietario.porcentaje_mora_agencia}% agencia)."
+                    ),
+                    usuario=request.user,
+                    portafolio=propietario.portafolio,
+                )
+
             # Asignar propiedades seleccionadas al propietario
             propiedades_seleccionadas = form.cleaned_data.get('propiedades')
             Propiedad.objects.filter(propietario_inmueble=propietario).update(propietario_inmueble=None)
@@ -3887,12 +3955,16 @@ def crear_propietario(request):
             messages.success(request, f'Propietario "{propietario.nombre}" registrado exitosamente.')
             return redirect('lista_propietarios')
     else:
-        form = PropietarioInmuebleForm(portafolios=portafolios)
-        
+        form = PropietarioInmuebleForm(
+            portafolios=portafolios,
+            puede_editar_politica_mora=puede_editar_politica_mora,
+        )
+
     context = {
         'titulo_pagina': 'Registrar Propietario de Inmueble',
         'form': form,
-        'portafolios': portafolios
+        'portafolios': portafolios,
+        'puede_editar_politica_mora': puede_editar_politica_mora,
     }
     return render(request, 'gestion_propiedades/form_generico.html', context)
 
@@ -3906,12 +3978,47 @@ def editar_propietario(request, propietario_id):
             Q(propietario=request.user) | Q(accesos__usuario=request.user)
         ).distinct()
     propietario = get_object_or_404(PropietarioInmueble, id=propietario_id, portafolio__in=portafolios)
-    
+    puede_editar_politica_mora = request.user.is_superuser or (propietario.portafolio.propietario_id == request.user.id)
+
     if request.method == 'POST':
-        form = PropietarioInmuebleForm(request.POST, instance=propietario, portafolios=portafolios)
+        old_pol = propietario.politica_mora
+        old_pct = propietario.porcentaje_mora_agencia
+
+        if not puede_editar_politica_mora:
+            post_pol = request.POST.get('politica_mora')
+            post_pct = request.POST.get('porcentaje_mora_agencia')
+            intento_cambio = (
+                (post_pol is not None and post_pol != old_pol)
+                or (post_pct is not None and str(post_pct).strip() not in ('', str(old_pct)))
+            )
+            if intento_cambio:
+                messages.error(request, "Acceso restringido: solo el dueño de la agencia puede cambiar la política de mora de un propietario.")
+                return redirect('editar_propietario', propietario_id=propietario.id)
+
+        form = PropietarioInmuebleForm(
+            request.POST,
+            instance=propietario,
+            portafolios=portafolios,
+            puede_editar_politica_mora=puede_editar_politica_mora,
+        )
         if form.is_valid():
-            form.save()
-            
+            prop_guardado = form.save()
+
+            if puede_editar_politica_mora and (
+                prop_guardado.politica_mora != old_pol or prop_guardado.porcentaje_mora_agencia != old_pct
+            ):
+                AuditLog.objects.create(
+                    accion='EDITAR',
+                    modulo='PoliticaMora',
+                    descripcion=(
+                        f"Política de mora del propietario '{prop_guardado.nombre}' actualizada por {request.user.username} "
+                        f"el {timezone.now():%d/%m/%Y %H:%M}. Anterior: {old_pol} ({old_pct}% agencia) -> "
+                        f"Nuevo: {prop_guardado.politica_mora} ({prop_guardado.porcentaje_mora_agencia}% agencia)."
+                    ),
+                    usuario=request.user,
+                    portafolio=prop_guardado.portafolio,
+                )
+
             # Actualizar propiedades asignadas al propietario
             propiedades_seleccionadas = form.cleaned_data.get('propiedades')
             Propiedad.objects.filter(propietario_inmueble=propietario).update(propietario_inmueble=None)
@@ -3921,12 +4028,17 @@ def editar_propietario(request, propietario_id):
             messages.success(request, f'Información del propietario "{propietario.nombre}" actualizada.')
             return redirect('detalle_propietario', propietario_id=propietario.id)
     else:
-        form = PropietarioInmuebleForm(instance=propietario, portafolios=portafolios)
-        
+        form = PropietarioInmuebleForm(
+            instance=propietario,
+            portafolios=portafolios,
+            puede_editar_politica_mora=puede_editar_politica_mora,
+        )
+
     context = {
         'titulo_pagina': f'Editar Propietario: {propietario.nombre}',
         'form': form,
-        'propietario': propietario
+        'propietario': propietario,
+        'puede_editar_politica_mora': puede_editar_politica_mora,
     }
     return render(request, 'gestion_propiedades/form_generico.html', context)
 

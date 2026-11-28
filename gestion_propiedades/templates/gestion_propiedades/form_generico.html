@@ -184,8 +184,8 @@
                                     }
                                 });
                             </script>
-                        {% elif field.name in 'telefono,telefono_secundario,cedula_o_pasaporte,correo,nombre_fiador,cedula_fiador,telefono_fiador,telefono_fiador_secundario,latitud,longitud,precio_alquiler_sugerido,tipo_comision,porcentaje_comision,monto_comision_fijo,banco_nombre,tipo_cuenta,numero_cuenta' %}
-                            <div class="col-md-6 mb-3">
+                        {% elif field.name in 'telefono,telefono_secundario,cedula_o_pasaporte,correo,nombre_fiador,cedula_fiador,telefono_fiador,telefono_fiador_secundario,latitud,longitud,precio_alquiler_sugerido,tipo_comision,porcentaje_comision,monto_comision_fijo,politica_mora,porcentaje_mora_agencia,banco_nombre,tipo_cuenta,numero_cuenta' %}
+                            <div class="col-md-6 mb-3" {% if field.name == 'porcentaje_mora_agencia' %}id="grupoPorcentajeMoraPropietario"{% endif %}>
                                 <label class="form-label fw-bold">{{ field.label }}</label>
                                 {{ field }}
                                 {% if field.help_text %}
@@ -371,4 +371,20 @@
     }
 </script>
 {% endif %}
+
+<script>
+    (function() {
+        const selPol = document.getElementById('id_politica_mora_propietario');
+        const grupoPct = document.getElementById('grupoPorcentajeMoraPropietario');
+        function togglePctMoraProp() {
+            if (!selPol || !grupoPct) return;
+            grupoPct.style.display = selPol.value === 'COMPARTIDA' ? 'block' : 'none';
+        }
+        if (selPol) {
+            selPol.addEventListener('change', togglePctMoraProp);
+            document.addEventListener('DOMContentLoaded', togglePctMoraProp);
+            togglePctMoraProp();
+        }
+    })();
+</script>
 {% endblock %}
